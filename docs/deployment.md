@@ -2,8 +2,8 @@
 
 ## 组件边界
 
-- `proxystack-agent` / `ps-agent`：管理 agent 配置、stack、runtime 生成物、服务管理器和核心下载。
-- `proxystack-sub` / `ps-sub`：只消费 `sub/config.yaml` 与 `sub/inputs/`，提供订阅 HTTP 服务。
+- `ps-agent`：管理 agent 配置、stack、runtime 生成物、服务管理器和核心下载；`proxystack-agent` 作为兼容链接保留。
+- `ps-sub`：只消费 `sub/config.yaml` 与 `sub/inputs/`，提供订阅 HTTP 服务；`proxystack-sub` 作为兼容链接保留。
 - `ps-sub` 不读取 agent `config.yaml` 或 `stacks/*.yaml`。
 
 ## 本地 agent 部署
@@ -15,10 +15,11 @@ sudo scripts/install-agent.sh
 sudo /usr/local/bin/ps-agent --base-dir /opt/proxystack setup
 ```
 
-脚本默认从 GitHub Release 安装当前平台二进制，默认版本为 `latest`。如需固定版本或使用本地源码构建：
+脚本默认从当前 Git 工作区的 `remote.origin.url` 推导 GitHub Release 仓库，并安装当前平台二进制到 `/usr/local/bin`，默认版本为 `latest`。如需固定版本、显式指定仓库或使用本地源码构建：
 
 ```bash
 sudo scripts/install-agent.sh --version v1.2.3
+sudo scripts/install-agent.sh --repo OWNER/REPO
 sudo scripts/install-agent.sh --source /path/to/proxystack-go
 ```
 
@@ -31,8 +32,8 @@ sudo /usr/local/bin/ps-agent --base-dir /opt/proxystack setup --start
 脚本只做：
 
 - 创建 `proxystack:proxystack` 用户和托管目录。
-- 默认下载 GitHub Release 中的 `proxystack-go_<os>_<arch>.tar.gz`，其中 `<os>` 为 `linux` 或 `macos`，并用 `SHA256SUMS` 校验；传入 `--source` 时改为本地 `go build`。
-- 将 CLI 链接到 `/usr/local/bin`。
+- 默认下载 GitHub Release 中的 `proxystack-go_<os>_<arch>.tar.gz` 兼容别名；指定固定版本时下载 `proxystack-go_<version>_<os>_<arch>.tar.gz`，其中 `<os>` 为 `linux` 或 `macos`，并用 `SHA256SUMS` 校验；传入 `--source` 时改为本地 `go build`；脱离 Git 工作区运行时需要传入 `--repo OWNER/REPO` 或 `PROXYSTACK_RELEASE_REPO`。
+- 将 `ps-agent` 和 `ps-sub` 安装到 `/usr/local/bin`，并保留 `proxystack-agent` 与 `proxystack-sub` 兼容链接。
 - 可选执行 `ps-agent init` 与 `ps-agent service install`。
 
 脚本本身不安装 mihomo、xray-core 或 geo 数据；这些由 `ps-agent setup` 或 `ps-agent install all` 管理。
@@ -55,7 +56,7 @@ sudo scripts/install-sub-local.sh \
   --start
 ```
 
-该脚本会安装 Go CLI、准备 `/opt/proxystack/sub`，并可选导入订阅发布包。默认同样从 GitHub Release 下载，可通过 `--version v1.2.3` 固定版本，或通过 `--source /path/to/proxystack-go` 使用本地源码构建。sub 服务运行期只依赖：
+该脚本会安装 Go CLI 到 `/usr/local/bin`、准备 `/opt/proxystack/sub`，并可选导入订阅发布包。默认同样从当前 Git `remote.origin.url` 推导 GitHub Release 仓库，可通过 `--version v1.2.3` 固定版本，通过 `--repo OWNER/REPO` 显式指定仓库，或通过 `--source /path/to/proxystack-go` 使用本地源码构建。sub 服务运行期只依赖：
 
 ```text
 /opt/proxystack/sub/config.yaml
@@ -85,7 +86,7 @@ sudo ps-sub --base-dir /data/sub-only logs -f
 
 ## Docker sub 部署
 
-镜像只包含 `proxystack-sub`，不包含 mihomo/xray：
+镜像只包含 `ps-sub`，不包含 mihomo/xray：
 
 ```bash
 sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack
@@ -114,7 +115,7 @@ sudo scripts/deploy-sub-docker.sh --build
 - `read_only: true` / `--read-only`。
 - `cap_drop: ALL` / `--cap-drop ALL`。
 - `no-new-privileges:true`。
-- `/data` volume 持久化 host base dir，容器内运行 `proxystack-sub --base-dir /data serve`。
+- `/data` volume 持久化 host base dir，容器内运行 `ps-sub --base-dir /data serve`。
 - `/tmp` 使用受限 tmpfs。
 
 ## Python 版迁移说明

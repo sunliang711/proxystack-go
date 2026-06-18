@@ -247,7 +247,7 @@ run_container() {
 		--security-opt no-new-privileges:true \
 		--tmpfs /tmp:rw,noexec,nosuid,size=64m \
 		"${IMAGE}" \
-		proxystack-sub --base-dir /data serve
+		ps-sub --base-dir /data serve
 }
 
 # main 执行 Docker sub 部署主流程。

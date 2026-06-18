@@ -311,6 +311,38 @@ release_download_url() {
 	printf 'https://github.com/%s/releases/download/%s/%s' "${repo_name}" "${version_value}" "${asset_name}"
 }
 
+# release_asset_name 根据版本和平台生成 proxystack release 归档名。
+release_asset_name() {
+	local version_value="${1:-}"
+	local os_name="${2:-}"
+	local arch_name="${3:-}"
+
+	if [[ "${version_value}" == "latest" ]]; then
+		printf 'proxystack-go_%s_%s.tar.gz' "${os_name}" "${arch_name}"
+		return 0
+	fi
+	printf 'proxystack-go_%s_%s_%s.tar.gz' "${version_value}" "${os_name}" "${arch_name}"
+}
+
+# release_binary_path 返回 release 解包后的二进制路径，并兼容旧包中的长文件名。
+release_binary_path() {
+	local work_dir="${1:-}"
+	local short_name="${2:-}"
+	local legacy_name="${3:-}"
+	local short_path="${work_dir}/${short_name}"
+	local legacy_path="${work_dir}/${legacy_name}"
+
+	if is_dry_run || [[ -f "${short_path}" ]]; then
+		printf '%s' "${short_path}"
+		return 0
+	fi
+	if [[ -f "${legacy_path}" ]]; then
+		printf '%s' "${legacy_path}"
+		return 0
+	fi
+	die "Release archive is missing binary: ${short_name}"
+}
+
 # download_file 下载文件；dry-run 模式只打印 curl 命令。
 download_file() {
 	local source_url="${1:-}"
@@ -360,13 +392,13 @@ install_release_binaries() {
 	local version_value="${2:-}"
 	local base_dir="${3:-}"
 	local owner_group="${4:-}"
-	local os_name arch_name asset_name temp_dir archive_path checksums_path archive_url checksums_url
+	local os_name arch_name asset_name temp_dir archive_path checksums_path archive_url checksums_url agent_binary sub_binary
 
 	validate_release_repo "${repo_name}"
 	version_value="$(normalize_release_version "${version_value}")"
 	os_name="$(detect_release_os)"
 	arch_name="$(detect_release_arch)"
-	asset_name="proxystack-go_${os_name}_${arch_name}.tar.gz"
+	asset_name="$(release_asset_name "${version_value}" "${os_name}" "${arch_name}")"
 	if is_dry_run; then
 		temp_dir="${base_dir}/runtime/proxystack-release-dry-run"
 		run install -d -m 0750 "${temp_dir}"
@@ -382,8 +414,10 @@ install_release_binaries() {
 	download_file "${checksums_url}" "${checksums_path}"
 	verify_release_checksum "${temp_dir}" "${checksums_path}" "${asset_name}"
 	run tar -xzf "${archive_path}" -C "${temp_dir}"
-	install_file "${temp_dir}/proxystack-agent" "${base_dir}/bin/proxystack-agent" "0750" "${owner_group}"
-	install_file "${temp_dir}/proxystack-sub" "${base_dir}/bin/proxystack-sub" "0750" "${owner_group}"
+	agent_binary="$(release_binary_path "${temp_dir}" "ps-agent" "proxystack-agent")"
+	sub_binary="$(release_binary_path "${temp_dir}" "ps-sub" "proxystack-sub")"
+	install_file "${agent_binary}" "${base_dir}/bin/ps-agent" "0750" "${owner_group}"
+	install_file "${sub_binary}" "${base_dir}/bin/ps-sub" "0750" "${owner_group}"
 	if ! is_dry_run; then
 		run rm -rf "${temp_dir}"
 	fi

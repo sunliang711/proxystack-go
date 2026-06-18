@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/eagle/proxystack-go/internal/testutil"
@@ -17,13 +18,18 @@ func TestDeploymentScriptsUseReleaseBinaryBootstrap(t *testing.T) {
 			content := readRepoFile(t, "scripts", scriptName)
 
 			require.Contains(t, content, "RELEASE_VERSION=\"latest\"")
+			require.Contains(t, content, "RELEASE_REPO=\"\"")
 			require.Contains(t, content, "--version VERSION")
 			require.Contains(t, content, "--repo OWNER/REPO")
+			require.Contains(t, content, "resolve_default_release_repo")
+			require.Contains(t, content, "normalize_git_remote_repo")
 			require.Contains(t, content, "install_release_binaries")
 			require.Contains(t, content, "go build -trimpath")
 			require.Contains(t, content, "go_build_ldflags")
-			require.Contains(t, content, "proxystack-agent")
-			require.Contains(t, content, "proxystack-sub")
+			require.Contains(t, content, "ps-agent")
+			require.Contains(t, content, "ps-sub")
+			require.Contains(t, content, "install_file \"${agent_binary}\" \"${bin_dir}/ps-agent\" \"0755\"")
+			require.NotContains(t, content, "scripts/lib/common.sh")
 			require.NotContains(t, content, "python3 -m venv")
 			require.NotContains(t, content, "pip install")
 		})
@@ -32,10 +38,15 @@ func TestDeploymentScriptsUseReleaseBinaryBootstrap(t *testing.T) {
 	common := readRepoFile(t, "scripts", "lib", "common.sh")
 	require.Contains(t, common, "releases/latest/download")
 	require.Contains(t, common, "SHA256SUMS")
-	require.Contains(t, common, "proxystack-go_${os_name}_${arch_name}.tar.gz")
+	require.Contains(t, common, "release_asset_name")
+	require.Contains(t, common, "release_binary_path")
+	require.Contains(t, common, "proxystack-go_%s_%s_%s.tar.gz")
 	require.Contains(t, common, "resolve_build_version")
 	require.Contains(t, common, "resolve_build_commit")
 	require.Contains(t, common, "resolve_build_datetime")
+
+	workflow := readRepoFile(t, ".github", "workflows", "release.yml")
+	require.Contains(t, workflow, `tar -C "${work_dir}" -czf "dist/${archive}" ps-agent ps-sub`)
 }
 
 // TestDockerSubDeploymentUsesSecureDefaults 验证 Docker 部署文件保留 sub-only 和安全运行参数。
@@ -65,7 +76,7 @@ func TestDockerSubDeploymentUsesSecureDefaults(t *testing.T) {
 	require.Contains(t, deployScript, "--security-opt no-new-privileges:true")
 	require.Contains(t, deployScript, "--build")
 	require.Contains(t, deployScript, "--volume \"${BASE_DIR}:/data\"")
-	require.Contains(t, deployScript, "proxystack-sub --base-dir /data serve")
+	require.Contains(t, deployScript, "ps-sub --base-dir /data serve")
 }
 
 // TestDockerSubDeployDryRunUsesBaseDir 验证 Docker dry-run 使用 host base dir 映射到容器 /data。
@@ -82,11 +93,12 @@ func TestDockerSubDeployDryRunUsesBaseDir(t *testing.T) {
 	require.Contains(t, output, "install -d -m 0750 "+filepath.Join(baseDir, "sub"))
 	require.Contains(t, output, "install -d -m 0750 "+filepath.Join(baseDir, "sub", "inputs"))
 	require.Contains(t, output, "--volume "+baseDir+":/data")
-	require.Contains(t, output, "proxystack-sub --base-dir /data serve")
+	require.Contains(t, output, "ps-sub --base-dir /data serve")
 }
 
 // TestInstallScriptsDryRunDownloadRelease 验证安装脚本 dry-run 会从指定 GitHub Release 下载二进制。
 func TestInstallScriptsDryRunDownloadRelease(t *testing.T) {
+	repoName := currentOriginRepo(t)
 	for _, scriptName := range []string{"install-agent.sh", "install-sub-local.sh"} {
 		t.Run(scriptName, func(t *testing.T) {
 			baseDir := filepath.Join(t.TempDir(), "proxystack")
@@ -95,10 +107,31 @@ func TestInstallScriptsDryRunDownloadRelease(t *testing.T) {
 			output, err := runScript(t, filepath.Join("scripts", scriptName), "--dry-run", "--base-dir", baseDir, "--bin-dir", binDir, "--version", "1.2.3")
 
 			require.NoError(t, err, output)
-			require.Contains(t, output, "https://github.com/eagle/proxystack-go/releases/download/v1.2.3/proxystack-go_")
-			require.Contains(t, output, "https://github.com/eagle/proxystack-go/releases/download/v1.2.3/SHA256SUMS")
+			require.Contains(t, output, "https://github.com/"+repoName+"/releases/download/v1.2.3/proxystack-go_v1.2.3_")
+			require.Contains(t, output, "https://github.com/"+repoName+"/releases/download/v1.2.3/SHA256SUMS")
 			require.Contains(t, output, "tar -xzf")
 			require.Contains(t, output, "proxystack-release-dry-run")
+			require.Contains(t, output, filepath.Join(binDir, "ps-agent"))
+			require.Contains(t, output, filepath.Join(binDir, "ps-sub"))
+			require.NotContains(t, output, filepath.Join(baseDir, "bin", "ps-agent"))
+		})
+	}
+}
+
+// TestInstallScriptsDryRunLatestKeepsStableAssetAlias 验证 latest 下载仍使用不带版本的兼容资产名。
+func TestInstallScriptsDryRunLatestKeepsStableAssetAlias(t *testing.T) {
+	repoName := currentOriginRepo(t)
+	for _, scriptName := range []string{"install-agent.sh", "install-sub-local.sh"} {
+		t.Run(scriptName, func(t *testing.T) {
+			baseDir := filepath.Join(t.TempDir(), "proxystack")
+			binDir := filepath.Join(t.TempDir(), "bin")
+
+			output, err := runScript(t, filepath.Join("scripts", scriptName), "--dry-run", "--base-dir", baseDir, "--bin-dir", binDir)
+
+			require.NoError(t, err, output)
+			require.Contains(t, output, "https://github.com/"+repoName+"/releases/latest/download/proxystack-go_")
+			require.NotContains(t, output, "releases/latest/download/proxystack-go_latest_")
+			require.Contains(t, output, "https://github.com/"+repoName+"/releases/latest/download/SHA256SUMS")
 		})
 	}
 }
@@ -141,6 +174,31 @@ func readRepoFile(t *testing.T, parts ...string) string {
 	content, err := os.ReadFile(filepath.Clean(path))
 	require.NoError(t, err)
 	return string(content)
+}
+
+// currentOriginRepo 读取当前 GitHub origin 仓库名，匹配安装脚本默认仓库解析逻辑。
+func currentOriginRepo(t *testing.T) string {
+	t.Helper()
+	command := exec.Command("git", "remote", "get-url", "origin")
+	command.Dir = testutil.RepoPath(t)
+	output, err := command.Output()
+	require.NoError(t, err)
+	remoteURL := strings.TrimSpace(string(output))
+	switch {
+	case strings.HasPrefix(remoteURL, "https://github.com/"):
+		remoteURL = strings.TrimPrefix(remoteURL, "https://github.com/")
+	case strings.HasPrefix(remoteURL, "http://github.com/"):
+		remoteURL = strings.TrimPrefix(remoteURL, "http://github.com/")
+	case strings.HasPrefix(remoteURL, "git@github.com:"):
+		remoteURL = strings.TrimPrefix(remoteURL, "git@github.com:")
+	case strings.HasPrefix(remoteURL, "ssh://git@github.com/"):
+		remoteURL = strings.TrimPrefix(remoteURL, "ssh://git@github.com/")
+	default:
+		t.Fatalf("unsupported origin URL: %s", remoteURL)
+	}
+	remoteURL = strings.TrimSuffix(remoteURL, ".git")
+	remoteURL = strings.TrimSuffix(remoteURL, "/")
+	return remoteURL
 }
 
 // runScript 执行仓库内脚本并返回合并输出。

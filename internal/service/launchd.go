@@ -225,14 +225,14 @@ func RenderLaunchdPlists(config domain.GlobalConfig, target string) (map[string]
 	selected := map[string]string{}
 	switch target {
 	case "", "all":
-		selected[LaunchdSubLabel+".plist"] = renderLaunchdPlist(LaunchdSubLabel, []string{"/usr/local/bin/proxystack-sub", "--base-dir", launchdBaseDir(config), "serve"}, launchdBaseDir(config))
+		selected[LaunchdSubLabel+".plist"] = renderLaunchdPlist(LaunchdSubLabel, []string{"/usr/local/bin/ps-sub", "--base-dir", launchdBaseDir(config), "serve"}, launchdBaseDir(config))
 		stackSet, err := configloader.LoadStacks(config, false)
 		if err != nil {
 			return nil, err
 		}
 		addLaunchdStackPlists(selected, config, stackSet.Stacks, "all")
 	case "sub":
-		selected[LaunchdSubLabel+".plist"] = renderLaunchdPlist(LaunchdSubLabel, []string{"/usr/local/bin/proxystack-sub", "--base-dir", launchdBaseDir(config), "serve"}, launchdBaseDir(config))
+		selected[LaunchdSubLabel+".plist"] = renderLaunchdPlist(LaunchdSubLabel, []string{"/usr/local/bin/ps-sub", "--base-dir", launchdBaseDir(config), "serve"}, launchdBaseDir(config))
 	case "xrelay", "xray", "clash", "mihomo":
 		stackSet, err := configloader.LoadStacks(config, false)
 		if err != nil {
@@ -509,7 +509,7 @@ func launchdLogPredicate(services []string) string {
 	for _, label := range services {
 		switch {
 		case label == LaunchdSubLabel:
-			processes["proxystack-sub"] = true
+			processes["ps-sub"] = true
 		case strings.HasPrefix(label, "com.proxystack.xray."):
 			processes["xray"] = true
 		case strings.HasPrefix(label, "com.proxystack.mihomo."):

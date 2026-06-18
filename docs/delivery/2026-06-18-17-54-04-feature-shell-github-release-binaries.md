@@ -7,8 +7,8 @@
 ## 实现方案
 
 - 新增 GitHub Actions release workflow：tag push 匹配 `v*.*.*` 后运行，并用 bash 正则严格校验 `^v[0-9]+\.[0-9]+\.[0-9]+$`。
-- workflow 构建 `linux/amd64`、`linux/arm64`、`macos/amd64`、`macos/arm64` 四个 tar.gz 包，每个包包含 `proxystack-agent` 和 `proxystack-sub`。
-- Release 资产命名为 `proxystack-go_<os>_<arch>.tar.gz`，另上传 `SHA256SUMS`。
+- workflow 构建 `linux/amd64`、`linux/arm64`、`macos/amd64`、`macos/arm64` 四个 tar.gz 包，每个包包含 `ps-agent` 和 `ps-sub`。
+- Release 资产主命名为 `proxystack-go_<version>_<os>_<arch>.tar.gz`，同时保留 `proxystack-go_<os>_<arch>.tar.gz` 作为 latest 兼容别名，另上传 `SHA256SUMS`。
 - `scripts/install-agent.sh` 和 `scripts/install-sub-local.sh` 默认下载 GitHub Release，`--version` 默认 `latest`，也支持 `--version v1.2.3` 或 `--version 1.2.3`。
 - 保留 `--source DIR`，用于本地源码构建，不影响开发态验证。
 - 支持通过 `--repo OWNER/REPO` 或 `PROXYSTACK_RELEASE_REPO` 覆盖默认 release 仓库。
@@ -32,7 +32,7 @@
 - `bash -n scripts/lib/common.sh scripts/install-agent.sh scripts/install-sub-local.sh`：通过。
 - `shellcheck scripts/lib/common.sh scripts/install-agent.sh scripts/install-sub-local.sh`：通过。
 - `go test -count=1 ./internal/deployment`：通过。
-- 本地交叉编译 `linux/darwin` x `amd64/arm64` 的 `proxystack-agent` 和 `proxystack-sub`：通过。
+- 本地交叉编译 `linux/darwin` x `amd64/arm64` 的 `ps-agent` 和 `ps-sub`：通过。
 - `git diff --check`：通过。
 - `go test ./...`：未全量通过，仍失败于既有 `internal/generator/sub TestRenderSubscriptionsMatchGolden` golden 差异，表现为 proxy-groups 顺序、ADS 分组和 AdsRules 目标不一致。
 

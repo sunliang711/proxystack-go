@@ -179,6 +179,8 @@ func uninstallServiceDisplayName(service string) string {
 func hasProxystackInstallMarker(baseDir string) (bool, error) {
 	markers := []string{
 		uninstallPreservedConfig,
+		filepath.Join("bin", "ps-agent"),
+		filepath.Join("bin", "ps-sub"),
 		filepath.Join("bin", "proxystack-agent"),
 		filepath.Join("bin", "proxystack-sub"),
 		filepath.Join("bin", "xray"),

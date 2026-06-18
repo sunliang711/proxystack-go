@@ -26,8 +26,8 @@ stat /home/runner/work/proxystack-go/proxystack-go/cmd/ps-agent: directory not f
 
 - `git check-ignore -v cmd/ps-agent/main.go cmd/ps-sub/main.go`：不再匹配忽略规则。
 - `go test -count=1 ./cmd/ps-agent ./cmd/ps-sub ./internal/cli ./internal/version`：通过。
-- `go build -trimpath -o <tmp>/proxystack-agent ./cmd/ps-agent`：通过。
-- `go build -trimpath -o <tmp>/proxystack-sub ./cmd/ps-sub`：通过。
+- `go build -trimpath -o <tmp>/ps-agent ./cmd/ps-agent`：通过。
+- `go build -trimpath -o <tmp>/ps-sub ./cmd/ps-sub`：通过。
 - `go test ./...`：通过。
 
 ## 风险与后续建议

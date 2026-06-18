@@ -55,11 +55,11 @@ mtu = 1420
 peer = (public-key = 8Ih1UZSITx3LaNIuotXCaC0SmkVb8cxUDXnBTgF9RRw=, allowed-ips = "0.0.0.0/0, ::0/0", endpoint = example.cc:51820, keepalive = 30)
 
 [Proxy Group]
+ProxyList = select, AutoGroup, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/surge.webp
 AutoGroup = url-test, Manual Relay, url=http://www.gstatic.com/generate_204, interval=120, tolerance=200, timeout=15, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/auto.png
+FinalList = select, ProxyList, AutoGroup, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/surge.webp
 🌐 其他地区 = url-test, Manual Relay, url=http://www.gstatic.com/generate_204, interval=120, tolerance=200, timeout=15
 
-ProxyList = select, AutoGroup, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/surge.webp
-FinalList = select, ProxyList, AutoGroup, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/surge.webp
 
 Claude = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/claude.webp
 Cursor = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/cursor.png
@@ -90,7 +90,7 @@ Overseas = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=
 LAN10_1_1 = select, DIRECT, wgHome,icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/lan.png
 LAN10_2 = select, DIRECT, wgChiefOffice,icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/lan.png
 China = select, DIRECT, ProxyList, AutoGroup, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/china.png
-ADS = select, REJECT, DIRECT
+ADS = select, REJECT, DIRECT, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/ads.png
 
 [Rule]
 

@@ -2,6 +2,7 @@ package subserver
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"net"
 	"net/http"
@@ -149,7 +150,7 @@ func (s *Server) logLoaded(listen string) {
 
 func healthHandler(state *State) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		index, users, lastError := state.Snapshot()
+		index, _, lastError := state.Snapshot()
 		status := "ok"
 		if lastError != "" {
 			status = "error"
@@ -157,10 +158,6 @@ func healthHandler(state *State) gin.HandlerFunc {
 		response := gin.H{
 			"status": status,
 			"index":  index != nil,
-			"users":  users,
-		}
-		if lastError != "" {
-			response["last_error"] = lastError
 		}
 		c.JSON(http.StatusOK, response)
 	}
@@ -220,13 +217,10 @@ func authorize(c *gin.Context, access config.AccessConfig, pathToken string) boo
 	}
 	token := pathToken
 	if token == "" {
-		token = c.Query("token")
-	}
-	if token == "" {
 		writeError(c, http.StatusUnauthorized, "unauthorized", "subscription token required")
 		return false
 	}
-	if token != access.Token {
+	if subtle.ConstantTimeCompare([]byte(token), []byte(access.Token)) != 1 {
 		writeError(c, http.StatusForbidden, "forbidden", "subscription token invalid")
 		return false
 	}

@@ -91,6 +91,18 @@ watch_debounce: 0
 	require.Equal(t, config.LogFormatJSON, subConfig.Log.Format)
 }
 
+// TestLoadSubServerConfigDefaultsToLoopback 验证默认订阅服务只监听本机。
+func TestLoadSubServerConfigDefaultsToLoopback(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "sub.yaml")
+	writeFile(t, configPath, "log:\n  format: json\n")
+
+	subConfig, err := config.LoadSubServerConfig(configPath)
+
+	require.NoError(t, err)
+	require.Equal(t, "127.0.0.1:3003", subConfig.Listen)
+	require.Equal(t, "none", subConfig.Access.Type)
+}
+
 // TestLoadSubServerConfigRejectsInvalidValues 验证 sub config 非法值会 fail fast。
 func TestLoadSubServerConfigRejectsInvalidValues(t *testing.T) {
 	tests := []struct {
@@ -100,6 +112,7 @@ func TestLoadSubServerConfigRejectsInvalidValues(t *testing.T) {
 	}{
 		{name: "bad listen", content: "listen: bad-listen\n", want: "listen must use host:port format"},
 		{name: "token missing", content: "access:\n  type: token\n", want: "access.token is required"},
+		{name: "public listen without token", content: "listen: 0.0.0.0:3003\naccess:\n  type: none\n", want: "access.type none is only allowed"},
 		{name: "access unknown", content: "access:\n  type: none\n  extra: true\n", want: "field extra not found"},
 		{name: "log unknown", content: "log:\n  format: json\n  extra: true\n", want: "field extra not found"},
 		{name: "bad log format", content: "log:\n  format: text\n", want: "log.format must be json or console"},

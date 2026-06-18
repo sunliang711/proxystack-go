@@ -29,8 +29,8 @@ func DefaultSubServerConfigYAML() string {
 # 修改后可执行 ps-sub --base-dir <base-dir> config check 校验。
 
 # HTTP 监听地址，格式为 host:port。
-# Docker 或公网暴露通常使用 0.0.0.0:3003；只允许本机访问时可改为 127.0.0.1:3003。
-listen: 0.0.0.0:3003
+# 默认只监听本机；Docker 或公网暴露可改为 0.0.0.0:3003，但必须启用 token。
+listen: 127.0.0.1:3003
 
 # 日志输出设置。
 # format: json 输出结构化 JSON，适合 systemd/docker 收集；format: console 输出人类可读文本，适合前台排查。
@@ -41,7 +41,7 @@ log:
 # type: none 表示不校验 token；type: token 表示订阅 URL 必须携带 token。
 access:
   type: none
-  # token 仅在 type: token 时必填，可通过 /sub/<token>/<user> 或 ?token=... 访问。
+  # token 仅在 type: token 时必填，可通过 /sub/<token>/<user> 访问。
   # token: change-me
 
 # 自定义模板目录；为空时使用内置模板。
@@ -88,7 +88,7 @@ func (s *SubServerConfig) UnmarshalYAML(value *yaml.Node) error {
 // ApplyDefaults 补齐 sub config 的运行默认值。
 func (s *SubServerConfig) ApplyDefaults() {
 	if s.Listen == "" {
-		s.Listen = "0.0.0.0:3003"
+		s.Listen = "127.0.0.1:3003"
 	}
 	if s.Access.Type == "" {
 		s.Access.Type = "none"
@@ -111,7 +111,8 @@ func (s *SubServerConfig) ApplyDefaults() {
 
 // Validate 校验 sub config 的运行期安全约束和基础格式。
 func (s SubServerConfig) Validate() error {
-	if _, _, err := domain.ParseListen(s.Listen); err != nil {
+	host, _, err := domain.ParseListen(s.Listen)
+	if err != nil {
 		return err
 	}
 	if s.WatchInterval <= 0 {
@@ -122,6 +123,9 @@ func (s SubServerConfig) Validate() error {
 	}
 	if err := s.Access.Validate(); err != nil {
 		return err
+	}
+	if s.Access.Type == "none" && !domain.IsLoopbackHost(host) {
+		return fmt.Errorf("access.type none is only allowed when listen host is loopback or localhost")
 	}
 	if err := s.Log.Validate(); err != nil {
 		return err

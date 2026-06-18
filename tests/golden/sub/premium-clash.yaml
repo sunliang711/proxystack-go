@@ -33,28 +33,6 @@ proxies:
     password: demo-pass
     udp: true
 proxy-groups:
-  - name: AutoGroup
-    type: url-test
-    url: http://www.gstatic.com/generate_204
-    interval: 120
-    tolerance: 200
-    proxies:
-
-      - "Manual Relay"
-
-    icon: https://raw.githubusercontent.com/sunliang711/icons/main/auto.png
-
-  - name: 🌐 其他地区
-    type: url-test
-    url: http://www.gstatic.com/generate_204
-    interval: 120
-    tolerance: 200
-    proxies:
-
-      - "Manual Relay"
-
-
-
   - name: ProxyList
     type: select
     proxies:
@@ -80,6 +58,28 @@ proxy-groups:
       - "Manual Relay"
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/surge.webp
+  - name: AutoGroup
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 120
+    tolerance: 200
+    proxies:
+
+      - "Manual Relay"
+
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/auto.png
+
+  - name: 🌐 其他地区
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 120
+    tolerance: 200
+    proxies:
+
+      - "Manual Relay"
+
+
+
   - name: Claude
     type: select
     proxies:
@@ -346,6 +346,19 @@ proxy-groups:
       - "Manual Relay"
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/tiktok.png
+  - name: ADS
+    type: select
+    proxies:
+      - REJECT
+      - DIRECT
+      - ProxyList
+
+      - 🌐 其他地区
+
+
+      - "Manual Relay"
+
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/ads.png
   - name: GlobalMedia
     type: select
     proxies:
@@ -593,7 +606,7 @@ rule-providers:
     interval: 86400
 rules:
   - DOMAIN-SUFFIX,www.rustez.cc,DIRECT
-  - RULE-SET,AdsRules,REJECT
+  - RULE-SET,AdsRules,ADS
   - RULE-SET,OpenAIRules,OpenAI
   - RULE-SET,ClaudeRules,Claude
   - RULE-SET,CursorRules,Cursor

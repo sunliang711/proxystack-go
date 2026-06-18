@@ -75,7 +75,7 @@ func TestInitCommandCreatesSubLayout(t *testing.T) {
 	require.Contains(t, string(data), "# Surge managed config 输出设置。")
 	subConfig, err := config.LoadSubServerConfig(filepath.Join(baseDir, "sub", "config.yaml"))
 	require.NoError(t, err)
-	require.Equal(t, "0.0.0.0:3003", subConfig.Listen)
+	require.Equal(t, "127.0.0.1:3003", subConfig.Listen)
 	require.Equal(t, config.LogFormatJSON, subConfig.Log.Format)
 }
 
@@ -337,7 +337,8 @@ func TestServeHostPortOverride(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, []byte(`listen: 127.0.0.1:3003
 access:
-  type: none
+  type: token
+  token: demo-token
 `), 0o644))
 	command := NewRootCommand()
 	require.NoError(t, command.PersistentFlags().Set("base-dir", baseDir))
@@ -350,6 +351,7 @@ access:
 
 	require.NoError(t, err)
 	require.Equal(t, "0.0.0.0:39003", subConfig.Listen)
+	require.Equal(t, "token", subConfig.Access.Type)
 	require.Equal(t, filepath.Join(baseDir, "sub"), subConfig.DataDir)
 }
 

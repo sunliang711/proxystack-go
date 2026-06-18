@@ -31,9 +31,14 @@ func TestHTTPRoutesAndAuth(t *testing.T) {
 	response := performRequest(router, http.MethodGet, "/health")
 	require.Equal(t, http.StatusOK, response.Code)
 	require.Contains(t, response.Body.String(), `"index":true`)
-	require.Contains(t, response.Body.String(), `"alice"`)
+	require.NotContains(t, response.Body.String(), `"users"`)
+	require.NotContains(t, response.Body.String(), `"alice"`)
+	require.NotContains(t, response.Body.String(), `"last_error"`)
 
 	response = performRequest(router, http.MethodGet, "/sub/alice")
+	require.Equal(t, http.StatusUnauthorized, response.Code)
+
+	response = performRequest(router, http.MethodGet, "/sub/alice?token=demo-token")
 	require.Equal(t, http.StatusUnauthorized, response.Code)
 
 	response = performRequest(router, http.MethodGet, "/sub/bad-token/alice")
@@ -100,6 +105,35 @@ func TestServerStartWritesStartupLog(t *testing.T) {
 	require.Contains(t, logText, `"input_dir":"`+filepath.Join(dataDir, "inputs")+`"`)
 	require.Contains(t, logText, `"users":1`)
 	require.Contains(t, logText, `"nodes":1`)
+}
+
+// TestHTTPHealthRedactsReloadError 验证健康检查不暴露用户列表和 reload 错误明文。
+func TestHTTPHealthRedactsReloadError(t *testing.T) {
+	dataDir := prepareDataDir(t)
+	state := subserver.NewState(dataDir, subgen.Access{Type: "none"}, func() string { return fixedGeneratedAt })
+	require.NoError(t, state.Load())
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "inputs", "manual.yaml"), []byte("bad: ["), 0o644))
+	require.Error(t, state.Reload())
+	subConfig := config.SubServerConfig{
+		DataDir:       dataDir,
+		Listen:        "127.0.0.1:3003",
+		Access:        config.AccessConfig{Type: "none"},
+		WatchInterval: 1,
+		WatchDebounce: 0,
+	}
+	subConfig.ApplyDefaults()
+	require.NoError(t, subConfig.Validate())
+	router := subserver.NewRouter(state, subConfig)
+
+	response := performRequest(router, http.MethodGet, "/health")
+
+	require.Equal(t, http.StatusOK, response.Code)
+	require.Contains(t, response.Body.String(), `"status":"error"`)
+	require.Contains(t, response.Body.String(), `"index":true`)
+	require.NotContains(t, response.Body.String(), `"users"`)
+	require.NotContains(t, response.Body.String(), `"alice"`)
+	require.NotContains(t, response.Body.String(), `"last_error"`)
+	require.NotContains(t, response.Body.String(), "invalid YAML")
 }
 
 // TestHTTPTemplateErrorReturns503 验证坏模板映射为 template_error。

@@ -79,5 +79,5 @@ venv/
 .codex/
 AGENTS.md
 
-ps-agent
-ps-sub
+/ps-agent
+/ps-sub

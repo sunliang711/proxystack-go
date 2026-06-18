@@ -393,7 +393,7 @@ install_release_binaries() {
 	local repo_name="${1:-}"
 	local version_value="${2:-}"
 	local bin_dir="${3:-}"
-	local os_name arch_name asset_name temp_dir archive_path checksums_path archive_url checksums_url agent_binary sub_binary
+	local os_name arch_name asset_name temp_dir archive_path checksums_path archive_url checksums_url sub_binary
 
 	validate_release_repo "${repo_name}"
 	version_value="$(normalize_release_version "${version_value}")"
@@ -415,9 +415,7 @@ install_release_binaries() {
 	download_file "${checksums_url}" "${checksums_path}"
 	verify_release_checksum "${temp_dir}" "${checksums_path}" "${asset_name}"
 	run tar -xzf "${archive_path}" -C "${temp_dir}"
-	agent_binary="$(release_binary_path "${temp_dir}" "ps-agent")"
 	sub_binary="$(release_binary_path "${temp_dir}" "ps-sub")"
-	install_file "${agent_binary}" "${bin_dir}/ps-agent" "0755"
 	install_file "${sub_binary}" "${bin_dir}/ps-sub" "0755"
 	if ! is_dry_run; then
 		run rm -rf "${temp_dir}"
@@ -461,7 +459,7 @@ usage() {
 	cat <<'EOF'
 Usage: scripts/install-sub-local.sh [options]
 
-Download and install proxystack release binaries by default for a local
+Download and install proxystack ps-sub release binary by default for a local
 non-Docker deployment. The script creates subscription data directories,
 optionally imports a bundle, and optionally installs or starts
 proxystack-sub.service.
@@ -626,7 +624,7 @@ ensure_cli_dir() {
 	run install -d -m 0755 "${BIN_DIR}"
 }
 
-# build_go_binaries 构建 ps-agent 和 ps-sub，并安装到系统 bin 目录。
+# build_go_binaries 构建 ps-sub，并安装到系统 bin 目录。
 build_go_binaries() {
 	local build_ldflags
 	local temp_dir
@@ -638,9 +636,7 @@ build_go_binaries() {
 	else
 		temp_dir="$(mktemp -d)"
 	fi
-	run_stream go build -trimpath -ldflags "${build_ldflags}" -o "${temp_dir}/ps-agent" "${SOURCE_DIR}/cmd/ps-agent"
 	run_stream go build -trimpath -ldflags "${build_ldflags}" -o "${temp_dir}/ps-sub" "${SOURCE_DIR}/cmd/ps-sub"
-	install_file "${temp_dir}/ps-agent" "${BIN_DIR}/ps-agent" "0755"
 	install_file "${temp_dir}/ps-sub" "${BIN_DIR}/ps-sub" "0755"
 	if ! is_dry_run; then
 		run rm -rf "${temp_dir}"
@@ -699,7 +695,7 @@ main() {
 	ensure_sub_dirs
 	log "Prepare CLI directory"
 	ensure_cli_dir
-	log "Install Go binaries"
+	log "Install ps-sub binary"
 	install_binaries
 	log "Ensure config"
 	ensure_config

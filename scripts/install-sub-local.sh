@@ -246,49 +246,12 @@ validate_release_repo() {
 	fi
 }
 
-# normalize_git_remote_repo 从 GitHub remote URL 提取 OWNER/REPO。
-normalize_git_remote_repo() {
-	local remote_url="${1:-}"
-	local repo_name=""
+# resolve_default_release_repo 读取环境变量或返回当前项目默认 Release 仓库。
+resolve_default_release_repo() {
+	local repo_name="${PROXYSTACK_RELEASE_REPO:-${DEFAULT_RELEASE_REPO}}"
 
-	case "${remote_url}" in
-		https://github.com/*)
-			repo_name="${remote_url#https://github.com/}"
-			;;
-		http://github.com/*)
-			repo_name="${remote_url#http://github.com/}"
-			;;
-		git@github.com:*)
-			repo_name="${remote_url#git@github.com:}"
-			;;
-		ssh://git@github.com/*)
-			repo_name="${remote_url#ssh://git@github.com/}"
-			;;
-		*)
-			die "Git remote origin must be a GitHub repository URL or pass --repo OWNER/REPO"
-			;;
-	esac
-	repo_name="${repo_name%.git}"
-	repo_name="${repo_name%/}"
 	validate_release_repo "${repo_name}"
 	printf '%s' "${repo_name}"
-}
-
-# resolve_default_release_repo 从当前 Git remote origin 推导默认 Release 仓库。
-resolve_default_release_repo() {
-	local remote_url
-
-	if [[ -n "${PROXYSTACK_RELEASE_REPO:-}" ]]; then
-		validate_release_repo "${PROXYSTACK_RELEASE_REPO}"
-		printf '%s' "${PROXYSTACK_RELEASE_REPO}"
-		return 0
-	fi
-	require_cmd git
-	remote_url="$(git config --get remote.origin.url 2>/dev/null || true)"
-	if [[ -z "${remote_url}" ]]; then
-		die "Git remote origin is required for default release repo; pass --repo OWNER/REPO"
-	fi
-	normalize_git_remote_repo "${remote_url}"
 }
 
 # normalize_release_version 规范 release 版本号，latest 原样保留。
@@ -482,6 +445,7 @@ run_as_user() {
 
 SOURCE_DIR=""
 INSTALL_SOURCE="release"
+DEFAULT_RELEASE_REPO="sunliang711/proxystack-go"
 RELEASE_REPO=""
 RELEASE_VERSION="latest"
 BASE_DIR="/opt/proxystack"
@@ -504,7 +468,7 @@ proxystack-sub.service.
 
 Options:
   --version VERSION        Release version to install. Default: latest
-  --repo OWNER/REPO        GitHub release repository. Default: current remote origin
+  --repo OWNER/REPO        GitHub release repository. Default: sunliang711/proxystack-go
   --source DIR             Build from a local source directory instead of downloading release
   --base-dir DIR           Managed base directory. Default: /opt/proxystack
   --bin-dir DIR            CLI install directory. Default: /usr/local/bin

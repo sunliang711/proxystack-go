@@ -15,7 +15,7 @@ sudo scripts/install-agent.sh
 sudo /usr/local/bin/ps-agent --base-dir /opt/proxystack setup
 ```
 
-脚本默认从当前 Git 工作区的 `remote.origin.url` 推导 GitHub Release 仓库，并安装当前平台二进制到 `/usr/local/bin`，默认版本为 `latest`。如需固定版本、显式指定仓库或使用本地源码构建：
+脚本默认从当前项目的 GitHub Release 仓库 `sunliang711/proxystack-go` 下载并安装当前平台二进制到 `/usr/local/bin`，默认版本为 `latest`。如需固定版本、显式指定仓库或使用本地源码构建：
 
 ```bash
 sudo scripts/install-agent.sh --version v1.2.3
@@ -32,7 +32,7 @@ sudo /usr/local/bin/ps-agent --base-dir /opt/proxystack setup --start
 脚本只做：
 
 - 创建 `proxystack:proxystack` 用户和托管目录。
-- 默认下载 GitHub Release 中的 `proxystack-go_<os>_<arch>.tar.gz` 兼容别名；指定固定版本时下载 `proxystack-go_<version>_<os>_<arch>.tar.gz`，其中 `<os>` 为 `linux` 或 `macos`，并用 `SHA256SUMS` 校验；传入 `--source` 时改为本地 `go build`；脱离 Git 工作区运行时需要传入 `--repo OWNER/REPO` 或 `PROXYSTACK_RELEASE_REPO`。
+- 默认下载 GitHub Release 中的 `proxystack-go_<os>_<arch>.tar.gz` 兼容别名；指定固定版本时下载 `proxystack-go_<version>_<os>_<arch>.tar.gz`，其中 `<os>` 为 `linux` 或 `macos`，并用 `SHA256SUMS` 校验；传入 `--source` 时改为本地 `go build`；如需改用其他仓库，可传入 `--repo OWNER/REPO` 或设置 `PROXYSTACK_RELEASE_REPO`。
 - 将 `ps-agent` 和 `ps-sub` 安装到 `/usr/local/bin`。
 - 可选执行 `ps-agent init` 与 `ps-agent service install`。
 
@@ -56,7 +56,7 @@ sudo scripts/install-sub-local.sh \
   --start
 ```
 
-该脚本会安装 Go CLI 到 `/usr/local/bin`、准备 `/opt/proxystack/sub`，并可选导入订阅发布包。默认同样从当前 Git `remote.origin.url` 推导 GitHub Release 仓库，可通过 `--version v1.2.3` 固定版本，通过 `--repo OWNER/REPO` 显式指定仓库，或通过 `--source /path/to/proxystack-go` 使用本地源码构建。sub 服务运行期只依赖：
+该脚本会安装 Go CLI 到 `/usr/local/bin`、准备 `/opt/proxystack/sub`，并可选导入订阅发布包。默认同样从当前项目的 GitHub Release 仓库 `sunliang711/proxystack-go` 下载，可通过 `--version v1.2.3` 固定版本，通过 `--repo OWNER/REPO` 显式指定仓库，或通过 `--source /path/to/proxystack-go` 使用本地源码构建。sub 服务运行期只依赖：
 
 ```text
 /opt/proxystack/sub/config.yaml

@@ -19,8 +19,8 @@
 - inputs 固定为 `<base-dir>/sub/inputs`。
 - `SubServerConfig.DataDir` 保留为运行时字段，不再从 YAML 读取或输出；YAML 中出现 `data_dir` 会 strict reject。
 - `ps-agent init` 生成的 `sub/config.yaml` 不再包含 `data_dir`。
-- systemd sub unit 改为 `proxystack-sub --base-dir <base-dir> serve`。
-- Docker sub-only 部署改为挂载 host base dir 到 `/data`，容器内执行 `proxystack-sub --base-dir /data serve`。
+- systemd sub unit 改为 `ps-sub --base-dir <base-dir> serve`。
+- Docker sub-only 部署改为挂载 host base dir 到 `/data`，容器内执行 `ps-sub --base-dir /data serve`。
 
 ## 文件与配置变更
 

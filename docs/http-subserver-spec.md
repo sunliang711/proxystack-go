@@ -2,11 +2,11 @@
 
 生成日期：2026-06-17
 
-本文定义 `proxystack-sub serve` 的 HTTP 行为、鉴权、状态管理和 watcher 语义。
+本文定义 `ps-sub serve` 的 HTTP 行为、鉴权、状态管理和 watcher 语义。
 
 ## 1. 服务边界
 
-`proxystack-sub` 只允许读取：
+`ps-sub` 只允许读取：
 
 - `sub/config.yaml`
 - `sub/inputs/*.yaml|*.yml|*.json`

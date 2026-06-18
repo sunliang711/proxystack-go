@@ -29,7 +29,7 @@
 
 - 新增 `scripts/install-agent.sh`、`scripts/install-sub-local.sh`、`scripts/deploy-sub-docker.sh` 和 `scripts/lib/common.sh`。
 - 脚本使用 Go binary bootstrap，不再安装 Python venv。
-- Dockerfile 只构建 `proxystack-sub`，镜像不包含 mihomo/xray。
+- Dockerfile 只构建 `ps-sub`，镜像不包含 mihomo/xray。
 - Docker/compose 默认非 root、read-only、`cap_drop: ALL`、`no-new-privileges:true`，并持久化 `/data`。
 
 ### T18 E2E 验收

@@ -11,7 +11,7 @@
 - 模板兼容决策已写入 [template-compat-spec.md](template-compat-spec.md)。
 - golden 对照策略已确认。
 - Go module 名称为 `github.com/eagle/proxystack-go`。
-- 已保留 `proxystack-agent`/`proxystack-sub` 长命令和 `ps-agent`/`ps-sub` 短命令。
+- 二进制入口统一为 `ps-agent` 和 `ps-sub`。
 - 服务管理器支持 `auto|systemd|launchd`，相关改动需要同时覆盖 `internal/service`、`internal/systemd` 和 CLI。
 
 ## 2. 当前 module 与依赖

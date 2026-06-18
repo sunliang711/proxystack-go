@@ -12,7 +12,7 @@
 
 已确认边界：
 
-- 业务目标：保持现有 `proxystack-agent` 与 `proxystack-sub` 能力，用 Go 重写为可替代版本。
+- 业务目标：保持现有 agent 与 sub 能力，用 Go 重写为可替代版本。
 - 影响范围：目标项目为 `/Users/eagle/Sync/proxy/proxystack-go`。
 - 接口形态：CLI 为主，订阅服务 HTTP 为辅；不新增管理 Web UI 或管理 HTTP API。
 - 关键规则：配置格式、生成结果、订阅包、备份包、服务管理文件、运行目录边界尽量兼容现有 Python 版。
@@ -51,7 +51,7 @@
 Go 版需要保持以下兼容契约：
 
 - 保持现有用户配置格式：`config.yaml`、`stacks/*.yaml`、`sub/config.yaml`、订阅 input、订阅 bundle、原生 backup。
-- 保持现有命令名称和短别名：`proxystack-agent`、`proxystack-sub`、`ps-agent`、`ps-sub`。
+- 保持现有命令入口：`ps-agent`、`ps-sub`。
 - 保持 agent/sub 数据边界：`ps-sub` 不读取 `config.yaml`、`stacks/`、`runtime/`。
 - 保持订阅边界：订阅只来自 `xrelay.inbounds[]` 中 `sub: true` 的节点，不把 clash upstream、groups、rules、controller 写入订阅。
 - 保持生成边界：`start` 写 runtime/generated 和 manifest，但不隐式生成订阅发布包；`sub export` 才生成发布包。

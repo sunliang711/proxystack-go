@@ -1,6 +1,6 @@
 # pair 模板，也是 add 默认模板
 # 使用方式：
-#   proxystack-agent add <name> --template pair
+#   ps-agent add <name> --template pair
 # 快速定位：
 # - 搜索【必改】：部署前必须替换的 server、uuid、secret 等占位值。
 # - 搜索【按需改】：端口、监听地址、user、remark、sub 等常见部署参数。

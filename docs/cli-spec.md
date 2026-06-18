@@ -8,17 +8,15 @@
 
 二进制入口：
 
-- `proxystack-agent`
-- `proxystack-sub`
-- `ps-agent`，等价于 `proxystack-agent`
-- `ps-sub`，等价于 `proxystack-sub`
+- `ps-agent`
+- `ps-sub`
 
 通用约定：
 
-- `proxystack-agent` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`。
+- `ps-agent` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`。
 - agent 全局配置文件固定为 `<base-dir>/config.yaml`，不再提供 `-c/--config`。
-- `proxystack-sub` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`；sub root 固定为 `<base-dir>/sub`。
-- `proxystack-sub` 通过全局 `--listen HOST:PORT` 覆盖订阅 HTTP 监听地址，默认 `0.0.0.0:3003`；`serve --host/--port` 可进一步覆盖 host 或 port。
+- `ps-sub` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`；sub root 固定为 `<base-dir>/sub`。
+- `ps-sub` 通过全局 `--listen HOST:PORT` 覆盖订阅 HTTP 监听地址，默认 `0.0.0.0:3003`；`serve --host/--port` 可进一步覆盖 host 或 port。
 - 服务管理器通过全局 `--service-manager auto|systemd|launchd` 指定，默认 `auto`；Linux 解析为 `systemd`，macOS 解析为 `launchd`，其他平台需要显式支持后才能使用 `auto`。
 - CLI 日志消息使用英文，面向用户的错误摘要可以使用中文。
 - 外部命令必须使用参数数组执行，禁止拼接 shell 字符串。
@@ -33,13 +31,13 @@
 | 写 runtime | 写 `runtime/generated`、`runtime/manifest.json` 或 `publish` | `start`、`restart`、`sub export`、`export`、`import` |
 | 服务管理器 | 调用 `systemctl`/`journalctl` 或 `launchctl`/`log` | `start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`service *` |
 | 下载/安装 | 写 `downloads`、`bin`、`geo` 或 `.venv` | `install`、`update` |
-| HTTP 运行 | 启动长期运行进程 | `proxystack-sub serve` |
+| HTTP 运行 | 启动长期运行进程 | `ps-sub serve` |
 
 `check` 必须只做完整编译和 diff 预览，不能写 `runtime`，不能调用服务管理器。
 
 `start sub` 必须只操作本地订阅服务，不能读取 `config.yaml` 和 `stacks/*.yaml`，不能创建 `runtime/generated`。
 
-## 3. `proxystack-agent` 命令
+## 3. `ps-agent` 命令
 
 ### 3.1 `init`
 
@@ -440,11 +438,11 @@ ps-agent [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECON
 - `ipinfo` 不是 mihomo REST API。
 - IPv4/IPv6 默认来源和 fallback 与 Python 版一致。
 
-## 4. `proxystack-sub` 命令
+## 4. `ps-sub` 命令
 
 全局路径入口：
 
-- `proxystack-sub` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`。
+- `ps-sub` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`。
 - sub root 固定为 `<base-dir>/sub`。
 - sub config 固定为 `<base-dir>/sub/config.yaml`。
 - inputs 固定为 `<base-dir>/sub/inputs`。

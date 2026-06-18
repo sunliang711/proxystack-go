@@ -208,7 +208,7 @@ func prepareUninstallBaseDir(t *testing.T) string {
 	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "config.yaml"), []byte(doctorTestConfig()), 0o640))
 	stackContent := strings.Replace(doctorTestStack(24001, 17091, 19091), "name: edge", "name: usa1", 1)
 	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stacks", "usa1.yaml"), []byte(stackContent), 0o640))
-	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "bin", "proxystack-agent"), []byte("bin"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "bin", "ps-agent"), []byte("bin"), 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "runtime", "manifest.json"), []byte("{}\n"), 0o640))
 	return baseDir
 }

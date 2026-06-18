@@ -369,20 +369,14 @@ release_asset_name() {
 	printf 'proxystack-go_%s_%s_%s.tar.gz' "${version_value}" "${os_name}" "${arch_name}"
 }
 
-# release_binary_path 返回 release 解包后的二进制路径，并兼容旧包中的长文件名。
+# release_binary_path 返回 release 解包后的标准二进制路径。
 release_binary_path() {
 	local work_dir="${1:-}"
 	local short_name="${2:-}"
-	local legacy_name="${3:-}"
 	local short_path="${work_dir}/${short_name}"
-	local legacy_path="${work_dir}/${legacy_name}"
 
 	if is_dry_run || [[ -f "${short_path}" ]]; then
 		printf '%s' "${short_path}"
-		return 0
-	fi
-	if [[ -f "${legacy_path}" ]]; then
-		printf '%s' "${legacy_path}"
 		return 0
 	fi
 	die "Release archive is missing binary: ${short_name}"
@@ -458,8 +452,8 @@ install_release_binaries() {
 	download_file "${checksums_url}" "${checksums_path}"
 	verify_release_checksum "${temp_dir}" "${checksums_path}" "${asset_name}"
 	run tar -xzf "${archive_path}" -C "${temp_dir}"
-	agent_binary="$(release_binary_path "${temp_dir}" "ps-agent" "proxystack-agent")"
-	sub_binary="$(release_binary_path "${temp_dir}" "ps-sub" "proxystack-sub")"
+	agent_binary="$(release_binary_path "${temp_dir}" "ps-agent")"
+	sub_binary="$(release_binary_path "${temp_dir}" "ps-sub")"
 	install_file "${agent_binary}" "${bin_dir}/ps-agent" "0755"
 	install_file "${sub_binary}" "${bin_dir}/ps-sub" "0755"
 	if ! is_dry_run; then
@@ -698,12 +692,6 @@ install_binaries() {
 	install_release_binaries "${RELEASE_REPO}" "${RELEASE_VERSION}" "${BIN_DIR}"
 }
 
-# link_cli_commands 创建兼容 CLI 入口。
-link_cli_commands() {
-	run ln -sf "${BIN_DIR}/ps-agent" "${BIN_DIR}/proxystack-agent"
-	run ln -sf "${BIN_DIR}/ps-sub" "${BIN_DIR}/proxystack-sub"
-}
-
 # ensure_config 创建默认 sub 配置，已存在时保持不动。
 ensure_config() {
 	run_as_user "${INSTALL_USER}" "${BIN_DIR}/ps-sub" --base-dir "${BASE_DIR}" init
@@ -749,8 +737,6 @@ main() {
 	ensure_cli_dir
 	log "Install Go binaries"
 	install_binaries
-	log "Link CLI commands"
-	link_cli_commands
 	log "Ensure config"
 	ensure_config
 	log "Import subscription bundle"

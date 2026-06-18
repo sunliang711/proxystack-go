@@ -173,7 +173,7 @@ plist 行为：
 
 - `RunAtLoad=false`，安装 plist 后不会隐式自启。
 - 不固定写入 `UserName` 或 `GroupName`。
-- `sub` 运行命令为 `/usr/local/bin/proxystack-sub --base-dir <base-dir> serve`。
+- `sub` 运行命令为 `/usr/local/bin/ps-sub --base-dir <base-dir> serve`。
 - xray/mihomo 使用 `<base-dir>/bin`、`runtime/generated` 和 `runtime/mihomo` 中的实际路径。
 - `install all` 会清理目标范围内不再期望的旧 proxystack plist。
 - `uninstall` 删除 plist 前会先对已加载 job 执行 `bootout`。

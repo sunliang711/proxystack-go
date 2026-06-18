@@ -324,20 +324,14 @@ release_asset_name() {
 	printf 'proxystack-go_%s_%s_%s.tar.gz' "${version_value}" "${os_name}" "${arch_name}"
 }
 
-# release_binary_path 返回 release 解包后的二进制路径，并兼容旧包中的长文件名。
+# release_binary_path 返回 release 解包后的标准二进制路径。
 release_binary_path() {
 	local work_dir="${1:-}"
 	local short_name="${2:-}"
-	local legacy_name="${3:-}"
 	local short_path="${work_dir}/${short_name}"
-	local legacy_path="${work_dir}/${legacy_name}"
 
 	if is_dry_run || [[ -f "${short_path}" ]]; then
 		printf '%s' "${short_path}"
-		return 0
-	fi
-	if [[ -f "${legacy_path}" ]]; then
-		printf '%s' "${legacy_path}"
 		return 0
 	fi
 	die "Release archive is missing binary: ${short_name}"
@@ -414,8 +408,8 @@ install_release_binaries() {
 	download_file "${checksums_url}" "${checksums_path}"
 	verify_release_checksum "${temp_dir}" "${checksums_path}" "${asset_name}"
 	run tar -xzf "${archive_path}" -C "${temp_dir}"
-	agent_binary="$(release_binary_path "${temp_dir}" "ps-agent" "proxystack-agent")"
-	sub_binary="$(release_binary_path "${temp_dir}" "ps-sub" "proxystack-sub")"
+	agent_binary="$(release_binary_path "${temp_dir}" "ps-agent")"
+	sub_binary="$(release_binary_path "${temp_dir}" "ps-sub")"
 	install_file "${agent_binary}" "${base_dir}/bin/ps-agent" "0750" "${owner_group}"
 	install_file "${sub_binary}" "${base_dir}/bin/ps-sub" "0750" "${owner_group}"
 	if ! is_dry_run; then

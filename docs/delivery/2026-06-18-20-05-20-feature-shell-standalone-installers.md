@@ -8,7 +8,7 @@
 
 - 两个安装脚本移除对 `scripts/lib/common.sh` 的运行时依赖，内联必要的参数校验、release 下载、checksum 校验和安装函数。
 - release 仓库默认不再写死为固定仓库；未传 `--repo` 且未设置 `PROXYSTACK_RELEASE_REPO` 时，脚本会从当前 Git `remote.origin.url` 解析 `OWNER/REPO`。
-- `ps-agent` 和 `ps-sub` 实际安装到 `--bin-dir`，默认 `/usr/local/bin`；`proxystack-agent` 和 `proxystack-sub` 保留为兼容软链接。
+- `ps-agent` 和 `ps-sub` 实际安装到 `--bin-dir`，默认 `/usr/local/bin`。
 - 脚本内的 init、import、service install 和 start 调用改为使用 `--bin-dir` 下的 CLI。
 - 部署文档同步说明默认仓库解析、独立运行限制和安装目录变化。
 

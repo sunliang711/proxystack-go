@@ -2,8 +2,8 @@
 
 ## 组件边界
 
-- `ps-agent`：管理 agent 配置、stack、runtime 生成物、服务管理器和核心下载；`proxystack-agent` 作为兼容链接保留。
-- `ps-sub`：只消费 `sub/config.yaml` 与 `sub/inputs/`，提供订阅 HTTP 服务；`proxystack-sub` 作为兼容链接保留。
+- `ps-agent`：管理 agent 配置、stack、runtime 生成物、服务管理器和核心下载。
+- `ps-sub`：只消费 `sub/config.yaml` 与 `sub/inputs/`，提供订阅 HTTP 服务。
 - `ps-sub` 不读取 agent `config.yaml` 或 `stacks/*.yaml`。
 
 ## 本地 agent 部署
@@ -33,7 +33,7 @@ sudo /usr/local/bin/ps-agent --base-dir /opt/proxystack setup --start
 
 - 创建 `proxystack:proxystack` 用户和托管目录。
 - 默认下载 GitHub Release 中的 `proxystack-go_<os>_<arch>.tar.gz` 兼容别名；指定固定版本时下载 `proxystack-go_<version>_<os>_<arch>.tar.gz`，其中 `<os>` 为 `linux` 或 `macos`，并用 `SHA256SUMS` 校验；传入 `--source` 时改为本地 `go build`；脱离 Git 工作区运行时需要传入 `--repo OWNER/REPO` 或 `PROXYSTACK_RELEASE_REPO`。
-- 将 `ps-agent` 和 `ps-sub` 安装到 `/usr/local/bin`，并保留 `proxystack-agent` 与 `proxystack-sub` 兼容链接。
+- 将 `ps-agent` 和 `ps-sub` 安装到 `/usr/local/bin`。
 - 可选执行 `ps-agent init` 与 `ps-agent service install`。
 
 脚本本身不安装 mihomo、xray-core 或 geo 数据；这些由 `ps-agent setup` 或 `ps-agent install all` 管理。

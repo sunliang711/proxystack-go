@@ -70,6 +70,8 @@ func TestDockerSubDeploymentUsesSecureDefaults(t *testing.T) {
 	require.Contains(t, compose, "no-new-privileges:true")
 	require.Contains(t, compose, "/opt/proxystack:/data")
 	require.Contains(t, compose, "user: \"10001:10001\"")
+	require.Contains(t, compose, "- ps-sub")
+	require.NotContains(t, compose, "- proxystack-sub")
 
 	require.Contains(t, deployScript, "--read-only")
 	require.Contains(t, deployScript, "--cap-drop ALL")

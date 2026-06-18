@@ -60,6 +60,10 @@ xrelay:
       # 入站认证配置。
       auth:
         # 认证类型；支持全集：noauth、password；noauth 表示不需要用户名密码。
+        # 如果改为 password，需要同时配置 username 和 password：
+        # type: password
+        # username: relay-user
+        # password: change-me-relay-password
         type: noauth
       # 【按需改】订阅或统计中的用户标识。
       user: user1

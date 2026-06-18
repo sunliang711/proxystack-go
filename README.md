@@ -141,7 +141,7 @@ sudo ps-agent --base-dir /opt/proxystack check
 sudo ps-sub --base-dir /opt/proxystack init
 ```
 
-订阅服务配置固定为 `<base-dir>/sub/config.yaml`：
+订阅服务配置固定为 `<base-dir>/sub/config.yaml`。不要在该 YAML 中写 `data_dir`，运行数据目录固定由 `--base-dir` 推导为 `<base-dir>/sub`：
 
 ```yaml
 listen: 0.0.0.0:3003
@@ -160,6 +160,13 @@ managed_config:
 ```bash
 sudo ps-sub --base-dir /opt/proxystack config show
 sudo ps-sub --base-dir /opt/proxystack config check
+```
+
+如果编辑配置时报 `field data_dir not found`，删除 `sub/config.yaml` 中的 `data_dir` 字段，并在命令中通过 `--base-dir` 指定目录：
+
+```bash
+sudo ps-sub --base-dir /opt/proxystack config
+sudo ps-sub --base-dir /opt/proxystack serve
 ```
 
 ## 使用

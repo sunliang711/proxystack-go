@@ -38,6 +38,7 @@ func TestHelpUsesCommandGroupsAndBaseDirOnly(t *testing.T) {
 	require.Contains(t, helpText, "  init")
 	require.Contains(t, helpText, "  config")
 	require.Contains(t, helpText, "  import")
+	require.Contains(t, helpText, "  input")
 	require.Contains(t, helpText, "  serve")
 	require.Contains(t, helpText, "  doctor")
 	require.Contains(t, helpText, "  version")

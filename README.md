@@ -196,6 +196,12 @@ sudo ps-agent --base-dir /opt/proxystack sub export
 # 导入 agent 生成的订阅包
 sudo ps-sub --base-dir /opt/proxystack import /opt/proxystack/publish/sub-bundle.zip
 
+# 查询、校验或编辑订阅 input
+sudo ps-sub --base-dir /opt/proxystack input list
+sudo ps-sub --base-dir /opt/proxystack input show manual
+sudo ps-sub --base-dir /opt/proxystack input validate
+sudo ps-sub --base-dir /opt/proxystack input edit manual
+
 # 前台运行订阅服务
 sudo ps-sub --base-dir /opt/proxystack serve
 

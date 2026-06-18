@@ -73,6 +73,7 @@ func NewRootCommand() *cobra.Command {
 	command.AddCommand(groupedCommand(subInitGroup, newInitCommand()))
 	command.AddCommand(groupedCommand(subServiceGroup, newServeCommand()))
 	command.AddCommand(groupedCommand(subDataGroup, newImportCommand()))
+	command.AddCommand(groupedCommand(subDataGroup, newInputCommand()))
 	command.AddCommand(groupedCommand(subConfigGroup, newConfigCommand()))
 	command.AddCommand(groupedCommand(subDataGroup, newClearCommand()))
 	command.AddCommand(groupedCommand(subServiceGroup, newServiceCommand()))

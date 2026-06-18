@@ -555,7 +555,39 @@ ps-sub [--base-dir DIR] clear
 - 不删除 `sub/config.yaml`。
 - 不读取 agent 配置。
 
-### 4.6 `serve`
+### 4.6 `input`
+
+```bash
+ps-sub [--base-dir DIR] input list
+ps-sub [--base-dir DIR] input show SOURCE [--raw] [--show-secrets]
+ps-sub [--base-dir DIR] input validate [SOURCE]
+ps-sub [--base-dir DIR] input edit SOURCE [--editor CMD]
+ps-sub [--base-dir DIR] input remove SOURCE
+```
+
+职责：
+
+- `list` 列出 `<base-dir>/sub/inputs` 中的 input 文件、source、nodes、users 和 generated_at。
+- `show` 打印单个 input，默认输出脱敏后的规范 YAML；`--raw` 输出原始文件内容；`--show-secrets` 仅影响非 raw 输出。
+- `validate` 严格校验单个 input，或对全部 inputs 执行合并校验。
+- `edit` 通过临时文件编辑单个 input，保存前必须 strict decode 并通过 schema 校验。
+- `remove` 删除单个 input 文件。
+
+副作用：
+
+- `list`、`show`、`validate` 只读。
+- `edit` 可写目标 input 文件。
+- `remove` 可删除目标 input 文件。
+
+验收：
+
+- SOURCE 只能解析为 `<base-dir>/sub/inputs` 下的 `.yaml`、`.yml` 或 `.json` 普通文件，不允许路径穿越。
+- `show` 默认不得输出 password、token、uuid 等敏感值。
+- `edit` 校验失败时不得覆盖原文件。
+- `validate` 全量模式必须发现重复 `node.id` 和同用户重复代理名。
+- 不读取 agent `config.yaml`。
+
+### 4.7 `serve`
 
 ```bash
 ps-sub [--base-dir DIR] [--listen HOST:PORT] serve [--host HOST] [--port PORT]
@@ -576,7 +608,7 @@ ps-sub [--base-dir DIR] [--listen HOST:PORT] serve [--host HOST] [--port PORT]
 
 - 启动阶段输入非法时启动失败。
 
-### 4.7 `service install`
+### 4.8 `service install`
 
 ```bash
 ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] service install
@@ -597,7 +629,7 @@ ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] service install
 - 不读取或创建 `stacks/`、`runtime/`、`publish/`。
 - 不安装 xray/mihomo 相关服务文件。
 
-### 4.8 生命周期命令
+### 4.9 生命周期命令
 
 ```bash
 ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] start
@@ -625,7 +657,7 @@ ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] disable
 - 运行期 reload 失败保留上一份可用内存索引。
 - 日志不得打印 token/password。
 
-### 4.9 `doctor`
+### 4.10 `doctor`
 
 ```bash
 ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] doctor

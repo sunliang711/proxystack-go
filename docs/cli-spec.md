@@ -2,7 +2,7 @@
 
 生成日期：2026-06-17
 
-本文定义 Go 版 `proxystack` 必须兼容的命令、参数、默认值和副作用边界。实现阶段不得把只读命令改成会落盘或调用 systemd 的命令。
+本文定义 Go 版 `proxystack` 必须兼容的命令、参数、默认值和副作用边界。实现阶段不得把只读命令改成会落盘或调用服务管理器的命令。
 
 ## 1. 全局约定
 
@@ -17,6 +17,9 @@
 
 - `proxystack-agent` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`。
 - agent 全局配置文件固定为 `<base-dir>/config.yaml`，不再提供 `-c/--config`。
+- `proxystack-sub` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`；sub root 固定为 `<base-dir>/sub`。
+- `proxystack-sub` 通过全局 `--listen HOST:PORT` 覆盖订阅 HTTP 监听地址，默认 `0.0.0.0:3003`；`serve --host/--port` 可进一步覆盖 host 或 port。
+- 服务管理器通过全局 `--service-manager auto|systemd|launchd` 指定，默认 `auto`；Linux 解析为 `systemd`，macOS 解析为 `launchd`，其他平台需要显式支持后才能使用 `auto`。
 - CLI 日志消息使用英文，面向用户的错误摘要可以使用中文。
 - 外部命令必须使用参数数组执行，禁止拼接 shell 字符串。
 - 默认不自动提权，权限不足时失败并给出明确提示。
@@ -25,16 +28,16 @@
 
 | 分类 | 含义 | 命令 |
 | --- | --- | --- |
-| 只读 | 不写文件，不调用 systemd，不启动 HTTP 服务 | `version`、`list`、`validate`、`check`、`render *`、`doctor`、`sub validate-inputs` |
+| 只读 | 不写文件，不调用服务管理器，不启动 HTTP 服务 | `version`、`list`、`validate`、`check`、`render *`、`doctor`、`sub validate-inputs` |
 | 写配置 | 写 `config.yaml`、`sub/config.yaml` 或 `stacks/*.yaml` | `ps-agent init`、`config`、`add`、`clone`、`member add/remove`、`remove`、`ps-sub init` |
 | 写 runtime | 写 `runtime/generated`、`runtime/manifest.json` 或 `publish` | `start`、`restart`、`sub export`、`export`、`import` |
-| systemd | 调用 `systemctl` 或 `journalctl` | `start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`service *` |
+| 服务管理器 | 调用 `systemctl`/`journalctl` 或 `launchctl`/`log` | `start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`service *` |
 | 下载/安装 | 写 `downloads`、`bin`、`geo` 或 `.venv` | `install`、`update` |
 | HTTP 运行 | 启动长期运行进程 | `proxystack-sub serve` |
 
-`check` 必须只做完整编译和 diff 预览，不能写 `runtime`，不能调用 `systemctl`。
+`check` 必须只做完整编译和 diff 预览，不能写 `runtime`，不能调用服务管理器。
 
-`start sub` 必须只操作 `proxystack-sub.service`，不能读取 `config.yaml` 和 `stacks/*.yaml`，不能创建 `runtime/generated`。
+`start sub` 必须只操作本地订阅服务，不能读取 `config.yaml` 和 `stacks/*.yaml`，不能创建 `runtime/generated`。
 
 ## 3. `proxystack-agent` 命令
 
@@ -55,7 +58,7 @@ ps-agent [--base-dir DIR] init [--external-host HOST] [--force]
 
 - 可写 `config.yaml`。
 - 可创建标准目录。
-- 不下载依赖，不安装 systemd unit。
+- 不下载依赖，不安装系统服务文件。
 
 验收：
 
@@ -79,13 +82,13 @@ ps-agent [--base-dir DIR] setup [--external-host HOST] [--force] [--start]
 
 - 可写配置和标准目录。
 - 可下载安装 mihomo/xray/geo。
-- 可写 `/etc/systemd/system`。
+- 可写系统服务文件目录；systemd 后端为 `/etc/systemd/system`，launchd 后端为 `/Library/LaunchDaemons`。
 
 验收：
 
 - 任一步失败时命令失败，并显示失败步骤。
 - `install all` 不包含 `self`。
-- systemd 权限不足时不能吞错。
+- 服务管理器权限不足时不能吞错。
 
 ### 3.3 `add`
 
@@ -105,7 +108,7 @@ ps-agent [--base-dir DIR] add NAME [--template pair|auto-url-test|load-balance] 
 
 - 只写新 stack 文件。
 - 不写 runtime。
-- 不调用 systemd。
+- 不调用服务管理器。
 
 验收：
 
@@ -259,7 +262,7 @@ ps-agent [--base-dir DIR] check [TARGET] [--skip-system-ports]
 
 - 不创建 `runtime/generated`。
 - 不写 manifest。
-- 不调用 systemd。
+- 不调用服务管理器。
 
 ### 3.11 `render`
 
@@ -287,13 +290,13 @@ ps-agent [--base-dir DIR] render sub [--input-dir DIR] [--skip-system-ports]
 ### 3.12 生命周期命令
 
 ```bash
-ps-agent [--base-dir DIR] start [TARGET]
-ps-agent [--base-dir DIR] stop [TARGET]
-ps-agent [--base-dir DIR] restart [TARGET]
-ps-agent [--base-dir DIR] status [TARGET]
-ps-agent [--base-dir DIR] logs [TARGET] [--follow|-f]
-ps-agent [--base-dir DIR] enable [TARGET]
-ps-agent [--base-dir DIR] disable [TARGET]
+ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] start [TARGET]
+ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] stop [TARGET]
+ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] restart [TARGET]
+ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] status [TARGET]
+ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] logs [TARGET] [--follow|-f]
+ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] enable [TARGET]
+ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] disable [TARGET]
 ```
 
 target 规则：
@@ -302,43 +305,43 @@ target 规则：
 - `NAME`：该 stack 的 xray + clash。
 - `xrelay/NAME`：只操作 xray。
 - `clash/NAME`：只操作 mihomo。
-- `sub`：只操作本地 `proxystack-sub.service`。
+- `sub`：只操作本地订阅服务。
 
 副作用：
 
-- `start/restart` 可写 runtime/generated 和 manifest，并调用 systemd。
-- `stop/status/logs/enable/disable` 只调用 systemd，不写 runtime。
+- `start/restart` 可写 runtime/generated 和 manifest，并调用服务管理器。
+- `stop/status/logs/enable/disable` 只调用服务管理器，不写 runtime。
 
 验收：
 
-- `start/restart` 调 systemd 前必须检查所需二进制存在且可执行。
+- `start/restart` 调服务管理器前必须检查所需二进制存在且可执行。
 - 生命周期命令默认跳过系统端口占用检查。
-- `logs NAME -f` 对该 stack 的 xray 和 clash unit 使用一次 `journalctl` 调用。
+- `logs NAME -f` 对该 stack 的 xray 和 clash 服务使用一次日志查询调用；systemd 后端使用 `journalctl`，launchd 后端使用 `log`。
 
 ### 3.13 `service`
 
 ```bash
-ps-agent [--base-dir DIR] service install [TARGET]
-ps-agent [--base-dir DIR] service uninstall [TARGET]
-ps-agent [--base-dir DIR] service start|stop|restart|status|enable|disable [TARGET]
-ps-agent [--base-dir DIR] service log [TARGET] [--follow|-f]
+ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] service install [TARGET]
+ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] service uninstall [TARGET]
+ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] service start|stop|restart|status|enable|disable [TARGET]
+ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] service logs|log [TARGET] [--follow|-f]
 ```
 
 职责：
 
-- `install/uninstall` 管理 unit 文件。
-- 其他子命令是 systemd wrapper。
+- `install/uninstall` 管理 systemd unit 或 launchd plist。
+- 其他子命令是服务管理器 wrapper。
 
 副作用：
 
-- `install/uninstall` 写 `/etc/systemd/system`。
-- 其他子命令只调用 systemd/journalctl。
+- `install/uninstall` 写系统服务文件目录。
+- 其他子命令只调用服务管理器。
 
 验收：
 
-- `install all` 安装三个 unit 模板。
-- `sub` 只安装或操作 `proxystack-sub.service`。
-- systemd 错误必须保留 stdout/stderr 摘要。
+- `install all` 在 systemd 后端安装三个 unit 模板，在 launchd 后端按当前 enabled stack 渲染 plist。
+- `sub` 只安装或操作订阅服务。
+- 服务管理器错误必须保留 stdout/stderr 摘要。
 
 ### 3.14 `install/update/version`
 
@@ -437,6 +440,7 @@ ps-agent [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECON
 - sub config 固定为 `<base-dir>/sub/config.yaml`。
 - inputs 固定为 `<base-dir>/sub/inputs`。
 - 不提供 `--config` 或 `--data-dir`。
+- 监听地址可通过全局 `--listen HOST:PORT` 覆盖，默认 `0.0.0.0:3003`。
 - 服务管理器通过全局 `--service-manager auto|systemd|launchd` 指定，默认 `auto`。
 
 ### 4.1 `init`
@@ -538,7 +542,7 @@ ps-sub [--base-dir DIR] clear
 ### 4.6 `serve`
 
 ```bash
-ps-sub [--base-dir DIR] serve [--host HOST] [--port PORT]
+ps-sub [--base-dir DIR] [--listen HOST:PORT] serve [--host HOST] [--port PORT]
 ```
 
 职责：
@@ -580,13 +584,13 @@ ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] service install
 ### 4.8 生命周期命令
 
 ```bash
-ps-sub [--service-manager auto|systemd|launchd] start
-ps-sub [--service-manager auto|systemd|launchd] stop
-ps-sub [--service-manager auto|systemd|launchd] restart
-ps-sub [--service-manager auto|systemd|launchd] status
-ps-sub [--service-manager auto|systemd|launchd] logs [--follow|-f]
-ps-sub [--service-manager auto|systemd|launchd] enable
-ps-sub [--service-manager auto|systemd|launchd] disable
+ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] start
+ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] stop
+ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] restart
+ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] status
+ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] logs [--follow|-f]
+ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] enable
+ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] disable
 ```
 
 职责：

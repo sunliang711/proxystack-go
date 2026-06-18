@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build release binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate tag
+        run: |
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag ${GITHUB_REF_NAME} is not a semantic release tag"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build archives
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+          for goos in linux darwin; do
+            for goarch in amd64 arm64; do
+              asset_os="${goos}"
+              if [[ "${goos}" == "darwin" ]]; then
+                asset_os="macos"
+              fi
+              work_dir="dist/proxystack-go_${asset_os}_${goarch}"
+              archive="proxystack-go_${asset_os}_${goarch}.tar.gz"
+              mkdir -p "${work_dir}"
+              CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags="-s -w" -o "${work_dir}/proxystack-agent" ./cmd/ps-agent
+              CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags="-s -w" -o "${work_dir}/proxystack-sub" ./cmd/ps-sub
+              tar -C "${work_dir}" -czf "dist/${archive}" proxystack-agent proxystack-sub
+            done
+          done
+          (cd dist && sha256sum proxystack-go_*.tar.gz > SHA256SUMS)
+
+      - name: Upload GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: |
+            dist/proxystack-go_linux_amd64.tar.gz
+            dist/proxystack-go_linux_arm64.tar.gz
+            dist/proxystack-go_macos_amd64.tar.gz
+            dist/proxystack-go_macos_arm64.tar.gz
+            dist/SHA256SUMS
+          fail_on_unmatched_files: true

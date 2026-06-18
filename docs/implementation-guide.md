@@ -2,39 +2,42 @@
 
 生成日期：2026-06-17
 
-本文用于后续真正开始写 Go 代码时执行。当前阶段不包含代码实现。
+本文用于维护当前 Go 版实现。早期规划内容已按当前代码实际落地情况更新。
 
-## 1. 开工前检查
+## 1. 维护前检查
 
 执行前确认：
 
 - 模板兼容决策已写入 [template-compat-spec.md](template-compat-spec.md)。
 - golden 对照策略已确认。
-- Go module 名称已确认。
-- 是否保留 `proxystack-agent`/`proxystack-sub` 长命令和 `ps-agent`/`ps-sub` 短命令。
+- Go module 名称为 `github.com/eagle/proxystack-go`。
+- 已保留 `proxystack-agent`/`proxystack-sub` 长命令和 `ps-agent`/`ps-sub` 短命令。
+- 服务管理器支持 `auto|systemd|launchd`，相关改动需要同时覆盖 `internal/service`、`internal/systemd` 和 CLI。
 
-## 2. 初始化建议
+## 2. 当前 module 与依赖
 
-建议 module：
+当前 module：
 
 ```text
-module proxystack-go
+module github.com/eagle/proxystack-go
 ```
 
-首批依赖建议：
+当前直接依赖：
 
 - `github.com/spf13/cobra`
 - `github.com/gin-gonic/gin`
 - `github.com/rs/zerolog`
-- `github.com/go-playground/validator/v10`
+- `github.com/flosch/pongo2/v6`
+- `github.com/fsnotify/fsnotify`
 - `gopkg.in/yaml.v3`
 - `github.com/stretchr/testify`
 
-谨慎引入：
+当前未直接引入：
 
-- `go.uber.org/fx`：仅在 HTTP server 生命周期或大型组合有实际收益时使用。
-- `github.com/spf13/viper`：仅用于显式配置入口，不做隐式环境变量合并。
-- `github.com/flosch/pongo2/v6`：用于 Go 进程内兼容 `.j2` 订阅模板；必须先用默认模板和覆盖模板完成 spike。
+- `go.uber.org/fx`。
+- `github.com/spf13/viper`。
+
+`github.com/go-playground/validator/v10` 目前由 Gin 间接引入，业务 schema 和跨 stack 校验主要由代码中的显式校验函数完成。
 
 ## 3. 包边界
 
@@ -47,9 +50,10 @@ module proxystack-go
 | `internal/generator/xray` | Xray JSON | 读取磁盘 |
 | `internal/generator/mihomo` | mihomo YAML | 读取磁盘 |
 | `internal/generator/sub` | 订阅 input/index/bundle/template | 读取 agent stack 以外信息 |
-| `internal/runtime` | runtime plan、manifest、原子写文件 | 调用 systemd |
-| `internal/systemd` | systemctl/journalctl/unit | 解析业务配置 |
-| `internal/install` | 下载、校验、安装 | 调 systemd |
+| `internal/runtime` | runtime plan、manifest、原子写文件 | 调用服务管理器 |
+| `internal/service` | systemd/launchd 统一服务管理接口 | 生成 runtime、下载核心 |
+| `internal/systemd` | systemctl/journalctl/unit | 解析业务配置、处理 launchd |
+| `internal/install` | 下载、校验、安装 | 调服务管理器 |
 | `internal/subserver` | HTTP、state、watcher | 读取 agent config |
 | `internal/cli` | 参数绑定和用户输出 | 承载业务逻辑 |
 
@@ -62,7 +66,7 @@ module proxystack-go
 - `ReferenceError`
 - `GeneratorError`
 - `RuntimePlanError`
-- `SystemdError`
+- `ServiceManagerError`
 - `InstallError`
 - `SubscriptionError`
 
@@ -118,7 +122,7 @@ govulncheck ./...
 
 ## 8. 与 Python 版对照
 
-建议保留一个对照脚本或 Make target：
+如需重新对照 Python 版，可临时补充脚本或 Make target；当前仓库 Makefile 只提供 `build` 和 `build-linux`：
 
 ```text
 make compare-python-golden

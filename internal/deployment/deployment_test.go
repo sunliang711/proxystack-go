@@ -10,12 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestDeploymentScriptsUseGoBinaryBootstrap 验证部署脚本使用 Go 二进制 bootstrap，不再安装 Python venv。
-func TestDeploymentScriptsUseGoBinaryBootstrap(t *testing.T) {
+// TestDeploymentScriptsUseReleaseBinaryBootstrap 验证部署脚本默认使用 Release binary，并保留源码构建入口。
+func TestDeploymentScriptsUseReleaseBinaryBootstrap(t *testing.T) {
 	for _, scriptName := range []string{"install-agent.sh", "install-sub-local.sh"} {
 		t.Run(scriptName, func(t *testing.T) {
 			content := readRepoFile(t, "scripts", scriptName)
 
+			require.Contains(t, content, "RELEASE_VERSION=\"latest\"")
+			require.Contains(t, content, "--version VERSION")
+			require.Contains(t, content, "--repo OWNER/REPO")
+			require.Contains(t, content, "install_release_binaries")
 			require.Contains(t, content, "go build -trimpath")
 			require.Contains(t, content, "proxystack-agent")
 			require.Contains(t, content, "proxystack-sub")
@@ -23,6 +27,11 @@ func TestDeploymentScriptsUseGoBinaryBootstrap(t *testing.T) {
 			require.NotContains(t, content, "pip install")
 		})
 	}
+
+	common := readRepoFile(t, "scripts", "lib", "common.sh")
+	require.Contains(t, common, "releases/latest/download")
+	require.Contains(t, common, "SHA256SUMS")
+	require.Contains(t, common, "proxystack-go_${os_name}_${arch_name}.tar.gz")
 }
 
 // TestDockerSubDeploymentUsesSecureDefaults 验证 Docker 部署文件保留 sub-only 和安全运行参数。
@@ -67,6 +76,24 @@ func TestDockerSubDeployDryRunUsesBaseDir(t *testing.T) {
 	require.Contains(t, output, "install -d -m 0750 "+filepath.Join(baseDir, "sub", "inputs"))
 	require.Contains(t, output, "--volume "+baseDir+":/data")
 	require.Contains(t, output, "proxystack-sub --base-dir /data serve")
+}
+
+// TestInstallScriptsDryRunDownloadRelease 验证安装脚本 dry-run 会从指定 GitHub Release 下载二进制。
+func TestInstallScriptsDryRunDownloadRelease(t *testing.T) {
+	for _, scriptName := range []string{"install-agent.sh", "install-sub-local.sh"} {
+		t.Run(scriptName, func(t *testing.T) {
+			baseDir := filepath.Join(t.TempDir(), "proxystack")
+			binDir := filepath.Join(t.TempDir(), "bin")
+
+			output, err := runScript(t, filepath.Join("scripts", scriptName), "--dry-run", "--base-dir", baseDir, "--bin-dir", binDir, "--version", "1.2.3")
+
+			require.NoError(t, err, output)
+			require.Contains(t, output, "https://github.com/eagle/proxystack-go/releases/download/v1.2.3/proxystack-go_")
+			require.Contains(t, output, "https://github.com/eagle/proxystack-go/releases/download/v1.2.3/SHA256SUMS")
+			require.Contains(t, output, "tar -xzf")
+			require.Contains(t, output, "proxystack-release-dry-run")
+		})
+	}
 }
 
 // TestInstallScriptsRejectUnsafeManagedPaths 验证 root bootstrap 脚本拒绝宽泛托管目录。

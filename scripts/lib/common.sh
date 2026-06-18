@@ -187,6 +187,157 @@ install_file() {
 	fi
 }
 
+# validate_release_repo 校验 GitHub Release 仓库名。
+validate_release_repo() {
+	local repo_name="${1:-}"
+	if [[ ! "${repo_name}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+		die "Release repository must be OWNER/REPO: ${repo_name}"
+	fi
+}
+
+# normalize_release_version 规范 release 版本号，latest 原样保留。
+normalize_release_version() {
+	local version_value="${1:-}"
+	if [[ -z "${version_value}" ]]; then
+		die "Release version is required"
+	fi
+	if [[ "${version_value}" == "latest" ]]; then
+		printf '%s' "${version_value}"
+		return 0
+	fi
+	if [[ "${version_value}" != v* ]]; then
+		version_value="v${version_value}"
+	fi
+	if [[ ! "${version_value}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+		die "Release version must be latest or vMAJOR.MINOR.PATCH: ${version_value}"
+	fi
+	printf '%s' "${version_value}"
+}
+
+# detect_release_os 识别 release 资产中的操作系统名。
+detect_release_os() {
+	local os_name
+	os_name="$(uname -s)"
+	case "${os_name}" in
+		Linux)
+			printf 'linux'
+			;;
+		Darwin)
+			printf 'macos'
+			;;
+		*)
+			die "Unsupported OS for release binary: ${os_name}"
+			;;
+	esac
+}
+
+# detect_release_arch 识别 release 资产中的 CPU 架构名。
+detect_release_arch() {
+	local arch_name
+	arch_name="$(uname -m)"
+	case "${arch_name}" in
+		x86_64|amd64)
+			printf 'amd64'
+			;;
+		arm64|aarch64)
+			printf 'arm64'
+			;;
+		*)
+			die "Unsupported architecture for release binary: ${arch_name}"
+			;;
+	esac
+}
+
+# release_download_url 生成 GitHub Release 下载地址。
+release_download_url() {
+	local repo_name="${1:-}"
+	local version_value="${2:-}"
+	local asset_name="${3:-}"
+	if [[ "${version_value}" == "latest" ]]; then
+		printf 'https://github.com/%s/releases/latest/download/%s' "${repo_name}" "${asset_name}"
+		return 0
+	fi
+	printf 'https://github.com/%s/releases/download/%s/%s' "${repo_name}" "${version_value}" "${asset_name}"
+}
+
+# download_file 下载文件；dry-run 模式只打印 curl 命令。
+download_file() {
+	local source_url="${1:-}"
+	local target_path="${2:-}"
+	if is_dry_run; then
+		run_stream curl -fL --retry 3 -o "${target_path}" "${source_url}"
+		return 0
+	fi
+	if command -v curl >/dev/null 2>&1; then
+		run_stream curl -fL --retry 3 -o "${target_path}" "${source_url}"
+		return 0
+	fi
+	if command -v wget >/dev/null 2>&1; then
+		run_stream wget -O "${target_path}" "${source_url}"
+		return 0
+	fi
+	die "Required command not found: curl or wget"
+}
+
+# verify_release_checksum 校验下载归档的 SHA256。
+verify_release_checksum() {
+	local work_dir="${1:-}"
+	local checksums_path="${2:-}"
+	local asset_name="${3:-}"
+	local check_file="${work_dir}/${asset_name}.sha256"
+	if is_dry_run; then
+		log "DRY-RUN verify checksum: ${asset_name}"
+		return 0
+	fi
+	if ! awk -v asset="${asset_name}" '($2 == asset || $2 == "*" asset) { print; found=1 } END { exit found ? 0 : 1 }' "${checksums_path}" > "${check_file}"; then
+		die "Checksum entry not found: ${asset_name}"
+	fi
+	if command -v sha256sum >/dev/null 2>&1; then
+		(cd "${work_dir}" && sha256sum -c "$(basename "${check_file}")")
+		return 0
+	fi
+	if command -v shasum >/dev/null 2>&1; then
+		(cd "${work_dir}" && shasum -a 256 -c "$(basename "${check_file}")")
+		return 0
+	fi
+	die "Required command not found: sha256sum or shasum"
+}
+
+# install_release_binaries 从 GitHub Release 下载并安装当前平台二进制。
+install_release_binaries() {
+	local repo_name="${1:-}"
+	local version_value="${2:-}"
+	local base_dir="${3:-}"
+	local owner_group="${4:-}"
+	local os_name arch_name asset_name temp_dir archive_path checksums_path archive_url checksums_url
+
+	validate_release_repo "${repo_name}"
+	version_value="$(normalize_release_version "${version_value}")"
+	os_name="$(detect_release_os)"
+	arch_name="$(detect_release_arch)"
+	asset_name="proxystack-go_${os_name}_${arch_name}.tar.gz"
+	if is_dry_run; then
+		temp_dir="${base_dir}/runtime/proxystack-release-dry-run"
+		run install -d -m 0750 "${temp_dir}"
+	else
+		require_cmd tar
+		temp_dir="$(mktemp -d)"
+	fi
+	archive_path="${temp_dir}/${asset_name}"
+	checksums_path="${temp_dir}/SHA256SUMS"
+	archive_url="$(release_download_url "${repo_name}" "${version_value}" "${asset_name}")"
+	checksums_url="$(release_download_url "${repo_name}" "${version_value}" "SHA256SUMS")"
+	download_file "${archive_url}" "${archive_path}"
+	download_file "${checksums_url}" "${checksums_path}"
+	verify_release_checksum "${temp_dir}" "${checksums_path}" "${asset_name}"
+	run tar -xzf "${archive_path}" -C "${temp_dir}"
+	install_file "${temp_dir}/proxystack-agent" "${base_dir}/bin/proxystack-agent" "0750" "${owner_group}"
+	install_file "${temp_dir}/proxystack-sub" "${base_dir}/bin/proxystack-sub" "0750" "${owner_group}"
+	if ! is_dry_run; then
+		run rm -rf "${temp_dir}"
+	fi
+}
+
 # run_as_user 使用指定系统用户执行命令。
 run_as_user() {
 	local user_name="${1:-}"

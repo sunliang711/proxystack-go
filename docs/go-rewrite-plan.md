@@ -4,18 +4,18 @@
 
 目标目录：`/Users/eagle/Sync/proxy/proxystack-go`
 
-本方案只用于后续 Go 重写的设计和任务拆解，不包含任何 Go 代码实现。
+本方案最初用于 Go 重写的设计和任务拆解。当前仓库已经包含 Go module、源码实现和测试，本文件保留为架构背景与目标边界说明。
 
 ## 1. 需求理解
 
-本次目标是把当前 Python 项目 `proxystack` 用 Go 在 `../proxystack-go` 中重新实现一遍。当前阶段只输出方案和任务分解，不创建 Go module、不生成源码骨架、不改动当前 Python 项目。
+本次目标是把当前 Python 项目 `proxystack` 用 Go 在 `../proxystack-go` 中重新实现一遍。当前仓库已按该目标完成 Go module、源码骨架、T01-T18 实现和测试。
 
 已确认边界：
 
 - 业务目标：保持现有 `proxystack-agent` 与 `proxystack-sub` 能力，用 Go 重写为可替代版本。
-- 影响范围：未来目标项目为 `/Users/eagle/Sync/proxy/proxystack-go`，当前只写规划文档。
+- 影响范围：目标项目为 `/Users/eagle/Sync/proxy/proxystack-go`。
 - 接口形态：CLI 为主，订阅服务 HTTP 为辅；不新增管理 Web UI 或管理 HTTP API。
-- 关键规则：配置格式、生成结果、订阅包、备份包、systemd unit、运行目录边界尽量兼容现有 Python 版。
+- 关键规则：配置格式、生成结果、订阅包、备份包、服务管理文件、运行目录边界尽量兼容现有 Python 版。
 
 ## 2. 当前项目能力盘点
 
@@ -41,7 +41,7 @@
 | 订阅格式 | Clash、Premium Clash、Surge 三类输出；Surge 支持 `#!MANAGED-CONFIG` |
 | 订阅服务 | 支持 `/health`、`/sub`、`/premium_sub`、`/surge_sub`，token query/path 鉴权，启动加载 inputs，运行期 watcher reload |
 | CLI | `ps-agent` 与 `ps-sub`，覆盖 init/setup/add/config/list/remove/clone/member/check/start/restart/status/logs/doctor/install/update/export/import/sub export/sub validate-inputs/service 等 |
-| systemd | 生成并安装 `proxystack-xray@.service`、`proxystack-clash@.service`、`proxystack-sub.service`，带 hardening |
+| 服务管理 | Linux 生成并安装 `proxystack-xray@.service`、`proxystack-clash@.service`、`proxystack-sub.service`；macOS 生成 launchd plist |
 | 安装更新 | mihomo、xray、geo 下载/校验/原子替换；托管源 GitHub/R2 fallback；self update；远端 URL SSRF 防护 |
 | 备份发布 | 原生 agent backup 与订阅 bundle 分离；zip manifest/hash/path 安全校验 |
 | 测试 | golden tests 覆盖 Xray/mihomo/subscription；CLI、systemd、install、subserver、fixtures、部署脚本均有测试 |
@@ -55,13 +55,13 @@ Go 版需要保持以下兼容契约：
 - 保持 agent/sub 数据边界：`ps-sub` 不读取 `config.yaml`、`stacks/`、`runtime/`。
 - 保持订阅边界：订阅只来自 `xrelay.inbounds[]` 中 `sub: true` 的节点，不把 clash upstream、groups、rules、controller 写入订阅。
 - 保持生成边界：`start` 写 runtime/generated 和 manifest，但不隐式生成订阅发布包；`sub export` 才生成发布包。
-- 保持安全边界：下载、归档、systemd、日志、token、目录权限和安装更新行为不能弱化。
+- 保持安全边界：下载、归档、服务管理、日志、token、目录权限和安装更新行为不能弱化。
 
 不在首期范围内：
 
 - 不实现代理协议核心，不替代 Xray/mihomo。
 - 不引入数据库，GORM 不适用。
-- 不做 Web UI、管理 HTTP API、非 systemd 平台适配。
+- 不做 Web UI、管理 HTTP API；除已实现的 launchd 后端外，不扩展其他服务管理平台适配。
 - 不在首期实现 mihomo REST API 代理组切换。
 - 不自动导入旧 `clash`、`xrelay`、`clashsub` 或旧 `proxy-stack` 目录。
 - 不在 shell/bootstrap 脚本里下载 mihomo/xray/geo，仍由 agent 命令管理。
@@ -76,9 +76,9 @@ Go 版需要保持以下兼容契约：
 | HTTP 订阅服务 | Gin |
 | 日志 | Zerolog，日志消息使用英文，敏感字段脱敏 |
 | 配置解码 | `gopkg.in/yaml.v3` 解码到强类型 struct |
-| 配置管理 | Viper 仅作为入口配置定位和显式 override 的候选，不使用隐式环境变量合并污染现有行为 |
-| 校验 | `go-playground/validator/v10` + 自定义跨字段、跨 stack 校验 |
-| 依赖组织 | 首期优先显式构造对象；Fx 可用于 HTTP server 生命周期和大型组合，但不强塞到纯生成器路径 |
+| 配置管理 | 当前实现直接使用 Cobra flag 与 YAML loader，不引入 Viper |
+| 校验 | 手写校验和聚合错误为主，覆盖跨字段、跨 stack 规则 |
+| 依赖组织 | 当前实现优先显式构造对象，不引入 Fx |
 | JSON | 标准库 `encoding/json`，必要时用稳定结构保证字段顺序 |
 | YAML 输出 | `yaml.v3` + 必要的 ordered writer，保证生成文件稳定 |
 | 模板 | 首期采用 Go 进程内 Jinja2-compatible renderer，首选 `github.com/flosch/pongo2/v6`，保留现有 `.j2` 覆盖模板能力 |
@@ -89,9 +89,9 @@ Go 版需要保持以下兼容契约：
 
 模板兼容决策：首期使用 Go 进程内 Jinja2-compatible renderer，首选 `github.com/flosch/pongo2/v6`，不引入 Python runtime，不直接切换到 Go `text/template`。默认模板和使用公开上下文/`yaml_block` filter 的用户 `.j2` 覆盖模板必须兼容；不支持语法必须明确报错。
 
-## 5. 目录结构建议
+## 5. 当前目录结构
 
-后续实现时建议结构如下：
+当前实现主体结构如下：
 
 ```text
 proxystack-go/
@@ -101,9 +101,8 @@ proxystack-go/
     ps-sub/
       main.go
   internal/
-    app/
-      agent/
-      sub/
+    agentconfig/
+      templates/
     cli/
       agent/
       sub/
@@ -115,28 +114,15 @@ proxystack-go/
       mihomo/
       sub/
       backup/
+    service/
     subserver/
-      handler/
-      service/
-      watcher/
-      state/
     systemd/
     install/
     diagnostics/
     runtime/
-    logging/
     testutil/
-  pkg/
-    orderedyaml/
-    fileutil/
-    netutil/
-  configs/
-    agent-config.yaml
-    sub-config.yaml
   templates/
-    stack.pair.yaml
-    stack.auto-url-test.yaml
-    stack.load-balance.yaml
+    embed.go
     sub/
       clash.yaml.j2
       premium-clash.yaml.j2
@@ -161,18 +147,18 @@ proxystack-go/
 | `proxystack.generator.mihomo` | `internal/generator/mihomo` |
 | `proxystack.generator.sub` | `internal/generator/sub` |
 | `proxystack.generator.backup` | `internal/generator/backup` |
-| `proxystack.subserver.config` | `internal/subserver/config` |
-| `proxystack.subserver.state` | `internal/subserver/state` |
-| `proxystack.subserver.watcher` | `internal/subserver/watcher` |
-| `proxystack.subserver.app` | `internal/subserver/handler` + `internal/subserver/service` |
+| `proxystack.subserver.config` | `internal/config` |
+| `proxystack.subserver.state` | `internal/subserver` |
+| `proxystack.subserver.watcher` | `internal/subserver` |
+| `proxystack.subserver.app` | `internal/subserver` |
 | `proxystack.cli.agent` | `internal/cli/agent` |
 | `proxystack.cli.sub` | `internal/cli/sub` |
-| `proxystack.cli.lifecycle` | `internal/runtime` + `internal/cli/agent` |
-| `proxystack.systemd.service` | `internal/systemd` |
+| `proxystack.cli.lifecycle` | `internal/runtime` + `internal/cli/agent` + `internal/service` |
+| `proxystack.systemd.service` | `internal/systemd` + `internal/service` |
 | `proxystack.install.service` | `internal/install` |
 | `proxystack.diagnostics.ipinfo` | `internal/diagnostics` |
-| `proxystack.logging` | `internal/logging` |
-| `src/proxystack/templates` | `configs/` 与 `templates/`，通过 `embed` 打包 |
+| `proxystack.logging` | `internal/cli/runtime` 与 `internal/cli/sub` |
+| `src/proxystack/templates` | `internal/agentconfig/templates` 与 `templates/`，通过 `embed` 打包 |
 
 ## 7. 输出兼容标准
 

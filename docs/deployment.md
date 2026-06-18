@@ -2,28 +2,49 @@
 
 ## 组件边界
 
-- `proxystack-agent` / `ps-agent`：管理 agent 配置、stack、runtime 生成物、systemd 和核心下载。
+- `proxystack-agent` / `ps-agent`：管理 agent 配置、stack、runtime 生成物、服务管理器和核心下载。
 - `proxystack-sub` / `ps-sub`：只消费 `sub/config.yaml` 与 `sub/inputs/`，提供订阅 HTTP 服务。
 - `ps-sub` 不读取 agent `config.yaml` 或 `stacks/*.yaml`。
 
 ## 本地 agent 部署
 
-推荐使用 Go 二进制 bootstrap：
+推荐先使用 Go 二进制 bootstrap 安装 CLI，再由 `ps-agent setup` 完成 agent 初始化、核心安装和服务文件安装：
 
 ```bash
 sudo scripts/install-agent.sh
-sudo /usr/local/bin/ps-agent install all
-sudo /usr/local/bin/ps-agent service install
+sudo /usr/local/bin/ps-agent --base-dir /opt/proxystack setup
+```
+
+脚本默认从 GitHub Release 安装当前平台二进制，默认版本为 `latest`。如需固定版本或使用本地源码构建：
+
+```bash
+sudo scripts/install-agent.sh --version v1.2.3
+sudo scripts/install-agent.sh --source /path/to/proxystack-go
+```
+
+如需安装后立即生成 runtime 并启动 enabled 服务，可将第二步改为：
+
+```bash
+sudo /usr/local/bin/ps-agent --base-dir /opt/proxystack setup --start
 ```
 
 脚本只做：
 
 - 创建 `proxystack:proxystack` 用户和托管目录。
-- `go build` 生成 `proxystack-agent` 与 `proxystack-sub`。
+- 默认下载 GitHub Release 中的 `proxystack-go_<os>_<arch>.tar.gz`，其中 `<os>` 为 `linux` 或 `macos`，并用 `SHA256SUMS` 校验；传入 `--source` 时改为本地 `go build`。
 - 将 CLI 链接到 `/usr/local/bin`。
 - 可选执行 `ps-agent init` 与 `ps-agent service install`。
 
-脚本不安装 mihomo、xray-core 或 geo 数据；这些仍由 `ps-agent install all` 管理。
+脚本本身不安装 mihomo、xray-core 或 geo 数据；这些由 `ps-agent setup` 或 `ps-agent install all` 管理。
+
+CLI 服务管理器支持：
+
+```bash
+ps-agent --service-manager auto|systemd|launchd ...
+ps-sub --service-manager auto|systemd|launchd ...
+```
+
+`auto` 在 Linux 使用 systemd，在 macOS 使用 launchd。当前 shell bootstrap 脚本面向 Linux/systemd；macOS 可直接使用已构建的 CLI 与 `--service-manager launchd` 安装 plist。
 
 ## 本地 sub-only 部署
 
@@ -34,7 +55,7 @@ sudo scripts/install-sub-local.sh \
   --start
 ```
 
-该脚本会安装 Go CLI、准备 `/opt/proxystack/sub`，并可选导入订阅发布包。sub 服务运行期只依赖：
+该脚本会安装 Go CLI、准备 `/opt/proxystack/sub`，并可选导入订阅发布包。默认同样从 GitHub Release 下载，可通过 `--version v1.2.3` 固定版本，或通过 `--source /path/to/proxystack-go` 使用本地源码构建。sub 服务运行期只依赖：
 
 ```text
 /opt/proxystack/sub/config.yaml
@@ -104,6 +125,6 @@ sudo scripts/deploy-sub-docker.sh --build
 2. 执行 `scripts/install-agent.sh --no-init` 安装 Go CLI。
 3. 执行 `ps-agent validate`。
 4. 执行 `ps-agent check` 预览 runtime 变化。
-5. 使用 `ps-agent service install` 重新写入 Go 版 systemd unit。
+5. 使用 `ps-agent service install` 重新写入 Go 版服务文件；Linux 默认写入 systemd unit，macOS 可使用 `--service-manager launchd` 写入 launchd plist。
 
 不建议直接复用旧 Python venv 内 console scripts。

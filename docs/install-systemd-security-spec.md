@@ -1,8 +1,8 @@
-# 安装、systemd 与安全规格
+# 安装、服务管理与安全规格
 
 生成日期：2026-06-17
 
-本文定义 Go 版安装更新、systemd 管理和安全边界。
+本文定义 Go 版安装更新、服务管理和安全边界。
 
 ## 1. 目录权限
 
@@ -17,7 +17,7 @@ proxystack:proxystack
 | 路径 | 权限 | owner |
 | --- | --- | --- |
 | `/opt/proxystack` | `0750` | `proxystack:proxystack` |
-| `.venv/` 或 Go binary 目录 | `0750` | `proxystack:proxystack` |
+| Go binary 目录 | `0750` | `proxystack:proxystack` |
 | `bin/` | `0750` | `proxystack:proxystack` |
 | `geo/` | `0750` | `proxystack:proxystack` |
 | `runtime/` | `0750` | `proxystack:proxystack` |
@@ -46,14 +46,13 @@ proxystack:proxystack
 `install`：
 
 - 目标已存在时跳过。
-- 不安装 systemd unit。
+- 不安装系统服务文件。
 - 不重启服务。
 
 `update`：
 
 - 强制重新下载或替换。
 - 不自动重启服务。
-- 输出建议服务计划。
 
 `all`：
 
@@ -108,7 +107,11 @@ proxystack:proxystack
 - 原子 rename。
 - geo 多文件替换失败时回滚旧文件。
 
-## 5. systemd unit
+## 5. 服务管理文件
+
+服务管理器通过 CLI 全局 `--service-manager auto|systemd|launchd` 指定，默认 `auto`。`auto` 在 Linux 解析为 `systemd`，在 macOS 解析为 `launchd`。
+
+### 5.1 systemd unit
 
 unit 文件：
 
@@ -150,7 +153,32 @@ ExecStart=/usr/local/bin/ps-sub --base-dir /opt/proxystack serve
 - xray/clash 仅包含 runtime 相关目录。
 - sub 仅包含 sub data dir。
 
-## 6. systemctl/journalctl
+systemd 后端写入 unit 文件后执行 `systemctl daemon-reload`，避免新 unit 或更新后的 unit 未被 systemd 感知。
+
+### 5.2 launchd plist
+
+plist 文件默认写入：
+
+```text
+/Library/LaunchDaemons
+```
+
+label：
+
+- `com.proxystack.sub`
+- `com.proxystack.xray.<stack>`
+- `com.proxystack.mihomo.<stack>`
+
+plist 行为：
+
+- `RunAtLoad=false`，安装 plist 后不会隐式自启。
+- 不固定写入 `UserName` 或 `GroupName`。
+- `sub` 运行命令为 `/usr/local/bin/proxystack-sub --base-dir <base-dir> serve`。
+- xray/mihomo 使用 `<base-dir>/bin`、`runtime/generated` 和 `runtime/mihomo` 中的实际路径。
+- `install all` 会清理目标范围内不再期望的旧 proxystack plist。
+- `uninstall` 删除 plist 前会先对已加载 job 执行 `bootout`。
+
+## 6. systemctl/journalctl 与 launchctl/log
 
 调用方式：
 
@@ -162,12 +190,15 @@ ExecStart=/usr/local/bin/ps-sub --base-dir /opt/proxystack serve
 - 返回非零时展示 stdout/stderr 摘要。
 - 权限错误不可吞掉。
 - `systemctl status` inactive 返回码 3 不一定表示 CLI 失败，应按当前 Python 行为兼容。
+- `launchctl print` 返回服务未加载时应按未运行处理，其他错误保留 stdout/stderr 摘要。
 
 多 unit logs：
 
 ```bash
 journalctl -u proxystack-xray@usa1.service -u proxystack-clash@usa1.service --no-pager -n 100 -f
 ```
+
+launchd 日志通过 `log show` 或 `log stream` 查询，并按 proxystack 相关进程名过滤。
 
 ## 7. 日志脱敏
 

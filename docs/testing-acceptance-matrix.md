@@ -23,7 +23,8 @@
 | Clash 订阅 | `tests/golden/sub/clash.yaml` | 逐字节一致 |
 | Premium Clash 订阅 | `tests/golden/sub/premium-clash.yaml` | 逐字节一致 |
 | Surge 订阅 | `tests/golden/sub/surge.txt` | 逐字节一致 |
-| systemd unit | Python unit 测试期望文本 | 逐字节一致 |
+| systemd unit | `internal/systemd` 测试期望文本 | 逐字节一致 |
+| launchd plist | `internal/service` 测试期望文本 | 逐字节一致 |
 | bundle manifest | 从 Python 测试样例抽取 | 字段级一致，时间可注入固定值 |
 | native backup manifest | 从 Python 测试样例抽取 | 字段级一致，时间可注入固定值 |
 
@@ -55,6 +56,7 @@ tests/fixtures/sub/manual.yaml
 | `internal/cli/agent` | `test_cli.py`、`test_task11_cli_matrix.py` | 命令参数、target scope、只读命令不落盘、错误摘要 |
 | `internal/runtime` | `test_task11_main_flow.py` | runtime plan、manifest diff、generated_at 复用、start/restart apply |
 | `internal/systemd` | `test_systemd.py` | fake runner、unit 内容、journalctl 多 unit、inactive status |
+| `internal/service` | systemd/launchd 服务管理扩展用例 | service-manager auto 选择、launchd plist、launchctl/log 调用、stale plist 清理 |
 | `internal/install` | `test_install.py` | install/update/all/self、托管源 fallback、sha256、归档、回滚、SSRF |
 | `internal/diagnostics` | `test_ipinfo.py` | curl 参数、IPv4/IPv6 来源、fallback、进度输出 |
 | `scripts` / Docker | `test_task12_deployment_scripts.py`、`test_task11_docker_deployment.py` | bootstrap、sub Docker 安全参数、只做 sub 服务 |
@@ -65,9 +67,9 @@ tests/fixtures/sub/manual.yaml
 
 | 命令 | 不允许发生的事 |
 | --- | --- |
-| `validate` | 写任何文件、调用 systemd |
-| `check` | 写 `runtime/generated`、写 manifest、调用 systemd |
-| `render *` | 写 runtime、调用 systemd |
+| `validate` | 写任何文件、调用服务管理器 |
+| `check` | 写 `runtime/generated`、写 manifest、调用服务管理器 |
+| `render *` | 写 runtime、调用服务管理器 |
 | `list` | 写文件；默认不做系统端口检测 |
 | `doctor` | 写文件、修复权限 |
 | `start sub` | 读取 stack、创建 generated、写 agent manifest |
@@ -131,6 +133,15 @@ sudo ps-agent service install
 sudo ps-agent start usa1
 sudo ps-agent status usa1
 sudo ps-agent logs usa1 --follow
+```
+
+5. macOS launchd 环境：
+
+```bash
+sudo ps-agent --service-manager launchd service install
+sudo ps-agent --service-manager launchd start usa1
+sudo ps-agent --service-manager launchd status usa1
+sudo ps-agent --service-manager launchd logs usa1 --follow
 ```
 
 ## 8. 覆盖率要求

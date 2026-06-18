@@ -5,8 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SOURCE_DIR="${PROJECT_ROOT}"
+SOURCE_DIR=""
+INSTALL_SOURCE="release"
+RELEASE_REPO="${PROXYSTACK_RELEASE_REPO:-eagle/proxystack-go}"
+RELEASE_VERSION="latest"
 BASE_DIR="/opt/proxystack"
 BIN_DIR="/usr/local/bin"
 INSTALL_USER="proxystack"
@@ -19,12 +21,14 @@ usage() {
 	cat <<'EOF'
 Usage: scripts/install-agent.sh [options]
 
-Build and install proxystack Go binaries. The script bootstraps users,
-directories, CLI links, and optionally initializes config or installs systemd
-unit files. It does not install mihomo, xray-core, or geo data.
+Download and install proxystack release binaries by default. The script
+bootstraps users, directories, CLI links, and optionally initializes config or
+installs systemd unit files. It does not install mihomo, xray-core, or geo data.
 
 Options:
-  --source DIR             Build from a local source directory. Default: repository root
+  --version VERSION        Release version to install. Default: latest
+  --repo OWNER/REPO        GitHub release repository. Default: eagle/proxystack-go
+  --source DIR             Build from a local source directory instead of downloading release
   --base-dir DIR           Managed base directory. Default: /opt/proxystack
   --bin-dir DIR            CLI symlink directory. Default: /usr/local/bin
   --user USER              System user. Default: proxystack
@@ -40,12 +44,30 @@ EOF
 parse_args() {
 	while [[ "$#" -gt 0 ]]; do
 		case "$1" in
+			--version)
+				RELEASE_VERSION="$(read_arg "$1" "${2:-}")"
+				shift 2
+				;;
+			--version=*)
+				RELEASE_VERSION="${1#*=}"
+				shift
+				;;
+			--repo)
+				RELEASE_REPO="$(read_arg "$1" "${2:-}")"
+				shift 2
+				;;
+			--repo=*)
+				RELEASE_REPO="${1#*=}"
+				shift
+				;;
 			--source)
 				SOURCE_DIR="$(read_arg "$1" "${2:-}")"
+				INSTALL_SOURCE="source"
 				shift 2
 				;;
 			--source=*)
 				SOURCE_DIR="${1#*=}"
+				INSTALL_SOURCE="source"
 				shift
 				;;
 			--base-dir)
@@ -109,9 +131,17 @@ validate_args() {
 	guard_system_dir "${BIN_DIR}" "bin directory"
 	validate_identity "${INSTALL_USER}" "${INSTALL_GROUP}"
 	ensure_systemd_defaults
-	if [[ ! -d "${SOURCE_DIR}" && "${DRY_RUN}" != "1" ]]; then
-		die "Source directory does not exist: ${SOURCE_DIR}"
+	if [[ "${INSTALL_SOURCE}" == "source" ]]; then
+		if [[ -z "${SOURCE_DIR}" ]]; then
+			die "Source directory is required"
+		fi
+		if [[ ! -d "${SOURCE_DIR}" && "${DRY_RUN}" != "1" ]]; then
+			die "Source directory does not exist: ${SOURCE_DIR}"
+		fi
+		return 0
 	fi
+	validate_release_repo "${RELEASE_REPO}"
+	RELEASE_VERSION="$(normalize_release_version "${RELEASE_VERSION}")"
 }
 
 # ensure_systemd_defaults 避免自定义安装参数和固定 systemd unit 不一致。
@@ -156,6 +186,15 @@ build_go_binaries() {
 	if ! is_dry_run; then
 		run rm -rf "${temp_dir}"
 	fi
+}
+
+# install_binaries 按参数选择 release 下载或本地源码构建。
+install_binaries() {
+	if [[ "${INSTALL_SOURCE}" == "source" ]]; then
+		build_go_binaries
+		return 0
+	fi
+	install_release_binaries "${RELEASE_REPO}" "${RELEASE_VERSION}" "${BASE_DIR}" "${INSTALL_USER}:${INSTALL_GROUP}"
 }
 
 # link_cli_commands 链接 CLI 入口到系统 bin 目录。
@@ -212,8 +251,8 @@ main() {
 	ensure_user "${INSTALL_USER}" "${INSTALL_GROUP}" "${BASE_DIR}"
 	log "Prepare directories"
 	ensure_agent_dirs
-	log "Build Go binaries"
-	build_go_binaries
+	log "Install Go binaries"
+	install_binaries
 	log "Link CLI commands"
 	link_cli_commands
 	log "Initialize project"

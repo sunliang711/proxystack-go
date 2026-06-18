@@ -21,6 +21,7 @@ func TestDeploymentScriptsUseReleaseBinaryBootstrap(t *testing.T) {
 			require.Contains(t, content, "--repo OWNER/REPO")
 			require.Contains(t, content, "install_release_binaries")
 			require.Contains(t, content, "go build -trimpath")
+			require.Contains(t, content, "go_build_ldflags")
 			require.Contains(t, content, "proxystack-agent")
 			require.Contains(t, content, "proxystack-sub")
 			require.NotContains(t, content, "python3 -m venv")
@@ -32,6 +33,9 @@ func TestDeploymentScriptsUseReleaseBinaryBootstrap(t *testing.T) {
 	require.Contains(t, common, "releases/latest/download")
 	require.Contains(t, common, "SHA256SUMS")
 	require.Contains(t, common, "proxystack-go_${os_name}_${arch_name}.tar.gz")
+	require.Contains(t, common, "resolve_build_version")
+	require.Contains(t, common, "resolve_build_commit")
+	require.Contains(t, common, "resolve_build_datetime")
 }
 
 // TestDockerSubDeploymentUsesSecureDefaults 验证 Docker 部署文件保留 sub-only 和安全运行参数。
@@ -41,6 +45,9 @@ func TestDockerSubDeploymentUsesSecureDefaults(t *testing.T) {
 	deployScript := readRepoFile(t, "scripts", "deploy-sub-docker.sh")
 
 	require.Contains(t, dockerfile, "./cmd/ps-sub")
+	require.Contains(t, dockerfile, "BUILD_VERSION")
+	require.Contains(t, dockerfile, "BUILD_COMMIT")
+	require.Contains(t, dockerfile, "BUILD_DATETIME")
 	require.Contains(t, dockerfile, "USER 10001:10001")
 	require.Contains(t, dockerfile, "VOLUME [\"/data\"]")
 	require.NotContains(t, dockerfile, "xray")

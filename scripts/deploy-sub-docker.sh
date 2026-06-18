@@ -201,7 +201,13 @@ maybe_build_image() {
 	if [[ "${BUILD_IMAGE}" != "1" ]]; then
 		return 0
 	fi
-	run_stream docker build -f "${PROJECT_ROOT}/Dockerfile.sub" -t "${IMAGE}" "${PROJECT_ROOT}"
+	run_stream docker build \
+		--build-arg "BUILD_VERSION=$(resolve_build_version "${PROJECT_ROOT}")" \
+		--build-arg "BUILD_COMMIT=$(resolve_build_commit "${PROJECT_ROOT}")" \
+		--build-arg "BUILD_DATETIME=$(resolve_build_datetime)" \
+		-f "${PROJECT_ROOT}/Dockerfile.sub" \
+		-t "${IMAGE}" \
+		"${PROJECT_ROOT}"
 }
 
 # ensure_image_available 确认镜像可用后再替换旧容器。

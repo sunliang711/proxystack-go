@@ -50,6 +50,57 @@ require_cmd() {
 	fi
 }
 
+# resolve_build_version 从源码目录当前提交匹配的 git tag 推导 Go CLI 版本。
+resolve_build_version() {
+	local source_dir="${1:-}"
+	local version_value="${PROXYSTACK_BUILD_VERSION:-}"
+
+	if [[ -z "${version_value}" && -n "${source_dir}" ]]; then
+		version_value="$(git -C "${source_dir}" describe --tags --exact-match 2>/dev/null || true)"
+	fi
+	if [[ -z "${version_value}" ]]; then
+		version_value="0.1.0-dev"
+	fi
+	printf '%s' "${version_value}"
+}
+
+# resolve_build_commit 从源码目录读取当前 git commit short hash。
+resolve_build_commit() {
+	local source_dir="${1:-}"
+	local commit_value="${PROXYSTACK_BUILD_COMMIT:-}"
+
+	if [[ -z "${commit_value}" && -n "${source_dir}" ]]; then
+		commit_value="$(git -C "${source_dir}" rev-parse --short HEAD 2>/dev/null || true)"
+	fi
+	if [[ -z "${commit_value}" ]]; then
+		commit_value="unknown"
+	fi
+	printf '%s' "${commit_value}"
+}
+
+# resolve_build_datetime 生成构建 UTC 时间，默认使用 RFC3339 格式。
+resolve_build_datetime() {
+	local datetime_value="${PROXYSTACK_BUILD_DATETIME:-}"
+
+	if [[ -z "${datetime_value}" ]]; then
+		datetime_value="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+	fi
+	printf '%s' "${datetime_value}"
+}
+
+# go_build_ldflags 生成注入 version 包构建信息的 Go ldflags。
+go_build_ldflags() {
+	local source_dir="${1:-}"
+	local build_version
+	local build_commit
+	local build_datetime
+
+	build_version="$(resolve_build_version "${source_dir}")"
+	build_commit="$(resolve_build_commit "${source_dir}")"
+	build_datetime="$(resolve_build_datetime)"
+	printf '%s' "-s -w -X github.com/eagle/proxystack-go/internal/version.Version=${build_version} -X github.com/eagle/proxystack-go/internal/version.Commit=${build_commit} -X github.com/eagle/proxystack-go/internal/version.BuildDateTime=${build_datetime}"
+}
+
 # require_root 确认脚本以 root 运行。
 require_root() {
 	if [[ "${EUID}" -ne 0 && "${DRY_RUN}" != "1" ]]; then

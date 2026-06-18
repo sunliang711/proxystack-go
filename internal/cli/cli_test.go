@@ -20,8 +20,8 @@ func TestRootCommandsSmoke(t *testing.T) {
 	}{
 		{name: "agent help", command: agent.NewRootCommand, args: []string{"--help"}, want: "ps-agent"},
 		{name: "sub help", command: sub.NewRootCommand, args: []string{"--help"}, want: "ps-sub"},
-		{name: "agent version", command: agent.NewRootCommand, args: []string{"version"}, want: "ps-agent 0.1.0-dev"},
-		{name: "sub version", command: sub.NewRootCommand, args: []string{"version"}, want: "ps-sub 0.1.0-dev"},
+		{name: "agent version", command: agent.NewRootCommand, args: []string{"version"}, want: "ps-agent\n  version: 0.1.0-dev\n  commit: "},
+		{name: "sub version", command: sub.NewRootCommand, args: []string{"version"}, want: "ps-sub\n  version: 0.1.0-dev\n  commit: "},
 	}
 
 	for _, tt := range tests {
@@ -36,6 +36,9 @@ func TestRootCommandsSmoke(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Contains(t, output.String(), tt.want)
+			if tt.args[0] == "version" {
+				require.Contains(t, output.String(), "\n  build_datetime: ")
+			}
 		})
 	}
 }

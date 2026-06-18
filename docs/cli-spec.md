@@ -352,6 +352,15 @@ ps-agent [--base-dir DIR] update self [--wheel FILE|PACKAGE_SPEC] [--sha256 HASH
 ps-agent version [mihomo|xray|geo]
 ```
 
+输出：
+
+```text
+ps-agent
+  version: <git tag>
+  commit: <short hash>
+  build_datetime: <UTC RFC3339>
+```
+
 验收：
 
 - `install all` 和 `update all` 不包含 `self`。
@@ -469,6 +478,15 @@ ps-sub [--base-dir DIR] init [--force]
 
 ```bash
 ps-sub version
+```
+
+输出：
+
+```text
+ps-sub
+  version: <git tag>
+  commit: <short hash>
+  build_datetime: <UTC RFC3339>
 ```
 
 副作用：只读。

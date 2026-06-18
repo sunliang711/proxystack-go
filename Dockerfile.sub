@@ -1,5 +1,9 @@
 FROM golang:1.25-alpine AS builder
 
+ARG BUILD_VERSION=0.1.0-dev
+ARG BUILD_COMMIT=unknown
+ARG BUILD_DATETIME=unknown
+
 WORKDIR /src
 
 COPY go.mod go.sum ./
@@ -9,7 +13,7 @@ COPY cmd ./cmd
 COPY internal ./internal
 COPY templates ./templates
 
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/proxystack-sub ./cmd/ps-sub
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/eagle/proxystack-go/internal/version.Version=${BUILD_VERSION} -X github.com/eagle/proxystack-go/internal/version.Commit=${BUILD_COMMIT} -X github.com/eagle/proxystack-go/internal/version.BuildDateTime=${BUILD_DATETIME}" -o /out/proxystack-sub ./cmd/ps-sub
 
 FROM alpine:3.22
 

@@ -183,16 +183,18 @@ ensure_sub_dirs() {
 # build_go_binaries 构建 ps-agent 和 ps-sub，并安装到托管 bin 目录。
 build_go_binaries() {
 	local owner_group="${INSTALL_USER}:${INSTALL_GROUP}"
+	local build_ldflags
 	local temp_dir
 
 	require_cmd go
+	build_ldflags="$(go_build_ldflags "${SOURCE_DIR}")"
 	if is_dry_run; then
 		temp_dir="${BASE_DIR}/runtime/proxystack-build-dry-run"
 	else
 		temp_dir="$(mktemp -d)"
 	fi
-	run_stream go build -trimpath -o "${temp_dir}/proxystack-agent" "${SOURCE_DIR}/cmd/ps-agent"
-	run_stream go build -trimpath -o "${temp_dir}/proxystack-sub" "${SOURCE_DIR}/cmd/ps-sub"
+	run_stream go build -trimpath -ldflags "${build_ldflags}" -o "${temp_dir}/proxystack-agent" "${SOURCE_DIR}/cmd/ps-agent"
+	run_stream go build -trimpath -ldflags "${build_ldflags}" -o "${temp_dir}/proxystack-sub" "${SOURCE_DIR}/cmd/ps-sub"
 	install_file "${temp_dir}/proxystack-agent" "${BASE_DIR}/bin/proxystack-agent" "0750" "${owner_group}"
 	install_file "${temp_dir}/proxystack-sub" "${BASE_DIR}/bin/proxystack-sub" "0750" "${owner_group}"
 	if ! is_dry_run; then

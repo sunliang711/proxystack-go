@@ -1,0 +1,61 @@
+name: usa2
+enabled: true
+role: edge
+labels: [usa]
+
+xrelay:
+  enabled: true
+  api:
+    enabled: true
+    listen: 127.0.0.1:10092
+  stats:
+    enabled: true
+  policy:
+    enabled: true
+  outbound:
+    type: clash
+    ref: usa2.clash.socks
+  inbounds:
+    - name: relay
+      protocol: socks5
+      listen: 0.0.0.0
+      port: 24002
+      udp: true
+      auth:
+        type: password
+        username: usa2
+        password: demo-usa2-relay-password
+      user: alice
+      remark: usa2 relay socks
+      sub: true
+
+clash:
+  enabled: true
+  mode: Rule
+  controller:
+    listen: 127.0.0.1:19092
+    secret: demo-usa2-clash-api-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17092
+    http:
+      - name: local
+        listen: 127.0.0.1
+        port: 18092
+  upstreams:
+    - name: server-b
+      type: raw
+      config:
+        type: shadowsocks
+        server: server-b.example.com
+        port: 8388
+        cipher: aes-256-gcm
+        password: demo-server-b-password
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [server-b, DIRECT]
+  rules:
+    profile: default

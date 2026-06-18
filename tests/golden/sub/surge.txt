@@ -1,0 +1,155 @@
+[General]
+http-listen = 0.0.0.0:8888
+socks5-listen = 0.0.0.0:8889
+internet-test-url = http://www.gstatic.com/generate_204
+proxy-test-url = http://www.gstatic.com/generate_204
+test-timeout = 3
+ipv6 = true
+show-error-page-for-reject = true
+dns-server = 223.5.5.5, 119.29.29.29, 2400:3200::1, 2402:4e00::, system
+# DNS
+# doh-server = https://9.9.9.9/dns-query
+loglevel = notify
+skip-proxy = 127.0.0.1, 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, localhost, *.local
+exclude-simple-hostnames = true
+allow-wifi-access = true
+allow-hotspot-access = true
+external-controller-access = haha71@0.0.0.0:8887
+http-api-web-dashboard = true
+# Others
+http-listen = 0.0.0.0:8000
+# network-framework = true
+socks5-listen = 0.0.0.0:1080
+ipv6-vif = auto
+wifi-access-http-port = 8000
+wifi-access-socks5-port = 1080
+
+
+[Replica]
+hide-apple-request = true
+hide-crashlytics-request = true
+hide-udp = false
+keyword-filter-type = false
+
+[Proxy]
+Manual Relay = socks5, proxy.example.com, 24001, demo-user, demo-pass, udp-relay=true
+
+
+wgHome = wireguard, section-name=wgHome
+wgChiefOffice = wireguard, section-name=wgChiefOffice
+
+# wireguard 占位符，在module中覆盖
+[WireGuard wgHome]
+private-key = MGfzEmfwtvxUL/m0Hqou1nU/smad3aaaaaDKiQUCr2U=
+self-ip = 10.10.10.9
+dns-server = 10.1.1.1
+mtu = 1420
+peer = (public-key = 8Ih1UZSITx3LaNIuotXCaC0SmkVb8cxUDXnBTgF9RRw=, allowed-ips = "0.0.0.0/0, ::0/0", endpoint = example.cc:51820, keepalive = 30)
+
+# wireguard 占位符，在module中覆盖
+[WireGuard wgChiefOffice]
+private-key = MGfzEmfwtvxUL/m0Hqou1nU/smad3aaaaZDKiQUCr2U=
+self-ip = 10.10.10.9
+dns-server = 10.1.1.1
+mtu = 1420
+peer = (public-key = 8Ih1UZSITx3LaNIuotXCaC0SmkVb8cxUDXnBTgF9RRw=, allowed-ips = "0.0.0.0/0, ::0/0", endpoint = example.cc:51820, keepalive = 30)
+
+[Proxy Group]
+AutoGroup = url-test, Manual Relay, url=http://www.gstatic.com/generate_204, interval=120, tolerance=200, timeout=15, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/auto.png
+🌐 其他地区 = url-test, Manual Relay, url=http://www.gstatic.com/generate_204, interval=120, tolerance=200, timeout=15
+
+ProxyList = select, AutoGroup, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/surge.webp
+FinalList = select, ProxyList, AutoGroup, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/surge.webp
+
+Claude = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/claude.webp
+Cursor = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/cursor.png
+OpenAI = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/chatgpt33.webp
+OtherAI = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/ai.jpeg
+Google = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/google3.png
+Meta = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/meta.jpeg
+Apple = select, DIRECT, ProxyList, AutoGroup, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/applew.png
+Microsoft = select, DIRECT, ProxyList, AutoGroup, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/windows.png
+Binance = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/binance2.png
+Crypto = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/bitcoin.png
+Github = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/github.png
+Dropbox = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/dropbox.png
+1password = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/1password.png
+Telegram = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/telegram.webp
+Twitter = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/twitter3.png
+Discord = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/discord4.png
+Docker = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/docker5.png
+IP = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/ip2.png
+Netflix = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/netflix.png
+Disney+ = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/disney.png
+Spotify = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/spotify.png
+TikTok = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/tiktok.png
+GlobalMedia = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/HKMTMedia.png
+SpeedtestGroup = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/HKMTMedia.png
+Game = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/game.png
+Overseas = select, ProxyList, DIRECT, 🌐 其他地区, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/overseas.png
+LAN10_1_1 = select, DIRECT, wgHome,icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/lan.png
+LAN10_2 = select, DIRECT, wgChiefOffice,icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/lan.png
+China = select, DIRECT, ProxyList, AutoGroup, Manual Relay, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/china.png
+ADS = select, REJECT, DIRECT
+
+[Rule]
+
+# 内网流量走wireguard
+# IP-CIDR,10.1.1.0/24,wg,no-resolve // wireguard
+IP-CIDR,10.1.1.0/24,LAN10_1_1,no-resolve
+IP-CIDR,10.2.0.0/16,LAN10_2,no-resolve
+
+# > 订阅地址以及外部资源地址直连
+DOMAIN-SUFFIX,www.rustez.cc,DIRECT
+
+# baseURL1: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/ads.list
+# baseURL2: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/ads.list
+
+# > 广告拦截
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/ads.list,ADS
+# > AI
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/openai.list,OpenAI
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/claude.list,Claude
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/cursor.list,Cursor
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/other-ai.list,OtherAI
+# > 谷歌服务
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/google.list,Google
+# > Meta服务（Facebook,Instagram,whatsapp）
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/meta.list,Meta
+# > 苹果服务
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/apple.list,Apple
+# > 微软服务
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/microsoft.list,Microsoft
+# > Crypto
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/binance.list,Binance
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/crypto.list,Crypto
+# > 开发者平台
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/1password.list,1password
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/dropbox.list,Dropbox
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/github.list,Github
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/docker.list,Docker
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/ipDetect.list,IP
+# > 社交平台
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/telegram.list,Telegram
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/twitter.list,Twitter
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/discord.list,Discord
+# > 游戏平台
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/epic.list,Game
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/sony.list,Game
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/steam.list,Game
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/nintendo.list,Game
+# > 流媒体
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/netflix.list,Netflix
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/disney.list,Disney+
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/spotify.list,Spotify
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/tiktok.list,TikTok
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/globalmedia.list,GlobalMedia
+# > China
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/china.list,China,extended-matching
+# > 海外其它
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/overseas.list,Overseas
+
+# > 中国IP(会查询DNS，所以放到最后)
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/chinaIP.list,China
+# > 其他未分类流量
+FINAL,FinalList

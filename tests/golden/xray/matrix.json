@@ -1,0 +1,90 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "tag": "custom-vmess",
+      "listen": "127.0.0.1",
+      "port": 26001,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "alterId": 0,
+            "email": "alice"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "raw"
+      }
+    },
+    {
+      "tag": "shadowsocks:26002:ss-in",
+      "listen": "127.0.0.1",
+      "port": 26002,
+      "protocol": "shadowsocks",
+      "settings": {
+        "method": "chacha20-ietf-poly1305",
+        "password": "ss-password",
+        "network": "tcp,udp"
+      }
+    },
+    {
+      "tag": "socks5:26003:socks-noauth",
+      "listen": "127.0.0.1",
+      "port": 26003,
+      "protocol": "socks",
+      "settings": {
+        "auth": "noauth",
+        "udp": false
+      }
+    },
+    {
+      "tag": "socks5:26004:socks-password",
+      "listen": "127.0.0.1",
+      "port": 26004,
+      "protocol": "socks",
+      "settings": {
+        "auth": "password",
+        "udp": true,
+        "accounts": [
+          {
+            "user": "sock-user",
+            "pass": "sock-pass"
+          }
+        ]
+      }
+    },
+    {
+      "tag": "http:26005:http-noauth",
+      "listen": "127.0.0.1",
+      "port": 26005,
+      "protocol": "http",
+      "settings": {}
+    },
+    {
+      "tag": "http:26006:http-password",
+      "listen": "127.0.0.1",
+      "port": 26006,
+      "protocol": "http",
+      "settings": {
+        "accounts": [
+          {
+            "user": "http-user",
+            "pass": "http-pass"
+          }
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "egress-matrix",
+      "protocol": "freedom",
+      "settings": {}
+    }
+  ]
+}

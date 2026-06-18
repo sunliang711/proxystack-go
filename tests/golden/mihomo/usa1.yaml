@@ -1,0 +1,42 @@
+mode: Rule
+log-level: info
+ipv6: true
+allow-lan: false
+listeners:
+  - name: local
+    type: socks
+    listen: 127.0.0.1
+    port: 17091
+  - name: local-http
+    type: http
+    listen: 127.0.0.1
+    port: 18091
+external-controller: 127.0.0.1:19091
+secret: demo-usa1-clash-api-secret
+proxies:
+  - name: server-a
+    type: vmess
+    server: server-a.example.com
+    port: 443
+    uuid: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+    network: ws
+    tls: true
+    ws_opts:
+      path: /vmess
+    alterId: 0
+    cipher: auto
+proxy-groups:
+  - name: AllProxy
+    type: select
+    proxies:
+      - server-a
+      - DIRECT
+rules:
+  - DOMAIN-SUFFIX,local,DIRECT
+  - DOMAIN,localhost,DIRECT
+  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,100.64.0.0/10,DIRECT,no-resolve
+  - MATCH,AllProxy

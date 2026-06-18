@@ -1,0 +1,24 @@
+{
+  "log": {
+    "loglevel": "none"
+  },
+  "inbounds": [
+    {
+      "tag": "socks5:26003:socks-noauth",
+      "listen": "127.0.0.1",
+      "port": 26003,
+      "protocol": "socks",
+      "settings": {
+        "auth": "noauth",
+        "udp": false
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "egress-stack-log",
+      "protocol": "freedom",
+      "settings": {}
+    }
+  ]
+}

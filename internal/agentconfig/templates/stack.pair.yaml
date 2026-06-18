@@ -1,0 +1,225 @@
+# pair 模板，也是 add 默认模板
+# 使用方式：
+#   proxystack-agent add <name> --template pair
+# 快速定位：
+# - 搜索【必改】：部署前必须替换的 server、uuid、secret 等占位值。
+# - 搜索【按需改】：端口、监听地址、user、remark、sub 等常见部署参数。
+# - 搜索【一般不改】：默认结构配置，除非明确调整生成逻辑。
+# - 搜索【被引用】：其他 stack 会通过 ref 引用的名称，改名需同步修改引用方。
+
+# 【按需改】stack 名称；add 时会被替换为用户输入的实例名。
+name: example
+# 【一般不改】是否启用该 stack；false 时不会生成或管理对应服务。
+enabled: true
+# 【一般不改】stack 角色标记；支持全集：edge、auto；edge 表示普通边缘代理实例。
+role: edge
+# 【按需改】自定义标签列表；可用于分组、筛选或后续运维标记。
+labels: []
+
+# Xray/xrelay 侧配置，用于生成入站代理和转发链路。
+xrelay:
+  # 【一般不改】是否为该 stack 启用 xrelay 服务。
+  enabled: true
+  # 【按需改】stack 级 Xray 日志级别；不填继承 defaults.xrelay.loglevel。支持全集：debug、info、warning、error、none。
+  # loglevel: warning
+
+  # 【一般不改】Xray API 配置；默认开启并只监听本机，供 stats 查询使用。
+  api:
+    # 是否启用 Xray API。
+    enabled: true
+    # API 出站标识。
+    tag: api
+    # 【按需改】API 监听地址；add 默认会自动分配端口。
+    listen: 127.0.0.1:10085
+    # 启用的 API 服务列表。
+    services: [StatsService]
+
+  # 【一般不改】Xray stats 配置；默认开启以采集流量统计。
+  stats:
+    # 是否启用 stats。
+    enabled: true
+
+  # 【一般不改】Xray policy 配置；默认开启并继承全局统计开关。
+  policy:
+    # 是否生成 policy 配置。
+    enabled: true
+
+  # xrelay 入站列表，会生成对应 Xray inbound。
+  inbounds:
+    # 【被引用】默认 inter-stack socks5 入口；auto/load-balance 的 xrelay-socks5 upstream 默认会通过 <stack>.relay 引用这里。
+    # 若改名或删除，需要同步修改引用方 clash.upstreams[].ref。
+    - name: relay
+      # 【一般不改】入站协议；支持全集：vmess、shadowsocks、socks5、http；这里提供本地 socks5 入口。
+      protocol: socks5
+      # 【一般不改】入站监听地址；127.0.0.1 表示仅本机可访问。
+      listen: 127.0.0.1
+      # 【按需改】入站监听端口；需要避免与其他服务冲突。
+      port: 24000
+      # 是否允许该 socks5 入站转发 UDP。
+      udp: true
+      # 入站认证配置。
+      auth:
+        # 认证类型；支持全集：noauth、password；noauth 表示不需要用户名密码。
+        type: noauth
+      # 【按需改】订阅或统计中的用户标识。
+      user: user1
+      # 【按需改】入站备注，会出现在生成结果或订阅信息中。
+      remark: example local socks
+      # 【按需改】订阅地区简称，只校验两位大写字母格式，例如 US/HK/JP；该 inbound 下所有 users 共用。
+      # region: US
+      # 【按需改】是否导出到订阅；本地 relay 默认不对外发布。
+      sub: false
+
+    # 【按需改】入站名称；这里示例一个对外 vmess 入口。
+    - name: vmess
+      # 入站协议；支持全集：vmess、shadowsocks、socks5、http；vmess 用于兼容 Xray/V2Ray 客户端。
+      protocol: vmess
+      # 【按需改】入站监听地址；0.0.0.0 表示监听所有网卡。
+      listen: 0.0.0.0
+      # 【按需改】入站监听端口；对外开放时需放行防火墙。
+      port: 24100
+      # 【按需改】订阅节点 server；不填时使用全局 external_host。
+      # server: edge.example.com
+      # 【按需改】订阅地区简称，只校验两位大写字母格式，例如 US/HK/JP；该 inbound 下所有 users 共用。
+      # region: US
+      # 传输网络类型；raw 表示普通 TCP，其他值按 Xray 支持的 network 填写。
+      network: raw
+      # 【按需改】是否导出到订阅；true 表示生成订阅节点。
+      sub: true
+      # vmess 客户端用户列表；单用户也写一条 users 记录。
+      users:
+        # 【按需改】订阅或统计中的用户标识。
+        - user: user1
+          # 【必改】vmess 用户 UUID；部署前必须替换。
+          uuid: 11111111-1111-4111-8111-111111111111
+          # 【按需改】Xray 统计 email；不填时使用 user。
+          email:
+          # 【按需改】订阅节点名称。
+          remark: example vmess
+
+    # shadowsocks method 支持全集（Xray）：
+    # - SS2022：2022-blake3-aes-128-gcm、2022-blake3-aes-256-gcm、2022-blake3-chacha20-poly1305
+    # - 传统 SS：aes-256-gcm、aes-128-gcm、chacha20-poly1305、chacha20-ietf-poly1305、xchacha20-poly1305、xchacha20-ietf-poly1305、none、plain
+    # shadowsocks 多用户写法示例；需要使用时取消注释并调整端口、method 和密码。
+    # SS2022 password 必须是 base64 PSK；aes-256/chacha20 可用 openssl rand -base64 32 生成，aes-128 可用 openssl rand -base64 16 生成。
+    # SS2022 users 不支持单独设置 method；客户端订阅密码会生成为 ServerPassword:UserPassword。
+    # - name: ss2022
+    #   protocol: shadowsocks
+    #   listen: 0.0.0.0
+    #   port: 24101
+    #   # 【按需改】订阅节点 server；不填时使用全局 external_host。
+    #   # server: edge.example.com
+    #   method: 2022-blake3-aes-256-gcm
+    #   password: replace-with-base64-server-psk
+    #   udp: true
+    #   sub: true
+    #   users:
+    #     - user: user1
+    #       password: replace-with-base64-user-psk
+    #       email: user1@example.com
+    #       remark: example ss2022
+
+  # 【一般不改】xrelay 出站配置，决定入站流量转发到哪里。
+  # 下方方案只保留一种：默认方案 A 走本 stack 的 Clash；改用其他方案时同步删除或注释不适用字段。
+  outbound:
+    # 出站目标类型；支持全集：clash、socks5、http、direct。
+    # 方案 A：走本 stack 的 Clash socks 监听；type=clash 只使用 ref，不使用 server/port/username/password。
+    type: clash
+    # 【一般不改】出站引用；指向 stack.clash.socks 形式的唯一本地 socks 监听。
+    ref: example.clash.socks
+    # 方案 B：走外部 SOCKS5 上游；type=socks5 使用 server/port，可选 username/password，不使用 ref。
+    # type: socks5
+    # server: 127.0.0.1
+    # port: 1080
+    # username: up-user
+    # password: up-pass
+    # 方案 C：走外部 HTTP 上游；type=http 使用 server/port，可选 username/password，不使用 ref。
+    # type: http
+    # server: 127.0.0.1
+    # port: 8080
+    # 方案 D：直连；type=direct 不使用 ref/server/port/username/password。
+    # type: direct
+
+# Clash/mihomo 侧配置，用于生成本地出站代理和规则。
+clash:
+  # 【一般不改】是否为该 stack 启用 Clash 服务。
+  # 如果 xrelay.outbound.type 不使用 clash，可以设为 false，不生成或管理 Clash 服务；但当前 stack 模型仍要求保留合法 clash 配置段。
+  enabled: true
+  # 【按需改】Clash 运行模式；支持全集：Rule、Global、Direct；Rule 表示按规则分流。
+  mode: Rule
+  # 【按需改】stack 级 mihomo/clash 日志级别；不填继承 defaults.clash.loglevel。支持全集：debug、info、warning、error、silent。
+  # loglevel: info
+
+  # Clash external-controller API 配置。
+  controller:
+    # 【按需改】控制器监听地址；建议只监听本机。
+    listen: 127.0.0.1:19090
+    # 【必改】控制器访问密钥；部署前必须替换。
+    secret: change-me-clash-api-secret
+
+  # Clash 本地监听器配置。
+  listeners:
+    # socks 监听器列表，供本机或 xrelay 连接。
+    socks:
+      # 【一般不改】socks 监听器名称；会被 ref 引用。
+      - name: local
+        # 【一般不改】socks 监听地址；127.0.0.1 表示仅本机可访问。
+        listen: 127.0.0.1
+        # 【按需改】socks 监听端口；需要避免与其他服务冲突。
+        port: 17090
+        # 【按需改】mihomo 高级 listener 认证用户；不写表示跟随全局 authentication，[] 表示跳过认证。
+        # users:
+        #   - username: local-user
+        #     password: local-pass
+    # HTTP 监听器列表，供本机 HTTP 代理客户端连接。
+    http:
+      # 【一般不改】HTTP 监听器名称。
+      - name: local-http
+        # 【按需改】HTTP 监听地址；可与 socks 监听地址独立配置。
+        listen: 127.0.0.1
+        # 【按需改】HTTP 监听端口；需要避免与其他服务冲突。
+        port: 18090
+        # 【按需改】不写 users 表示跟随全局 authentication，users: [] 表示该 listener 不认证。
+        # users: []
+
+  # Clash 上游代理列表。
+  upstreams:
+    # 【被引用】上游代理名称；groups[].proxies 会引用它，改名需同步更新代理组。
+    - name: server-a
+      # 上游定义类型；支持全集：raw、xrelay-socks5；raw 表示直接写入 mihomo 原生 proxy 配置。
+      type: raw
+      # raw 上游的 mihomo 原生配置内容。
+      config:
+        # 上游代理协议类型；按 mihomo 原生 proxy type 填写，例如 vmess、shadowsocks 等。
+        type: vmess
+        # 【必改】上游服务器域名或 IP；部署前替换。
+        server: server.example.com
+        # 【按需改】上游服务器端口。
+        port: 443
+        # 【必改】上游 vmess UUID；部署前替换。
+        uuid: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+        # 【按需改】上游传输网络；按 mihomo/Xray 节点支持填写，ws 表示 WebSocket。
+        network: ws
+        # 是否启用 TLS。
+        tls: true
+        # WebSocket 传输参数。
+        ws_opts:
+          headers:
+            # 【按需改】WebSocket Host；需与服务端一致。
+            Host: server.example.com
+          # 【按需改】WebSocket 请求路径；需与服务端一致。
+          path: /vmess
+
+  # Clash 代理组列表。
+  groups:
+    # 代理组名称；供规则引用。
+    - name: AllProxy
+      # 代理组类型；支持全集：select、url-test、load-balance、fallback；select 表示手动选择节点。
+      type: select
+      # 【被引用】代理组成员；包含上游节点和直连选项，必须与 upstreams[].name 保持一致。
+      proxies: [server-a, DIRECT]
+
+  # Clash 规则集选择。
+  rules:
+    # 内置规则 profile 名称；支持全集：default；default 表示使用默认分流规则。
+    profile: default

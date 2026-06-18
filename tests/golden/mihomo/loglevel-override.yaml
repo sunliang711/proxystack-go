@@ -1,0 +1,26 @@
+mode: Rule
+log-level: silent
+ipv6: true
+allow-lan: false
+listeners:
+  - name: local
+    type: socks
+    listen: 127.0.0.1
+    port: 17001
+external-controller: 127.0.0.1:19001
+secret: demo-secret
+proxies: []
+proxy-groups:
+  - name: AllProxy
+    type: select
+    proxies:
+      - DIRECT
+rules:
+  - DOMAIN-SUFFIX,local,DIRECT
+  - DOMAIN,localhost,DIRECT
+  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,100.64.0.0/10,DIRECT,no-resolve
+  - MATCH,AllProxy

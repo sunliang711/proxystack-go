@@ -1,0 +1,70 @@
+name: auto
+enabled: true
+role: auto
+labels: [auto]
+
+xrelay:
+  enabled: true
+  api:
+    enabled: true
+    listen: 127.0.0.1:10150
+  stats:
+    enabled: true
+  policy:
+    enabled: true
+  outbound:
+    type: clash
+    ref: auto.clash.socks
+  inbounds:
+    - name: relay
+      protocol: socks5
+      listen: 0.0.0.0
+      port: 25001
+      udp: true
+      auth:
+        type: password
+        username: auto
+        password: demo-auto-relay-password
+      user: alice
+      remark: auto relay socks
+      sub: true
+
+clash:
+  enabled: true
+  mode: Rule
+  controller:
+    listen: 127.0.0.1:19093
+    secret: demo-auto-clash-api-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17093
+    http:
+      - name: local
+        listen: 127.0.0.1
+        port: 18093
+  upstreams:
+    - name: usa1-local
+      type: xrelay-socks5
+      ref: usa1.relay
+    - name: usa2-local
+      type: xrelay-socks5
+      ref: usa2.relay
+  groups:
+    - name: AutoProxy
+      type: url-test
+      proxies: [usa1-local, usa2-local]
+      url: http://www.gstatic.com/generate_204
+      interval: 120
+    - name: BalanceProxy
+      type: load-balance
+      proxies: [usa1-local, usa2-local]
+      url: http://www.gstatic.com/generate_204
+      interval: 120
+      strategy: consistent-hashing
+    - name: AllProxy
+      type: select
+      proxies: [AutoProxy, BalanceProxy, usa1-local, usa2-local, DIRECT]
+  rules:
+    profile: default

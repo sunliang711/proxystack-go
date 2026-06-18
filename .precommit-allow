@@ -1,0 +1,8 @@
+# Pre-commit allowlist for staged binary and large-file checks.
+# One extended regular expression per line.
+# Blank lines and lines starting with # are ignored.
+#
+# Examples:
+# ^docs/assets/
+# ^fixtures/sample\.bin$
+# \.(png|jpg|pdf)$

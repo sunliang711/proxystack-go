@@ -1,0 +1,271 @@
+package validation
+
+import (
+	"fmt"
+	"net"
+	"strings"
+
+	"github.com/eagle/proxystack-go/internal/domain"
+	"github.com/eagle/proxystack-go/internal/graph"
+)
+
+// Issue 表示带字段路径的配置校验问题。
+type Issue struct {
+	Path    string
+	Message string
+}
+
+// String 输出面向 CLI 的单行错误。
+func (i Issue) String() string {
+	return i.Path + ": " + i.Message
+}
+
+// ConfigValidationError 保存所有跨 stack 校验问题，便于 CLI 一次性展示。
+type ConfigValidationError struct {
+	Issues []Issue
+}
+
+// Error 输出所有校验问题。
+func (e ConfigValidationError) Error() string {
+	lines := make([]string, 0, len(e.Issues))
+	for _, issue := range e.Issues {
+		lines = append(lines, issue.String())
+	}
+	return strings.Join(lines, "\n")
+}
+
+// PortBinding 表示本地监听端口和来源字段路径。
+type PortBinding struct {
+	Host string
+	Port int
+	Path string
+}
+
+// PortChecker 抽象系统端口探测，测试可注入 fake 实现。
+type PortChecker interface {
+	IsAvailable(host string, port int) bool
+}
+
+// TCPPortChecker 通过尝试 bind 判断端口是否可用。
+type TCPPortChecker struct{}
+
+// IsAvailable 判断指定 host/port 是否可绑定。
+func (TCPPortChecker) IsAvailable(host string, port int) bool {
+	family := "tcp4"
+	if strings.Contains(host, ":") && host != "0.0.0.0" {
+		family = "tcp6"
+	}
+	listener, err := net.Listen(family, net.JoinHostPort(host, fmt.Sprintf("%d", port)))
+	if err != nil {
+		return false
+	}
+	_ = listener.Close()
+	return true
+}
+
+// NoopPortChecker 跳过系统端口占用探测。
+type NoopPortChecker struct{}
+
+// IsAvailable 始终返回端口可用，供只做配置逻辑测试时使用。
+func (NoopPortChecker) IsAvailable(host string, port int) bool {
+	return true
+}
+
+// FakePortChecker 使用预设端口集合模拟系统端口占用。
+type FakePortChecker struct {
+	Occupied map[int]bool
+}
+
+// IsAvailable 根据 Occupied 判断端口是否可用。
+func (f FakePortChecker) IsAvailable(host string, port int) bool {
+	return !f.Occupied[port]
+}
+
+// Option 调整 stack set 校验行为。
+type Option func(*options)
+
+type options struct {
+	portChecker PortChecker
+}
+
+// WithPortChecker 注入系统端口检查实现。
+func WithPortChecker(portChecker PortChecker) Option {
+	return func(options *options) {
+		options.portChecker = portChecker
+	}
+}
+
+// ValidateStackSet 执行跨 stack 的名称、端口、安全和引用图校验。
+func ValidateStackSet(stackSet domain.StackSet, opts ...Option) error {
+	options := options{portChecker: TCPPortChecker{}}
+	for _, opt := range opts {
+		opt(&options)
+	}
+	issues := make([]Issue, 0)
+	issues = append(issues, ValidateUniqueStackNames(stackSet.Stacks)...)
+	issues = append(issues, ValidatePublicInboundAuth(stackSet.Config, stackSet.Stacks)...)
+	portBindings := CollectPortBindings(stackSet)
+	issues = append(issues, ValidateUniquePorts(portBindings)...)
+	issues = append(issues, ValidateReferenceGraph(stackSet)...)
+	if options.portChecker != nil {
+		issues = append(issues, ValidateSystemPortsAvailable(portBindings, options.portChecker)...)
+	}
+	if len(issues) > 0 {
+		return ConfigValidationError{Issues: issues}
+	}
+	return nil
+}
+
+// ValidateUniqueStackNames 校验所有 stack 名称唯一。
+func ValidateUniqueStackNames(stacks []domain.Stack) []Issue {
+	issues := make([]Issue, 0)
+	seen := make(map[string]string, len(stacks))
+	for _, stack := range stacks {
+		path := stack.Name
+		if stack.SourcePath != "" {
+			path = stack.SourcePath
+		}
+		if firstPath, ok := seen[stack.Name]; ok {
+			issues = append(issues, Issue{
+				Path:    "stacks." + stack.Name + ".name",
+				Message: "duplicate stack name, first seen in " + firstPath,
+			})
+			continue
+		}
+		seen[stack.Name] = path
+	}
+	return issues
+}
+
+// ValidatePublicInboundAuth 校验公开 socks/http inbound 必须启用密码鉴权。
+func ValidatePublicInboundAuth(config domain.GlobalConfig, stacks []domain.Stack) []Issue {
+	if !config.Security.RequireAuthForPublicSocksHTTP || config.Security.AllowNoAuthPublic {
+		return nil
+	}
+	issues := make([]Issue, 0)
+	for _, stack := range stacks {
+		if !stack.Enabled || !stack.Xrelay.Enabled {
+			continue
+		}
+		for inboundIndex, inbound := range stack.Xrelay.Inbounds {
+			if inbound.Protocol != "socks5" && inbound.Protocol != "http" {
+				continue
+			}
+			if domain.IsLoopbackHost(inbound.Listen) {
+				continue
+			}
+			if inbound.Auth != nil && inbound.Auth.Type == "password" {
+				continue
+			}
+			issues = append(issues, Issue{
+				Path:    fmt.Sprintf("stacks.%s.xrelay.inbounds[%d].auth", stack.Name, inboundIndex),
+				Message: "public socks/http inbound requires password auth",
+			})
+		}
+	}
+	return issues
+}
+
+// CollectPortBindings 收集所有本地监听端口。
+func CollectPortBindings(stackSet domain.StackSet) []PortBinding {
+	bindings := make([]PortBinding, 0)
+	for _, stack := range stackSet.Stacks {
+		if !stack.Enabled {
+			continue
+		}
+		if stack.Xrelay.Enabled {
+			for inboundIndex, inbound := range stack.Xrelay.Inbounds {
+				bindings = append(bindings, PortBinding{
+					Host: inbound.Listen,
+					Port: inbound.Port,
+					Path: fmt.Sprintf("stacks.%s.xrelay.inbounds[%d].port", stack.Name, inboundIndex),
+				})
+			}
+			apiConfig := domain.ResolveXrelayAPIConfig(stackSet.Config.Defaults.Xrelay, stack.Xrelay)
+			if apiConfig.Enabled {
+				apiHost, apiPort, err := domain.ParseListen(apiConfig.Listen)
+				if err == nil {
+					bindings = append(bindings, PortBinding{
+						Host: apiHost,
+						Port: apiPort,
+						Path: fmt.Sprintf("stacks.%s.xrelay.api.listen", stack.Name),
+					})
+				}
+			}
+		}
+		if stack.Clash.Enabled {
+			for listenerIndex, listener := range stack.Clash.Listeners.Socks {
+				bindings = append(bindings, PortBinding{
+					Host: listener.Listen,
+					Port: listener.Port,
+					Path: fmt.Sprintf("stacks.%s.clash.listeners.socks[%d].port", stack.Name, listenerIndex),
+				})
+			}
+			for listenerIndex, listener := range stack.Clash.Listeners.HTTP {
+				bindings = append(bindings, PortBinding{
+					Host: listener.Listen,
+					Port: listener.Port,
+					Path: fmt.Sprintf("stacks.%s.clash.listeners.http[%d].port", stack.Name, listenerIndex),
+				})
+			}
+			controllerHost, controllerPort, err := domain.ParseListen(stack.Clash.Controller.Listen)
+			if err == nil {
+				bindings = append(bindings, PortBinding{
+					Host: controllerHost,
+					Port: controllerPort,
+					Path: fmt.Sprintf("stacks.%s.clash.controller.listen", stack.Name),
+				})
+			}
+		}
+	}
+	return bindings
+}
+
+// ValidateUniquePorts 校验本地监听端口在所有 stack 中全局唯一。
+func ValidateUniquePorts(bindings []PortBinding) []Issue {
+	issues := make([]Issue, 0)
+	seen := make(map[int]PortBinding)
+	for _, binding := range bindings {
+		first, ok := seen[binding.Port]
+		if ok {
+			issues = append(issues, Issue{
+				Path:    binding.Path,
+				Message: fmt.Sprintf("duplicate listen port %d, first seen at %s", binding.Port, first.Path),
+			})
+			continue
+		}
+		seen[binding.Port] = binding
+	}
+	return issues
+}
+
+// ValidateSystemPortsAvailable 校验配置声明的监听端口当前未被系统占用。
+func ValidateSystemPortsAvailable(bindings []PortBinding, checker PortChecker) []Issue {
+	issues := make([]Issue, 0)
+	checked := make(map[string]bool)
+	for _, binding := range bindings {
+		key := fmt.Sprintf("%s:%d", binding.Host, binding.Port)
+		if checked[key] {
+			continue
+		}
+		checked[key] = true
+		if checker.IsAvailable(binding.Host, binding.Port) {
+			continue
+		}
+		issues = append(issues, Issue{
+			Path:    binding.Path,
+			Message: fmt.Sprintf("listen port %d is already in use", binding.Port),
+		})
+	}
+	return issues
+}
+
+// ValidateReferenceGraph 将引用图问题转换为配置校验问题。
+func ValidateReferenceGraph(stackSet domain.StackSet) []Issue {
+	result := graph.CompileReferenceGraph(stackSet)
+	issues := make([]Issue, 0, len(result.Issues))
+	for _, issue := range result.Issues {
+		issues = append(issues, Issue{Path: issue.Path, Message: issue.Message})
+	}
+	return issues
+}

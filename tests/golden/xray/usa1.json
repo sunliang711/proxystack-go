@@ -1,0 +1,77 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "api": {
+    "tag": "api",
+    "listen": "127.0.0.1:10091",
+    "services": [
+      "StatsService"
+    ]
+  },
+  "stats": {},
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true,
+      "statsOutboundUplink": true,
+      "statsOutboundDownlink": true
+    }
+  },
+  "inbounds": [
+    {
+      "tag": "socks5:24001:relay",
+      "listen": "0.0.0.0",
+      "port": 24001,
+      "protocol": "socks",
+      "settings": {
+        "auth": "password",
+        "udp": true,
+        "accounts": [
+          {
+            "user": "usa1",
+            "pass": "demo-usa1-relay-password"
+          }
+        ]
+      }
+    },
+    {
+      "tag": "vmess:24101:vmess",
+      "listen": "0.0.0.0",
+      "port": 24101,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "alterId": 0,
+            "email": "alice"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "raw"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "egress-usa1",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "127.0.0.1",
+            "port": 17091
+          }
+        ]
+      }
+    }
+  ]
+}

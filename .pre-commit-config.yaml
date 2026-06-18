@@ -1,0 +1,26 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+  - repo: local
+    hooks:
+      - id: git-diff-check
+        name: git diff whitespace/conflict check
+        entry: bash -lc 'git --no-pager diff --check --cached --'
+        language: system
+        pass_filenames: false
+      - id: check-staged-no-binary
+        name: block staged binary files
+        entry: bash .githooks/check-staged-no-binary.sh
+        language: system
+        pass_filenames: false
+      - id: check-staged-file-size
+        name: block staged files larger than 2 MB
+        entry: bash .githooks/check-staged-file-size.sh 2048
+        language: system
+        pass_filenames: false

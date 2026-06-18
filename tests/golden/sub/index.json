@@ -1,0 +1,47 @@
+{
+  "index_version": 1,
+  "generated_at": "2026-06-05T12:00:00+08:00",
+  "sources": [
+    "manual"
+  ],
+  "nodes": [
+    {
+      "id": "manual:relay",
+      "user": "alice",
+      "protocol": "socks5",
+      "server": "proxy.example.com",
+      "port": 24001,
+      "tag": "socks5:24001:relay",
+      "remark": "Manual Relay",
+      "udp": true,
+      "auth": {
+        "type": "password",
+        "username": "demo-user",
+        "password": "demo-pass"
+      }
+    }
+  ],
+  "users": {
+    "alice": [
+      {
+        "id": "manual:relay",
+        "user": "alice",
+        "protocol": "socks5",
+        "server": "proxy.example.com",
+        "port": 24001,
+        "tag": "socks5:24001:relay",
+        "remark": "Manual Relay",
+        "udp": true,
+        "auth": {
+          "type": "password",
+          "username": "demo-user",
+          "password": "demo-pass"
+        }
+      }
+    ]
+  },
+  "access": {
+    "type": "token",
+    "token": "demo-token"
+  }
+}

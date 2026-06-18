@@ -1,0 +1,63 @@
+mode: Rule
+log-level: info
+ipv6: true
+allow-lan: false
+listeners:
+  - name: local
+    type: socks
+    listen: 127.0.0.1
+    port: 17093
+  - name: local-http
+    type: http
+    listen: 127.0.0.1
+    port: 18093
+external-controller: 127.0.0.1:19093
+secret: demo-auto-clash-api-secret
+proxies:
+  - name: usa1-local
+    type: socks5
+    server: 127.0.0.1
+    port: 24001
+    udp: true
+    username: usa1
+    password: demo-usa1-relay-password
+  - name: usa2-local
+    type: socks5
+    server: 127.0.0.1
+    port: 24002
+    udp: true
+    username: usa2
+    password: demo-usa2-relay-password
+proxy-groups:
+  - name: AutoProxy
+    type: url-test
+    proxies:
+      - usa1-local
+      - usa2-local
+    url: http://www.gstatic.com/generate_204
+    interval: 120
+  - name: BalanceProxy
+    type: load-balance
+    proxies:
+      - usa1-local
+      - usa2-local
+    url: http://www.gstatic.com/generate_204
+    interval: 120
+    strategy: consistent-hashing
+  - name: AllProxy
+    type: select
+    proxies:
+      - AutoProxy
+      - BalanceProxy
+      - usa1-local
+      - usa2-local
+      - DIRECT
+rules:
+  - DOMAIN-SUFFIX,local,DIRECT
+  - DOMAIN,localhost,DIRECT
+  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,100.64.0.0/10,DIRECT,no-resolve
+  - MATCH,AllProxy

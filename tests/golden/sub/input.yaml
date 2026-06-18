@@ -1,0 +1,17 @@
+input_schema: proxystack.subscription-input
+input_version: 1
+source: manual
+generated_at: '2026-06-05T12:00:00+08:00'
+nodes:
+  - id: manual:relay
+    user: alice
+    protocol: socks5
+    server: proxy.example.com
+    port: 24001
+    tag: socks5:24001:relay
+    remark: Manual Relay
+    udp: true
+    auth:
+      type: password
+      username: demo-user
+      password: demo-pass

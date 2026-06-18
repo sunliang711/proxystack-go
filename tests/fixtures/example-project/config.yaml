@@ -1,0 +1,66 @@
+version: 1
+paths:
+  bin: bin
+  geo: geo
+  stacks: stacks
+  runtime: runtime
+  generated: runtime/generated
+  publish: publish
+  downloads: downloads
+  sub: sub
+
+external_host: proxy.example.com
+
+subscription:
+  source: local
+
+port_ranges:
+  # Only used by add/clone --allocate-ports.
+  # Manually configured ports may be outside these ranges if they are valid and unique.
+  xrelay_inbound: 4300-4399
+  clash_socks: 7001-7101
+  clash_http: 7201-7301
+  xray_api_range: 10001-10999
+  clash_controller: 19000-19999
+
+defaults:
+  clash:
+    mode: Rule
+    rule_profile: default
+  xrelay:
+    loglevel: warning
+    api:
+      enabled: true
+      tag: api
+      listen: 127.0.0.1:10085
+      services: [StatsService]
+    stats:
+      enabled: true
+    policy:
+      enabled: true
+      levels:
+        "0":
+          statsUserUplink: true
+          statsUserDownlink: true
+      system:
+        statsInboundUplink: true
+        statsInboundDownlink: true
+        statsOutboundUplink: true
+        statsOutboundDownlink: true
+
+security:
+  require_auth_for_public_socks_http: true
+  allow_noauth_public: false
+
+install:
+  mihomo:
+    #version: latest
+    version: 1.19.27
+    source: auto
+  xray:
+    #version: latest
+    version: 26.3.27
+    source: auto
+  geo:
+    version: latest
+    source: auto

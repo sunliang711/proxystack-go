@@ -367,8 +367,6 @@ paths:
   publish: publish
   # install/update 下载缓存目录。
   downloads: downloads
-  # 预留订阅数据目录；ps-sub 默认使用独立根目录 /opt/proxystack-sub。
-  sub: sub
 
 # 对外访问主机名或 IP，用于生成订阅节点 server。
 external_host: %s

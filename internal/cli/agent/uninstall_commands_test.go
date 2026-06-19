@@ -134,6 +134,21 @@ func TestAgentUninstallPurgeRemovesBaseDir(t *testing.T) {
 	require.NoDirExists(t, baseDir)
 }
 
+// TestAgentUninstallSkipsStopWhenNoStackServices 验证无 stack 服务时不会调用空 stop。
+func TestAgentUninstallSkipsStopWhenNoStackServices(t *testing.T) {
+	baseDir := prepareEmptyUninstallBaseDir(t)
+	manager := &fakeUninstallManager{serviceFiles: []string{"/tmp/proxystack-xray@.service"}}
+	withAgentServiceManager(t, manager)
+
+	output := runAgentCommandForTest(t, "--base-dir", baseDir, "uninstall")
+
+	require.Equal(t, []string{"uninstall"}, manager.calls)
+	require.Empty(t, manager.stopped)
+	require.NotContains(t, output, "Stopping service:")
+	require.Contains(t, output, "Removing service file: /tmp/proxystack-xray@.service")
+	require.Contains(t, output, "Uninstall OK")
+}
+
 // TestUninstallServiceDisplayNames 验证卸载日志展示 stack 名并去重底层组件服务。
 func TestUninstallServiceDisplayNames(t *testing.T) {
 	names := uninstallServiceDisplayNames([]string{
@@ -208,6 +223,17 @@ func prepareUninstallBaseDir(t *testing.T) string {
 	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stacks", "usa1.yaml"), []byte(stackContent), 0o640))
 	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "bin", "ps-agent"), []byte("bin"), 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "runtime", "manifest.json"), []byte("{}\n"), 0o640))
+	return baseDir
+}
+
+// prepareEmptyUninstallBaseDir 构造没有 stack 文件但带安装标记的卸载测试目录。
+func prepareEmptyUninstallBaseDir(t *testing.T) string {
+	t.Helper()
+	baseDir := filepath.Join(t.TempDir(), "proxystack")
+	require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "stacks"), 0o750))
+	require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "bin"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "config.yaml"), []byte(doctorTestConfig()), 0o640))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "bin", "ps-agent"), []byte("bin"), 0o750))
 	return baseDir
 }
 

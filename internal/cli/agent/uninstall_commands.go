@@ -55,8 +55,11 @@ func runUninstall(command *cobra.Command, purge bool) error {
 	for _, service := range uninstallServiceDisplayNames(services) {
 		fmt.Fprintf(stdout, "Stopping service: %s\n", service)
 	}
-	if err := manager.Stop(context.Background(), services); err != nil {
-		return err
+	if len(services) > 0 {
+		// 空 stack 场景没有需要停止的服务，避免 systemctl stop 无 unit 参数失败。
+		if err := manager.Stop(context.Background(), services); err != nil {
+			return err
+		}
 	}
 	cfg, err := uninstallConfig(filepath.Join(baseDir, uninstallPreservedConfig), baseDir)
 	if err != nil {

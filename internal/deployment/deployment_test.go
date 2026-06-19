@@ -123,6 +123,7 @@ func TestInstallScriptsDryRunDownloadRelease(t *testing.T) {
 			require.Contains(t, output, filepath.Join(binDir, "ps-sub"))
 			if scriptName == "install-agent.sh" {
 				require.Contains(t, output, filepath.Join(binDir, "ps-agent"))
+				require.NotContains(t, output, filepath.Join(baseDir, "sub"))
 			} else {
 				require.NotContains(t, output, filepath.Join(binDir, "ps-agent"))
 			}

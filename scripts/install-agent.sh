@@ -606,7 +606,6 @@ ensure_agent_dirs() {
 	ensure_dir "${BASE_DIR}/runtime" "0750" "${owner_group}"
 	ensure_dir "${BASE_DIR}/publish" "0750" "${owner_group}"
 	ensure_dir "${BASE_DIR}/stacks" "0750" "${owner_group}"
-	ensure_dir "${BASE_DIR}/sub" "0750" "${owner_group}"
 }
 
 # ensure_cli_dir 创建 CLI 安装目录。

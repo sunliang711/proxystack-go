@@ -50,6 +50,7 @@ func TestInitProjectWritesConfigWithoutBaseDir(t *testing.T) {
 	data, err := os.ReadFile(configPath)
 	require.NoError(t, err)
 	require.NotContains(t, string(data), "base_dir:")
+	require.NotContains(t, string(data), "sub: sub")
 }
 
 // TestInitProjectWritesCommentedAgentConfig 验证 init 生成的 agent 配置包含字段说明注释。

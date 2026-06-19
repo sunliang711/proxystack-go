@@ -115,6 +115,28 @@ ps-agent [--base-dir DIR] add NAME [--template pair|auto-url-test|load-balance] 
 - `--keep-template-ports` 仍要检查端口合法、唯一和系统占用。
 - `--members` 只对 auto 模板生效。
 
+### 3.3.1 `example`
+
+```bash
+ps-agent example [stack|xrelay|clash] [SECTION] [TYPE]
+```
+
+职责：
+
+- 输出可复制的 stack YAML 配置片段到 stdout。
+- 不带参数时输出 usage 和当前支持的全部片段说明。
+- 支持按 area、section 或具体 type 逐级筛选片段。
+- 当前覆盖 stack role，xrelay api/stats/policy/loglevel/auth/inbound/outbound，以及 clash mode/loglevel/controller/listener/upstream/group/rules。
+- 精确到 `TYPE` 时输出纯 YAML；只筛选到 area 或 section 时输出带注释的候选片段清单。
+
+副作用：只读。
+
+验收：
+
+- 不读取 `--base-dir` 下的配置文件。
+- 不写任何文件。
+- `--help` 和不带参数输出必须包含全部可用片段说明。
+
 ### 3.4 `config`
 
 ```bash

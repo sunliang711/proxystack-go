@@ -28,6 +28,7 @@ func TestRootHelpUsesCommandGroups(t *testing.T) {
 	require.Contains(t, helpText, "其它")
 	require.Contains(t, helpText, "  init")
 	require.Contains(t, helpText, "  setup")
+	require.Contains(t, helpText, "  example")
 	require.Contains(t, helpText, "  render")
 	require.Contains(t, helpText, "  service")
 	require.Contains(t, helpText, "  sub")

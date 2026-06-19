@@ -50,6 +50,7 @@ func NewRootCommand() *cobra.Command {
 	command.AddCommand(groupedCommand(agentInstallGroup, newSetupCommand()))
 	command.AddCommand(groupedCommand(agentInstallGroup, newUninstallCommand()))
 	command.AddCommand(groupedCommand(agentConfigGroup, newAddCommand()))
+	command.AddCommand(groupedCommand(agentConfigGroup, newExampleCommand()))
 	command.AddCommand(groupedCommand(agentConfigGroup, newConfigCommand()))
 	command.AddCommand(groupedCommand(agentConfigGroup, newListCommand()))
 	command.AddCommand(groupedCommand(agentConfigGroup, newCloneCommand()))

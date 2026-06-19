@@ -356,6 +356,45 @@ download_file() {
 	die "Required command not found: curl or wget"
 }
 
+# latest_release_api_url 生成 GitHub latest release metadata 地址。
+latest_release_api_url() {
+	local repo_name="${1:-}"
+	printf 'https://api.github.com/repos/%s/releases/latest' "${repo_name}"
+}
+
+# download_metadata_file 下载小型 metadata 文件，避免进度条淹没版本日志。
+download_metadata_file() {
+	local source_url="${1:-}"
+	local target_path="${2:-}"
+	if command -v curl >/dev/null 2>&1; then
+		run curl -fsSL --retry 3 -o "${target_path}" "${source_url}"
+		return 0
+	fi
+	if command -v wget >/dev/null 2>&1; then
+		run wget -q -O "${target_path}" "${source_url}"
+		return 0
+	fi
+	die "Required command not found: curl or wget"
+}
+
+# resolve_latest_release_version 解析 latest 对应的真实 GitHub release tag。
+resolve_latest_release_version() {
+	local repo_name="${1:-}"
+	local work_dir="${2:-}"
+	local metadata_path tag_name
+
+	if [[ -z "${work_dir}" ]]; then
+		die "Release metadata directory is required"
+	fi
+	metadata_path="${work_dir}/latest-release.json"
+	download_metadata_file "$(latest_release_api_url "${repo_name}")" "${metadata_path}"
+	tag_name="$(awk -F'"' '/"tag_name"[[:space:]]*:/ { print $4; found=1; exit } END { exit found ? 0 : 1 }' "${metadata_path}" || true)"
+	if [[ -z "${tag_name}" ]]; then
+		die "GitHub latest release tag_name not found"
+	fi
+	normalize_release_version "${tag_name}"
+}
+
 # verify_release_checksum 校验下载归档的 SHA256。
 verify_release_checksum() {
 	local work_dir="${1:-}"
@@ -386,15 +425,12 @@ install_release_binaries() {
 	local version_value="${2:-}"
 	local base_dir="${3:-}"
 	local owner_group="${4:-}"
-	local os_name arch_name asset_name temp_dir archive_path checksums_path archive_url checksums_url agent_binary sub_binary
+	local os_name arch_name asset_name display_version temp_dir archive_path checksums_path archive_url checksums_url agent_binary sub_binary
 
 	validate_release_repo "${repo_name}"
 	version_value="$(normalize_release_version "${version_value}")"
 	os_name="$(detect_release_os)"
 	arch_name="$(detect_release_arch)"
-	asset_name="$(release_asset_name "${version_value}" "${os_name}" "${arch_name}")"
-	log "Download release: ${repo_name} ${version_value} ${os_name}/${arch_name}"
-	log "Download asset: ${asset_name}"
 	if is_dry_run; then
 		temp_dir="${base_dir}/runtime/proxystack-release-dry-run"
 		run install -d -m 0750 "${temp_dir}"
@@ -402,6 +438,13 @@ install_release_binaries() {
 		require_cmd tar
 		temp_dir="$(mktemp -d)"
 	fi
+	display_version="${version_value}"
+	if [[ "${version_value}" == "latest" && "${DRY_RUN}" != "1" ]]; then
+		display_version="$(resolve_latest_release_version "${repo_name}" "${temp_dir}")"
+	fi
+	asset_name="$(release_asset_name "${version_value}" "${os_name}" "${arch_name}")"
+	log "Download release: ${repo_name} ${display_version} ${os_name}/${arch_name}"
+	log "Download asset: ${asset_name}"
 	archive_path="${temp_dir}/${asset_name}"
 	checksums_path="${temp_dir}/SHA256SUMS"
 	archive_url="$(release_download_url "${repo_name}" "${version_value}" "${asset_name}")"

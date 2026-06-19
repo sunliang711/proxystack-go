@@ -122,6 +122,18 @@ func TestRenderUnitsUsesCustomBaseDir(t *testing.T) {
 	require.Contains(t, units[SubUnit], "ReadWritePaths="+filepath.Join(baseDir, "sub"))
 }
 
+// TestRenderSubUnitUsesSubOnlyRoot 验证 ps-sub 独立安装时 unit 读写整个 sub base dir。
+func TestRenderSubUnitUsesSubOnlyRoot(t *testing.T) {
+	paths := domain.DefaultConfigPaths()
+	paths.Sub = "."
+	cfg := domain.GlobalConfig{BaseDir: "/opt/proxystack-sub", Paths: paths}
+
+	units := RenderUnits(cfg)
+
+	require.Contains(t, units[SubUnit], "ps-sub --base-dir /opt/proxystack-sub serve")
+	require.Contains(t, units[SubUnit], "ReadWritePaths=/opt/proxystack-sub")
+}
+
 // TestInstallUnitsRejectsUnknownTarget 验证 unit install/uninstall 不会把未知 target 当作 all。
 func TestInstallUnitsRejectsUnknownTarget(t *testing.T) {
 	manager := Manager{UnitDir: t.TempDir()}
@@ -275,10 +287,12 @@ func systemdTestConfigWithStacks(t *testing.T, names ...string) domain.GlobalCon
 // TestRepairSubMetadataRecursesSubTree 验证 sub 运行目录下的子目录和文件都会修复 owner。
 func TestRepairSubMetadataRecursesSubTree(t *testing.T) {
 	baseDir := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "sub", "inputs", "manual"), 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "sub", "config.yaml"), []byte("access:\n  type: none\n"), 0o640))
-	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "sub", "inputs", "manual", "usa.yaml"), []byte("nodes: []\n"), 0o640))
-	cfg := domain.GlobalConfig{BaseDir: baseDir, Paths: domain.DefaultConfigPaths()}
+	require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "inputs", "manual"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "config.yaml"), []byte("access:\n  type: none\n"), 0o640))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "inputs", "manual", "usa.yaml"), []byte("nodes: []\n"), 0o640))
+	paths := domain.DefaultConfigPaths()
+	paths.Sub = "."
+	cfg := domain.GlobalConfig{BaseDir: baseDir, Paths: paths}
 	modes := make(map[string]os.FileMode)
 	owners := make(map[string][2]int)
 	fixer := MetadataFixer{
@@ -295,10 +309,10 @@ func TestRepairSubMetadataRecursesSubTree(t *testing.T) {
 	err := RepairSubMetadata(cfg, 1000, 1001, fixer)
 
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o750), modes[filepath.Join(baseDir, "sub")])
-	require.Equal(t, os.FileMode(0o750), modes[filepath.Join(baseDir, "sub", "inputs")])
-	require.Equal(t, os.FileMode(0o750), modes[filepath.Join(baseDir, "sub", "inputs", "manual")])
-	require.Equal(t, os.FileMode(0o640), modes[filepath.Join(baseDir, "sub", "config.yaml")])
-	require.Equal(t, os.FileMode(0o640), modes[filepath.Join(baseDir, "sub", "inputs", "manual", "usa.yaml")])
-	require.Equal(t, [2]int{1000, 1001}, owners[filepath.Join(baseDir, "sub", "inputs", "manual", "usa.yaml")])
+	require.Equal(t, os.FileMode(0o750), modes[baseDir])
+	require.Equal(t, os.FileMode(0o750), modes[filepath.Join(baseDir, "inputs")])
+	require.Equal(t, os.FileMode(0o750), modes[filepath.Join(baseDir, "inputs", "manual")])
+	require.Equal(t, os.FileMode(0o640), modes[filepath.Join(baseDir, "config.yaml")])
+	require.Equal(t, os.FileMode(0o640), modes[filepath.Join(baseDir, "inputs", "manual", "usa.yaml")])
+	require.Equal(t, [2]int{1000, 1001}, owners[filepath.Join(baseDir, "inputs", "manual", "usa.yaml")])
 }

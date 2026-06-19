@@ -446,7 +446,7 @@ INSTALL_SOURCE="release"
 DEFAULT_RELEASE_REPO="sunliang711/proxystack-go"
 RELEASE_REPO=""
 RELEASE_VERSION="latest"
-BASE_DIR="/opt/proxystack"
+BASE_DIR="/opt/proxystack-sub"
 BIN_DIR="/usr/local/bin"
 IMPORT_BUNDLE=""
 INSTALL_SYSTEMD="0"
@@ -468,7 +468,7 @@ Options:
   --version VERSION        Release version to install. Default: latest
   --repo OWNER/REPO        GitHub release repository. Default: sunliang711/proxystack-go
   --source DIR             Build from a local source directory instead of downloading release
-  --base-dir DIR           Managed base directory. Default: /opt/proxystack
+  --base-dir DIR           Managed base directory. Default: /opt/proxystack-sub
   --bin-dir DIR            CLI install directory. Default: /usr/local/bin
   --import-bundle FILE     Import a sub-bundle.zip after installation.
   --user USER              System user. Default: proxystack
@@ -613,10 +613,8 @@ ensure_sub_dirs() {
 	local owner_group="${INSTALL_USER}:${INSTALL_GROUP}"
 
 	ensure_dir "${BASE_DIR}" "0750" "${owner_group}"
-	ensure_dir "${BASE_DIR}/runtime" "0750" "${owner_group}"
-	ensure_dir "${BASE_DIR}/publish" "0750" "${owner_group}"
-	ensure_dir "${BASE_DIR}/sub" "0750" "${owner_group}"
-	ensure_dir "${BASE_DIR}/sub/inputs" "0750" "${owner_group}"
+	ensure_dir "${BASE_DIR}/inputs" "0750" "${owner_group}"
+	ensure_dir "${BASE_DIR}/templates" "0750" "${owner_group}"
 }
 
 # ensure_cli_dir 创建 CLI 安装目录。

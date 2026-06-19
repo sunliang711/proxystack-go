@@ -32,7 +32,6 @@ func TestSetupContinuesWhenConfigExists(t *testing.T) {
 	baseDir := t.TempDir()
 	require.NoError(t, agentconfig.InitProject(agentconfig.InitOptions{BaseDir: baseDir, ExternalHost: "existing.example.com"}))
 	require.NoError(t, os.RemoveAll(filepath.Join(baseDir, "bin")))
-	require.NoError(t, os.Remove(filepath.Join(baseDir, "sub", "config.yaml")))
 	manager := &fakeSetupManager{}
 	withAgentServiceManager(t, manager)
 	var installRequest install.Request
@@ -51,7 +50,8 @@ func TestSetupContinuesWhenConfigExists(t *testing.T) {
 	require.Equal(t, "", manager.target)
 	require.Equal(t, baseDir, manager.config.BaseDir)
 	require.DirExists(t, filepath.Join(baseDir, "bin"))
-	require.FileExists(t, filepath.Join(baseDir, "sub", "config.yaml"))
+	require.NoDirExists(t, filepath.Join(baseDir, "sub"))
+	require.NoFileExists(t, filepath.Join(baseDir, "sub", "config.yaml"))
 	require.Contains(t, output, "mihomo installed")
 	require.Contains(t, output, "Installed units:")
 }

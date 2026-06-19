@@ -145,7 +145,7 @@ ExecStart=/opt/proxystack/bin/mihomo -d /opt/proxystack/runtime/mihomo/%i -f /op
 sub：
 
 ```ini
-ExecStart=/usr/local/bin/ps-sub --base-dir /opt/proxystack serve
+ExecStart=/usr/local/bin/ps-sub --base-dir /opt/proxystack-sub serve
 ```
 
 `ReadWritePaths`：

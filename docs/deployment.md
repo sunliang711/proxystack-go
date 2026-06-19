@@ -3,7 +3,7 @@
 ## 组件边界
 
 - `ps-agent`：管理 agent 配置、stack、runtime 生成物、服务管理器和核心下载。
-- `ps-sub`：只消费 `sub/config.yaml` 与 `sub/inputs/`，提供订阅 HTTP 服务。
+- `ps-sub`：只消费自身 base dir 下的 `config.yaml` 与 `inputs/`，提供订阅 HTTP 服务。
 - `ps-sub` 不读取 agent `config.yaml` 或 `stacks/*.yaml`。
 
 ## 本地 agent 部署
@@ -56,51 +56,51 @@ sudo scripts/install-sub-local.sh \
   --start
 ```
 
-该脚本会安装 Go CLI 到 `/usr/local/bin`、准备 `/opt/proxystack/sub`，并可选导入订阅发布包。默认同样从当前项目的 GitHub Release 仓库 `sunliang711/proxystack-go` 下载，可通过 `--version v1.2.3` 固定版本，通过 `--repo OWNER/REPO` 显式指定仓库，或通过 `--source /path/to/proxystack-go` 使用本地源码构建。sub 服务运行期只依赖：
+该脚本会安装 Go CLI 到 `/usr/local/bin`、准备 `/opt/proxystack-sub`，并可选导入订阅发布包。默认同样从当前项目的 GitHub Release 仓库 `sunliang711/proxystack-go` 下载，可通过 `--version v1.2.3` 固定版本，通过 `--repo OWNER/REPO` 显式指定仓库，或通过 `--source /path/to/proxystack-go` 使用本地源码构建。sub 服务运行期只依赖：
 
 ```text
-/opt/proxystack/sub/config.yaml
-/opt/proxystack/sub/inputs/
+/opt/proxystack-sub/config.yaml
+/opt/proxystack-sub/inputs/
 ```
 
-独立 sub-only 部署只需要传入独立 base dir，例如：
+独立 sub-only 部署默认使用 `/opt/proxystack-sub`，也可以传入自定义 base dir，例如：
 
 ```bash
-ps-sub --base-dir /data/sub-only init
-ps-sub --base-dir /data/sub-only config
-ps-sub --base-dir /data/sub-only config check
-ps-sub --base-dir /data/sub-only import /path/to/sub-bundle.zip
-ps-sub --base-dir /data/sub-only serve
+ps-sub --base-dir /opt/proxystack-sub init
+ps-sub --base-dir /opt/proxystack-sub config
+ps-sub --base-dir /opt/proxystack-sub config check
+ps-sub --base-dir /opt/proxystack-sub import /path/to/sub-bundle.zip
+ps-sub --base-dir /opt/proxystack-sub serve
 ```
 
 使用系统服务时：
 
 ```bash
-sudo ps-sub --base-dir /data/sub-only service install
-sudo ps-sub --base-dir /data/sub-only start
-sudo ps-sub --base-dir /data/sub-only status
-sudo ps-sub --base-dir /data/sub-only logs -f
+sudo ps-sub --base-dir /opt/proxystack-sub service install
+sudo ps-sub --base-dir /opt/proxystack-sub start
+sudo ps-sub --base-dir /opt/proxystack-sub status
+sudo ps-sub --base-dir /opt/proxystack-sub logs -f
 ```
 
-此时 sub root 为 `/data/sub-only/sub`。
+此时 sub root 为 `/opt/proxystack-sub`。
 
 ## Docker sub 部署
 
 镜像只包含 `ps-sub`，不包含 mihomo/xray：
 
 ```bash
-sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack
-sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack/sub
-sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack/sub/inputs
-sudo install -o 10001 -g 10001 -m 0640 /path/to/sub-config.yaml /opt/proxystack/sub/config.yaml
+sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack-sub
+sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack-sub/inputs
+sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack-sub/templates
+sudo install -o 10001 -g 10001 -m 0640 /path/to/sub-config.yaml /opt/proxystack-sub/config.yaml
 docker compose -f docker-compose.sub.yml up -d --build
 ```
 
 如果宿主机已安装同架构 `ps-sub`，也可以先生成默认配置后再调整 owner：
 
 ```bash
-sudo ps-sub --base-dir /opt/proxystack init
-sudo chown -R 10001:10001 /opt/proxystack/sub
+sudo ps-sub --base-dir /opt/proxystack-sub init
+sudo chown -R 10001:10001 /opt/proxystack-sub
 ```
 
 或使用脚本：
@@ -122,7 +122,7 @@ sudo scripts/deploy-sub-docker.sh --build
 
 旧 Python venv 部署中的 `.venv` 不再是 Go 版运行依赖。迁移时建议：
 
-1. 保留原 `/opt/proxystack/config.yaml`、`stacks/`、`sub/config.yaml` 和 `sub/inputs/`。
+1. 保留原 `/opt/proxystack/config.yaml` 和 `stacks/`；将旧 `/opt/proxystack/sub/config.yaml` 与 `sub/inputs/` 迁移到 `/opt/proxystack-sub/config.yaml` 和 `/opt/proxystack-sub/inputs/`。
 2. 执行 `scripts/install-agent.sh --no-init` 安装 Go CLI。
 3. 执行 `ps-agent validate`。
 4. 执行 `ps-agent check` 预览 runtime 变化。

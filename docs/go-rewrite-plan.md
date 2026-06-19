@@ -25,8 +25,8 @@
 
 - `/opt/proxystack/config.yaml`
 - `/opt/proxystack/stacks/*.yaml`
-- `/opt/proxystack/sub/config.yaml`
-- `/opt/proxystack/sub/inputs/*.yaml|*.yml|*.json`
+- `/opt/proxystack-sub/config.yaml`
+- `/opt/proxystack-sub/inputs/*.yaml|*.yml|*.json`
 
 核心能力：
 
@@ -50,7 +50,7 @@
 
 Go 版需要保持以下兼容契约：
 
-- 保持现有用户配置格式：`config.yaml`、`stacks/*.yaml`、`sub/config.yaml`、订阅 input、订阅 bundle、原生 backup。
+- 保持现有用户配置格式：agent `config.yaml`、`stacks/*.yaml`、ps-sub `config.yaml`、订阅 input、订阅 bundle、原生 backup。
 - 保持现有命令入口：`ps-agent`、`ps-sub`。
 - 保持 agent/sub 数据边界：`ps-sub` 不读取 `config.yaml`、`stacks/`、`runtime/`。
 - 保持订阅边界：订阅只来自 `xrelay.inbounds[]` 中 `sub: true` 的节点，不把 clash upstream、groups、rules、controller 写入订阅。

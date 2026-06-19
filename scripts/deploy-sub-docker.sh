@@ -8,7 +8,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 IMAGE="proxystack-sub:latest"
 CONTAINER_NAME="proxystack-sub"
-BASE_DIR="/opt/proxystack"
+BASE_DIR="/opt/proxystack-sub"
 HOST="0.0.0.0"
 PORT="3003"
 CONTAINER_USER="10001:10001"
@@ -29,7 +29,7 @@ explicitly provided.
 Options:
   --image IMAGE            Docker image. Default: proxystack-sub:latest
   --name NAME              Container name. Default: proxystack-sub
-  --base-dir DIR           Host base directory mounted to /data. Default: /opt/proxystack
+  --base-dir DIR           Host base directory mounted to /data. Default: /opt/proxystack-sub
   --host HOST              Host bind address. Default: 0.0.0.0
   --port PORT              Host port mapped to container port 3003. Default: 3003
   --user UID:GID           Container user. Default: 10001:10001
@@ -158,8 +158,8 @@ validate_args() {
 # ensure_base_dirs 创建 Docker volume 持久化目录。
 ensure_base_dirs() {
 	ensure_dir "${BASE_DIR}" "0750" "${DATA_OWNER}"
-	ensure_dir "${BASE_DIR}/sub" "0750" "${DATA_OWNER}"
-	ensure_dir "${BASE_DIR}/sub/inputs" "0750" "${DATA_OWNER}"
+	ensure_dir "${BASE_DIR}/inputs" "0750" "${DATA_OWNER}"
+	ensure_dir "${BASE_DIR}/templates" "0750" "${DATA_OWNER}"
 }
 
 # ensure_sub_config_exists 确认 ps-sub 配置存在，避免容器以隐式默认配置启动。
@@ -168,8 +168,8 @@ ensure_sub_config_exists() {
 		log "SKIP sub config check in dry-run"
 		return 0
 	fi
-	if [[ ! -f "${BASE_DIR}/sub/config.yaml" ]]; then
-		die "Sub config does not exist: ${BASE_DIR}/sub/config.yaml"
+	if [[ ! -f "${BASE_DIR}/config.yaml" ]]; then
+		die "Sub config does not exist: ${BASE_DIR}/config.yaml"
 	fi
 }
 

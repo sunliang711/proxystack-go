@@ -72,7 +72,7 @@ type StackSummary struct {
 	ClashEndpoint  string
 }
 
-// InitProject 创建默认 agent 配置、sub 配置和标准目录。
+// InitProject 创建默认 agent 配置和标准目录。
 func InitProject(options InitOptions) error {
 	baseDir, err := normalizeBaseDir(options.BaseDir)
 	if err != nil {
@@ -93,7 +93,7 @@ func InitProject(options InitOptions) error {
 	return nil
 }
 
-// EnsureProjectLayout 幂等创建标准目录，并在缺失时补齐 sub 默认配置。
+// EnsureProjectLayout 幂等创建标准目录。
 func EnsureProjectLayout(options InitOptions) error {
 	baseDir, err := normalizeBaseDir(options.BaseDir)
 	if err != nil {
@@ -109,19 +109,12 @@ func EnsureProjectLayout(options InitOptions) error {
 		filepath.Join(baseDir, "runtime", "generated"),
 		filepath.Join(baseDir, "publish"),
 		filepath.Join(baseDir, "downloads"),
-		filepath.Join(baseDir, "sub"),
 		filepath.Dir(configPath),
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return err
 		}
-	}
-	subConfigPath := filepath.Join(baseDir, "sub", "config.yaml")
-	if _, err := os.Stat(subConfigPath); os.IsNotExist(err) || options.Force {
-		return writeFileAtomic(subConfigPath, []byte(config.DefaultSubServerConfigYAML()), 0o640)
-	} else if err != nil {
-		return err
 	}
 	return nil
 }
@@ -351,52 +344,110 @@ func randomUUID() (string, error) {
 }
 
 func defaultAgentConfig(externalHost string) string {
-	return fmt.Sprintf(`version: 1
+	return fmt.Sprintf(`# default agent 配置。
+# 文件路径固定为 <base-dir>/config.yaml；运行时 base dir 由 ps-agent --base-dir 指定。
+# 修改后建议执行 ps-agent --base-dir <base-dir> validate 或 check 校验。
+
+# 配置 schema 版本。当前固定为 1。
+version: 1
+
+# 路径配置。相对路径均以 <base-dir> 为基准解析。
 paths:
+  # ps-agent、ps-sub、xray、mihomo 等二进制所在目录。
   bin: bin
+  # geoip/geosite 等地理数据目录。
   geo: geo
+  # stack 配置目录；每个 stack 使用一个 <name>.yaml 文件。
   stacks: stacks
+  # runtime 状态目录，保存 manifest、锁文件和运行时辅助数据。
   runtime: runtime
+  # 生成后的 xray/mihomo 配置目录。
   generated: runtime/generated
+  # 订阅包和备份包输出目录。
   publish: publish
+  # install/update 下载缓存目录。
   downloads: downloads
+  # 预留订阅数据目录；ps-sub 默认使用独立根目录 /opt/proxystack-sub。
   sub: sub
+
+# 对外访问主机名或 IP，用于生成订阅节点 server。
 external_host: %s
+
+# 订阅导出设置。
 subscription:
+  # source 标识导出来源；local 表示本机 agent 生成。
   source: local
+
+# 自动分配端口范围。仅 add/clone --allocate-ports 使用；手工配置端口可在范围外。
 port_ranges:
+  # xrelay inbound 端口分配范围。
   xrelay_inbound: 4300-4399
+  # mihomo socks listener 端口分配范围。
   clash_socks: 7001-7101
+  # mihomo http listener 端口分配范围。
   clash_http: 7201-7301
+  # Xray API 端口分配范围。
   xray_api_range: 10001-10999
+  # mihomo external-controller 端口分配范围。
   clash_controller: 19000-19999
+
+# stack 默认值；具体 stack 未显式配置时继承这里的设置。
 defaults:
+  # mihomo 默认配置。
   clash:
+    # 代理模式，支持 Rule、Global、Direct。
     mode: Rule
+    # 内置规则模板名称。
     rule_profile: default
+  # Xray/xrelay 默认配置。
   xrelay:
+    # Xray 日志级别，支持 debug、info、warning、error、none。
     loglevel: warning
+    # Xray API 默认配置，用于 stats 查询等内部能力。
     api:
+      # 是否默认启用 Xray API。
       enabled: true
+      # API 出站 tag。
       tag: api
+      # API 默认监听地址；新增 stack 可按需自动分配端口。
       listen: 127.0.0.1:10085
+      # 启用的 API 服务列表。
       services: [StatsService]
+    # Xray stats 默认配置。
     stats:
+      # 是否默认启用 stats。
       enabled: true
+    # Xray policy 默认配置。
     policy:
+      # 是否默认生成 policy。
       enabled: true
+
+# 安全策略。默认禁止公开 noauth socks/http。
 security:
+  # socks/http 入站监听非 loopback 地址时必须配置认证。
   require_auth_for_public_socks_http: true
+  # 是否允许显式放行公开 noauth；生产环境不建议开启。
   allow_noauth_public: false
+
+# 核心组件安装来源配置。
 install:
+  # mihomo 安装配置。
   mihomo:
+    # latest 表示使用最新 release。
     version: latest
+    # auto 表示由安装器自动选择下载来源。
     source: auto
+  # xray-core 安装配置。
   xray:
+    # latest 表示使用最新 release。
     version: latest
+    # auto 表示由安装器自动选择下载来源。
     source: auto
+  # geo 数据安装配置。
   geo:
+    # latest 表示使用最新 release。
     version: latest
+    # auto 表示由安装器自动选择下载来源。
     source: auto
 `, externalHost)
 }

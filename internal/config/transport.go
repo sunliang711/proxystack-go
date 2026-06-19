@@ -22,10 +22,10 @@ type SubServerConfig struct {
 	fields map[string]bool `json:"-" yaml:"-"`
 }
 
-// DefaultSubServerConfigYAML 返回 ps-sub init 与 ps-agent init 共用的默认订阅服务配置。
+// DefaultSubServerConfigYAML 返回 ps-sub init 使用的默认订阅服务配置。
 func DefaultSubServerConfigYAML() string {
 	return `# ps-sub 订阅服务配置。
-# 文件路径固定为 <base-dir>/sub/config.yaml，运行数据目录固定为 <base-dir>/sub。
+# 文件路径固定为 <base-dir>/config.yaml，运行数据目录固定为 <base-dir>。
 # 修改后可执行 ps-sub --base-dir <base-dir> config check 校验。
 
 # HTTP 监听地址，格式为 host:port。
@@ -45,10 +45,10 @@ access:
   # token: change-me
 
 # 自定义模板目录；为空时使用内置模板。
-# 查找顺序：templates_dir/sub/<template> -> templates_dir/<template> -> <base-dir>/sub/templates/sub/<template> -> 内置模板。
-# templates_dir: /opt/proxystack/sub/templates
+# 查找顺序：templates_dir/sub/<template> -> templates_dir/<template> -> <base-dir>/templates/sub/<template> -> 内置模板。
+# templates_dir: /opt/proxystack-sub/templates
 
-# inputs 目录扫描间隔，单位秒；用于轮询兜底检测 sub/inputs 变更。
+# inputs 目录扫描间隔，单位秒；用于轮询兜底检测 input 文件变更。
 watch_interval: 2
 
 # 文件变化后的防抖时间，单位秒；避免一次导入触发多次 reload。

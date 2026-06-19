@@ -121,7 +121,7 @@ EOF
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "input.generated_at is required")
-	data, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "manual.yaml"))
+	data, err := os.ReadFile(filepath.Join(baseDir, "inputs", "manual.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, original, data)
 }
@@ -159,7 +159,7 @@ EOF
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "duplicate proxy name for user")
-	data, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "manual.yaml"))
+	data, err := os.ReadFile(filepath.Join(baseDir, "inputs", "manual.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, original, data)
 }
@@ -168,7 +168,7 @@ EOF
 func TestInputEditUpdatesValidContent(t *testing.T) {
 	baseDir := t.TempDir()
 	writeSubInputFixture(t, baseDir, "manual.yaml")
-	inputPath := filepath.Join(baseDir, "sub", "inputs", "manual.yaml")
+	inputPath := filepath.Join(baseDir, "inputs", "manual.yaml")
 	require.NoError(t, os.Chmod(inputPath, 0o600))
 	editorPath := writeEditorScript(t, `cat > "$1" <<'EOF'
 input_schema: proxystack.subscription-input
@@ -212,7 +212,7 @@ EOF
 func TestInputSetHostUpdatesSingleFile(t *testing.T) {
 	baseDir := t.TempDir()
 	writeSubInputFixture(t, baseDir, "manual.yaml")
-	inputPath := filepath.Join(baseDir, "sub", "inputs", "manual.yaml")
+	inputPath := filepath.Join(baseDir, "inputs", "manual.yaml")
 	command := NewRootCommand()
 	var output bytes.Buffer
 	command.SetOut(&output)
@@ -231,7 +231,7 @@ func TestInputSetHostUpdatesSingleFile(t *testing.T) {
 // TestInputSetHostUpdatesExistingExternalHost 验证 set-host 会同步更新已有文件级 external_host。
 func TestInputSetHostUpdatesExistingExternalHost(t *testing.T) {
 	baseDir := t.TempDir()
-	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	inputDir := filepath.Join(baseDir, "inputs")
 	data := writeSubInputData(t, inputDir, "manual.yaml")
 	data = bytes.ReplaceAll(data, []byte("generated_at: \"2026-06-05T12:00:00+08:00\"\nnodes:"), []byte("generated_at: \"2026-06-05T12:00:00+08:00\"\nexternal_host: proxy.example.com\nnodes:"))
 	require.NoError(t, os.WriteFile(filepath.Join(inputDir, "manual.yaml"), data, 0o640))
@@ -251,7 +251,7 @@ func TestInputSetHostUpdatesExistingExternalHost(t *testing.T) {
 // TestInputSetHostWritesDefaultedServer 验证 set-host 会把 external_host 默认出来的 server 写回节点。
 func TestInputSetHostWritesDefaultedServer(t *testing.T) {
 	baseDir := t.TempDir()
-	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	inputDir := filepath.Join(baseDir, "inputs")
 	inputPath := filepath.Join(inputDir, "manual.yaml")
 	require.NoError(t, os.MkdirAll(inputDir, 0o750))
 	require.NoError(t, os.WriteFile(inputPath, []byte(`input_schema: proxystack.subscription-input
@@ -282,7 +282,7 @@ nodes:
 // TestInputSetHostUpdatesJSONInput 验证 set-host 支持 JSON input 的规范回写。
 func TestInputSetHostUpdatesJSONInput(t *testing.T) {
 	baseDir := t.TempDir()
-	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	inputDir := filepath.Join(baseDir, "inputs")
 	require.NoError(t, os.MkdirAll(inputDir, 0o750))
 	input, err := subgen.LoadInputFile(testutil.RepoPath(t, "tests", "fixtures", "sub", "manual.yaml"))
 	require.NoError(t, err)
@@ -315,10 +315,10 @@ func TestInputSetHostAllUpdatesSafeInputFiles(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Contains(t, output.String(), "Input hosts updated: changed=2 unchanged=0 total=2")
-	manualData, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "manual.yaml"))
+	manualData, err := os.ReadFile(filepath.Join(baseDir, "inputs", "manual.yaml"))
 	require.NoError(t, err)
 	require.Contains(t, string(manualData), "server: edge.example.com")
-	copyData, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "copy.yaml"))
+	copyData, err := os.ReadFile(filepath.Join(baseDir, "inputs", "copy.yaml"))
 	require.NoError(t, err)
 	require.Contains(t, string(copyData), "server: edge.example.com")
 }
@@ -371,10 +371,10 @@ func TestInputSetHostRejectsMergeFailureWithoutWrite(t *testing.T) {
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "duplicate node id")
-	manualData, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "manual.yaml"))
+	manualData, err := os.ReadFile(filepath.Join(baseDir, "inputs", "manual.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, manualOriginal, manualData)
-	copyData, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "copy.yaml"))
+	copyData, err := os.ReadFile(filepath.Join(baseDir, "inputs", "copy.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, copyOriginal, copyData)
 }
@@ -392,7 +392,7 @@ func TestInputSetHostReportsUnchanged(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Contains(t, output.String(), "Input host unchanged: manual.yaml")
-	data, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "manual.yaml"))
+	data, err := os.ReadFile(filepath.Join(baseDir, "inputs", "manual.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, original, data)
 }
@@ -400,7 +400,7 @@ func TestInputSetHostReportsUnchanged(t *testing.T) {
 // TestInputRemoveRejectsPathTraversal 验证 remove 不允许 SOURCE 逃出 inputs 目录。
 func TestInputRemoveRejectsPathTraversal(t *testing.T) {
 	baseDir := t.TempDir()
-	configPath := filepath.Join(baseDir, "sub", "config.yaml")
+	configPath := filepath.Join(baseDir, "config.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, []byte("access:\n  type: none\n"), 0o640))
 	command := NewRootCommand()
@@ -417,7 +417,7 @@ func TestInputRemoveRejectsPathTraversal(t *testing.T) {
 func TestInputRemoveDeletesResolvedInputFile(t *testing.T) {
 	baseDir := t.TempDir()
 	writeSubInputFixture(t, baseDir, "manual.yaml")
-	inputPath := filepath.Join(baseDir, "sub", "inputs", "manual.yaml")
+	inputPath := filepath.Join(baseDir, "inputs", "manual.yaml")
 	command := NewRootCommand()
 	var output bytes.Buffer
 	command.SetOut(&output)
@@ -435,8 +435,8 @@ func TestInputCommandsRejectSymlinkInputDir(t *testing.T) {
 	baseDir := t.TempDir()
 	externalDir := t.TempDir()
 	writeSubInputData(t, externalDir, "manual.yaml")
-	require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "sub"), 0o750))
-	if err := os.Symlink(externalDir, filepath.Join(baseDir, "sub", "inputs")); err != nil {
+	require.NoError(t, os.MkdirAll(baseDir, 0o750))
+	if err := os.Symlink(externalDir, filepath.Join(baseDir, "inputs")); err != nil {
 		t.Skipf("symlink is not available: %v", err)
 	}
 	command := NewRootCommand()
@@ -454,7 +454,7 @@ func TestInputCommandsRejectSymlinkInputFile(t *testing.T) {
 	externalDir := t.TempDir()
 	writeSubInputData(t, externalDir, "manual.yaml")
 	externalPath := filepath.Join(externalDir, "manual.yaml")
-	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	inputDir := filepath.Join(baseDir, "inputs")
 	require.NoError(t, os.MkdirAll(inputDir, 0o750))
 	if err := os.Symlink(externalPath, filepath.Join(inputDir, "manual.yaml")); err != nil {
 		t.Skipf("symlink is not available: %v", err)
@@ -481,7 +481,7 @@ func TestInputCommandsRejectSymlinkInputFile(t *testing.T) {
 // writeSubInputFixture 写入测试订阅 input，并返回原始内容。
 func writeSubInputFixture(t *testing.T, baseDir string, name string) []byte {
 	t.Helper()
-	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	inputDir := filepath.Join(baseDir, "inputs")
 	return writeSubInputData(t, inputDir, name)
 }
 
@@ -498,7 +498,7 @@ func writeSubInputData(t *testing.T, inputDir string, name string) []byte {
 // writeSubInputVariant 写入与 manual 不冲突的第二个测试 input。
 func writeSubInputVariant(t *testing.T, baseDir string, name string) []byte {
 	t.Helper()
-	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	inputDir := filepath.Join(baseDir, "inputs")
 	data := writeSubInputData(t, inputDir, name)
 	data = bytes.ReplaceAll(data, []byte("source: manual"), []byte("source: copy"))
 	data = bytes.ReplaceAll(data, []byte("manual:relay"), []byte("copy:relay"))

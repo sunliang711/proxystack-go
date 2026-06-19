@@ -15,7 +15,7 @@
 
 - `ps-agent` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`。
 - agent 全局配置文件固定为 `<base-dir>/config.yaml`，不再提供 `-c/--config`。
-- `ps-sub` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`；sub root 固定为 `<base-dir>/sub`。
+- `ps-sub` 通过全局 `--base-dir DIR` 指定独立环境目录，默认 `/opt/proxystack-sub`；sub root 固定为 `<base-dir>`。
 - `ps-sub` 通过全局 `--listen HOST:PORT` 覆盖订阅 HTTP 监听地址，默认 `0.0.0.0:3003`；`serve --host/--port` 可进一步覆盖 host 或 port。
 - 服务管理器通过全局 `--service-manager auto|systemd|launchd` 指定，默认 `auto`；Linux 解析为 `systemd`，macOS 解析为 `launchd`，其他平台需要显式支持后才能使用 `auto`。
 - CLI 日志消息使用英文，面向用户的错误摘要可以使用中文。
@@ -27,7 +27,8 @@
 | 分类 | 含义 | 命令 |
 | --- | --- | --- |
 | 只读 | 不写文件，不调用服务管理器，不启动 HTTP 服务 | `version`、`list`、`validate`、`check`、`render *`、`doctor`、`sub validate-inputs` |
-| 写配置 | 写 `config.yaml`、`sub/config.yaml` 或 `stacks/*.yaml` | `ps-agent init`、`config`、`add`、`clone`、`member add/remove`、`remove`、`ps-sub init` |
+| 写 agent 配置 | 写 `config.yaml` 或 `stacks/*.yaml` | `ps-agent init`、`config`、`add`、`clone`、`member add/remove`、`remove` |
+| 写 sub 配置 | 写 `<sub-base-dir>/config.yaml` | `ps-sub init` |
 | 写 runtime | 写 `runtime/generated`、`runtime/manifest.json` 或 `publish` | `start`、`restart`、`sub export`、`export`、`import` |
 | 服务管理器 | 调用 `systemctl`/`journalctl` 或 `launchctl`/`log` | `start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`service *` |
 | 下载/安装 | 写 `downloads`、`bin`、`geo` 或 `.venv` | `install`、`update` |
@@ -47,9 +48,9 @@ ps-agent [--base-dir DIR] init [--external-host HOST] [--force]
 
 职责：
 
-- 创建 base dir、标准目录、默认 `config.yaml` 和初始 `sub/config.yaml`。
-- 优先读取内置 `agent-config.yaml` 模板。
-- `external_host` 未传时保留注释示例。
+- 创建 base dir、标准目录和带注释说明的默认 `config.yaml`。
+- 使用代码内置默认配置内容。
+- `external_host` 未传时写为空值，后续可编辑。
 - 已存在 `config.yaml` 时默认不覆盖。
 
 副作用：
@@ -62,7 +63,7 @@ ps-agent [--base-dir DIR] init [--external-host HOST] [--force]
 
 - 不传 `--force` 时不得覆盖既有 `config.yaml`。
 - 创建的目录权限应符合部署规格。
-- 缺少内置模板时可使用代码内置默认值。
+- 默认配置内容必须可通过 strict 校验。
 
 ### 3.2 `setup`
 
@@ -73,7 +74,7 @@ ps-agent [--base-dir DIR] setup [--external-host HOST] [--force] [--start]
 职责：
 
 - 依次执行幂等 `init`、`install all`、`service install`。
-- 已有 `config.yaml` 且未传 `--force` 时不覆盖配置，只补齐标准目录和缺失的 sub 默认配置后继续。
+- 已有 `config.yaml` 且未传 `--force` 时不覆盖配置，只补齐标准目录后继续。
 - 传入 `--start` 时继续执行 `start`。
 
 副作用：
@@ -392,7 +393,7 @@ ps-agent sub validate-inputs --input-dir DIR
 
 - `sub export` 缺少 `external_host` 时失败。
 - 指定 stack 时默认输出 `<stack>-sub-bundle.zip`。
-- 不直接写 `sub/inputs`。
+- 不直接写 ps-sub `inputs`。
 
 ### 3.16 `export/import`
 
@@ -443,10 +444,11 @@ ps-agent [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECON
 
 全局路径入口：
 
-- `ps-sub` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`。
-- sub root 固定为 `<base-dir>/sub`。
-- sub config 固定为 `<base-dir>/sub/config.yaml`。
-- inputs 固定为 `<base-dir>/sub/inputs`。
+- `ps-sub` 通过全局 `--base-dir DIR` 指定独立环境目录，默认 `/opt/proxystack-sub`。
+- sub root 固定为 `<base-dir>`。
+- sub config 固定为 `<base-dir>/config.yaml`。
+- inputs 固定为 `<base-dir>/inputs`。
+- templates 默认目录为 `<base-dir>/templates`。
 - 不提供 `--config` 或 `--data-dir`。
 - 监听地址可通过全局 `--listen HOST:PORT` 覆盖，默认 `0.0.0.0:3003`。
 - 服务管理器通过全局 `--service-manager auto|systemd|launchd` 指定，默认 `auto`。
@@ -459,13 +461,13 @@ ps-sub [--base-dir DIR] init [--force]
 
 职责：
 
-- 幂等创建 `<base-dir>/sub`、`<base-dir>/sub/inputs` 和 `<base-dir>/sub/config.yaml`。
-- 默认不覆盖既有 `<base-dir>/sub/config.yaml`。
+- 幂等创建 `<base-dir>`、`<base-dir>/inputs`、`<base-dir>/templates` 和 `<base-dir>/config.yaml`。
+- 默认不覆盖既有 `<base-dir>/config.yaml`。
 - `--force` 会重写默认 sub config。
 
 副作用：
 
-- 只写 `<base-dir>/sub` 相关目录和配置。
+- 只写 `<base-dir>` 下的 ps-sub 目录和配置。
 
 验收：
 
@@ -500,13 +502,13 @@ ps-sub [--base-dir DIR] config check
 
 职责：
 
-- `config` 编辑 `<base-dir>/sub/config.yaml`，保存后立即 strict 校验。
+- `config` 编辑 `<base-dir>/config.yaml`，保存后立即 strict 校验。
 - `config show` 打印有效 sub config，默认脱敏 token。
 - `config check` 只校验 sub config。
 
 副作用：
 
-- `config` 可写 `sub/config.yaml`。
+- `config` 可写 `<base-dir>/config.yaml`。
 - `config show` 和 `config check` 只读。
 
 验收：
@@ -525,11 +527,11 @@ ps-sub [--base-dir DIR] import BUNDLE [--replace-all]
 
 职责：
 
-- 校验订阅 bundle，并把 inputs 原子写入 `<base-dir>/sub/inputs`。
+- 校验订阅 bundle，并把 inputs 原子写入 `<base-dir>/inputs`。
 
 副作用：
 
-- 写 `sub/inputs`。
+- 写 `<base-dir>/inputs`。
 
 验收：
 
@@ -549,11 +551,11 @@ ps-sub [--base-dir DIR] clear
 
 副作用：
 
-- 删除 `sub/inputs` 中由 import 管理的 input 文件。
+- 删除 `<base-dir>/inputs` 中由 import 管理的 input 文件。
 
 验收：
 
-- 不删除 `sub/config.yaml`。
+- 不删除 `<base-dir>/config.yaml`。
 - 不读取 agent 配置。
 
 ### 4.6 `input`
@@ -569,7 +571,7 @@ ps-sub [--base-dir DIR] input remove SOURCE
 
 职责：
 
-- `list` 列出 `<base-dir>/sub/inputs` 中的 input 文件、source、nodes、users 和 generated_at。
+- `list` 列出 `<base-dir>/inputs` 中的 input 文件、source、nodes、users 和 generated_at。
 - `show` 打印单个 input，默认输出脱敏后的规范 YAML；`--raw` 输出原始文件内容；`--show-secrets` 仅影响非 raw 输出。
 - `validate` 严格校验单个 input，或对全部 inputs 执行合并校验。
 - `edit` 通过临时文件编辑单个 input，保存前必须 strict decode 并通过 schema 校验。
@@ -585,7 +587,7 @@ ps-sub [--base-dir DIR] input remove SOURCE
 
 验收：
 
-- SOURCE 只能解析为 `<base-dir>/sub/inputs` 下的 `.yaml`、`.yml` 或 `.json` 普通文件，不允许路径穿越。
+- SOURCE 只能解析为 `<base-dir>/inputs` 下的 `.yaml`、`.yml` 或 `.json` 普通文件，不允许路径穿越。
 - `show` 默认不得输出 password、token、uuid 等敏感值。
 - `edit` 校验失败时不得覆盖原文件。
 - `set-host` 校验失败时不得覆盖原文件。
@@ -601,7 +603,7 @@ ps-sub [--base-dir DIR] [--listen HOST:PORT] serve [--host HOST] [--port PORT]
 职责：
 
 - 启动订阅 HTTP 服务。
-- 加载 `<base-dir>/sub/config.yaml` 和 `<base-dir>/sub/inputs`。
+- 加载 `<base-dir>/config.yaml` 和 `<base-dir>/inputs`。
 - 启动 watcher，运行期 reload。
 
 副作用：
@@ -670,9 +672,9 @@ ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] doctor
 
 职责：
 
-- 检查 `<base-dir>/sub/config.yaml` 是否存在且可通过 strict 校验。
-- 检查 `<base-dir>/sub/inputs` 是否可按运行时逻辑合并为订阅索引。
-- 检查 `<base-dir>/sub` 目录树权限和 owner 是否符合订阅服务运行要求。
+- 检查 `<base-dir>/config.yaml` 是否存在且可通过 strict 校验。
+- 检查 `<base-dir>/inputs` 是否可按运行时逻辑合并为订阅索引。
+- 检查 `<base-dir>` 目录树权限和 owner 是否符合订阅服务运行要求。
 - 检查订阅服务对应的 systemd unit 或 launchd plist 是否存在。
 
 副作用：

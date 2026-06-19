@@ -43,13 +43,14 @@ func TestHelpUsesCommandGroupsAndBaseDirOnly(t *testing.T) {
 	require.Contains(t, helpText, "  doctor")
 	require.Contains(t, helpText, "  version")
 	require.Contains(t, helpText, "--base-dir")
+	require.Contains(t, helpText, "/opt/proxystack-sub")
 	require.NotContains(t, helpText, "--config")
 	require.NotContains(t, helpText, "--data-dir")
 	require.NotContains(t, helpText, "Available Commands:")
 	require.NotContains(t, helpText, "Additional Commands:")
 }
 
-// TestInitCommandCreatesSubLayout 验证 ps-sub init 只创建 sub 运行目录和默认配置。
+// TestInitCommandCreatesSubLayout 验证 ps-sub init 只创建独立运行目录和默认配置。
 func TestInitCommandCreatesSubLayout(t *testing.T) {
 	baseDir := t.TempDir()
 	command := NewRootCommand()
@@ -60,13 +61,15 @@ func TestInitCommandCreatesSubLayout(t *testing.T) {
 	err := command.Execute()
 
 	require.NoError(t, err)
-	require.DirExists(t, filepath.Join(baseDir, "sub"))
-	require.DirExists(t, filepath.Join(baseDir, "sub", "inputs"))
-	require.FileExists(t, filepath.Join(baseDir, "sub", "config.yaml"))
-	require.NoFileExists(t, filepath.Join(baseDir, "config.yaml"))
+	require.DirExists(t, baseDir)
+	require.DirExists(t, filepath.Join(baseDir, "inputs"))
+	require.DirExists(t, filepath.Join(baseDir, "templates"))
+	require.FileExists(t, filepath.Join(baseDir, "config.yaml"))
+	require.NoDirExists(t, filepath.Join(baseDir, "sub"))
 	require.NoDirExists(t, filepath.Join(baseDir, "runtime"))
+	require.Contains(t, output.String(), "template_dir="+filepath.Join(baseDir, "templates"))
 	require.Contains(t, output.String(), "created_config=true")
-	data, err := os.ReadFile(filepath.Join(baseDir, "sub", "config.yaml"))
+	data, err := os.ReadFile(filepath.Join(baseDir, "config.yaml"))
 	require.NoError(t, err)
 	require.Contains(t, string(data), "# ps-sub 订阅服务配置。")
 	require.Contains(t, string(data), "# HTTP 监听地址")
@@ -74,7 +77,7 @@ func TestInitCommandCreatesSubLayout(t *testing.T) {
 	require.Contains(t, string(data), "format: json")
 	require.Contains(t, string(data), "# HTTP 访问控制。")
 	require.Contains(t, string(data), "# Surge managed config 输出设置。")
-	subConfig, err := config.LoadSubServerConfig(filepath.Join(baseDir, "sub", "config.yaml"))
+	subConfig, err := config.LoadSubServerConfig(filepath.Join(baseDir, "config.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, "127.0.0.1:3003", subConfig.Listen)
 	require.Equal(t, config.LogFormatJSON, subConfig.Log.Format)
@@ -127,7 +130,7 @@ func TestConfigureSubLoggerRejectsUnknownFormat(t *testing.T) {
 // TestInitCommandKeepsExistingConfig 验证 ps-sub init 默认不覆盖既有 sub config。
 func TestInitCommandKeepsExistingConfig(t *testing.T) {
 	baseDir := t.TempDir()
-	configPath := filepath.Join(baseDir, "sub", "config.yaml")
+	configPath := filepath.Join(baseDir, "config.yaml")
 	original := []byte("listen: 127.0.0.1:39003\naccess:\n  type: none\n")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, original, 0o640))
@@ -148,7 +151,7 @@ func TestInitCommandKeepsExistingConfig(t *testing.T) {
 // TestInitCommandForceOverwritesConfig 验证 --force 会重写默认 sub config。
 func TestInitCommandForceOverwritesConfig(t *testing.T) {
 	baseDir := t.TempDir()
-	configPath := filepath.Join(baseDir, "sub", "config.yaml")
+	configPath := filepath.Join(baseDir, "config.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, []byte("listen: 127.0.0.1:39003\naccess:\n  type: none\n"), 0o600))
 	before, err := os.Stat(configPath)
@@ -174,10 +177,10 @@ func TestInitCommandForceOverwritesConfig(t *testing.T) {
 	}
 }
 
-// TestConfigShowUsesBaseDirSubConfig 验证 config show 使用 base-dir 下固定 sub/config.yaml。
+// TestConfigShowUsesBaseDirSubConfig 验证 config show 使用 base-dir 下固定 config.yaml。
 func TestConfigShowUsesBaseDirSubConfig(t *testing.T) {
 	baseDir := t.TempDir()
-	configPath := filepath.Join(baseDir, "sub", "config.yaml")
+	configPath := filepath.Join(baseDir, "config.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, []byte(`access:
   type: token
@@ -198,7 +201,7 @@ func TestConfigShowUsesBaseDirSubConfig(t *testing.T) {
 // TestConfigShowCanPrintSecrets 验证 --show-secrets 可打印完整 token。
 func TestConfigShowCanPrintSecrets(t *testing.T) {
 	baseDir := t.TempDir()
-	configPath := filepath.Join(baseDir, "sub", "config.yaml")
+	configPath := filepath.Join(baseDir, "config.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, []byte("access:\n  type: token\n  token: from-base-dir\n"), 0o640))
 	command := NewRootCommand()
@@ -215,7 +218,7 @@ func TestConfigShowCanPrintSecrets(t *testing.T) {
 // TestConfigShowRedactsUnusedToken 验证默认 show 会脱敏误写在 none 模式下的 token。
 func TestConfigShowRedactsUnusedToken(t *testing.T) {
 	baseDir := t.TempDir()
-	configPath := filepath.Join(baseDir, "sub", "config.yaml")
+	configPath := filepath.Join(baseDir, "config.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, []byte("access:\n  type: none\n  token: unused-secret\n"), 0o640))
 	command := NewRootCommand()
@@ -230,10 +233,10 @@ func TestConfigShowRedactsUnusedToken(t *testing.T) {
 	require.NotContains(t, output.String(), "unused-secret")
 }
 
-// TestConfigCommandEditsAndValidates 验证 config 编辑后会校验并写回 sub/config.yaml。
+// TestConfigCommandEditsAndValidates 验证 config 编辑后会校验并写回 config.yaml。
 func TestConfigCommandEditsAndValidates(t *testing.T) {
 	baseDir := t.TempDir()
-	configPath := filepath.Join(baseDir, "sub", "config.yaml")
+	configPath := filepath.Join(baseDir, "config.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, []byte("access:\n  type: none\n"), 0o640))
 	editorPath := writeEditorScript(t, `cat > "$1" <<'EOF'
@@ -256,7 +259,7 @@ EOF
 // TestConfigCommandSupportsQuotedEditorPath 验证带空格路径的编辑器可通过引号传入。
 func TestConfigCommandSupportsQuotedEditorPath(t *testing.T) {
 	baseDir := t.TempDir()
-	configPath := filepath.Join(baseDir, "sub", "config.yaml")
+	configPath := filepath.Join(baseDir, "config.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, []byte("access:\n  type: none\n"), 0o640))
 	editorPath := writeEditorScriptInDir(t, filepath.Join(t.TempDir(), "editor dir"), `cat > "$1" <<'EOF'
@@ -279,7 +282,7 @@ EOF
 // TestConfigCommandRejectsInvalidEdit 验证编辑结果非法时不覆盖原配置。
 func TestConfigCommandRejectsInvalidEdit(t *testing.T) {
 	baseDir := t.TempDir()
-	configPath := filepath.Join(baseDir, "sub", "config.yaml")
+	configPath := filepath.Join(baseDir, "config.yaml")
 	original := []byte("access:\n  type: none\n")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, original, 0o640))
@@ -334,7 +337,7 @@ func TestConfigCheckRequiresConfigFile(t *testing.T) {
 // TestServeHostPortOverride 验证 serve 的 --host/--port 会覆盖最终监听地址。
 func TestServeHostPortOverride(t *testing.T) {
 	baseDir := t.TempDir()
-	configPath := filepath.Join(baseDir, "sub", "config.yaml")
+	configPath := filepath.Join(baseDir, "config.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, []byte(`listen: 127.0.0.1:3003
 access:
@@ -353,20 +356,20 @@ access:
 	require.NoError(t, err)
 	require.Equal(t, "0.0.0.0:39003", subConfig.Listen)
 	require.Equal(t, "token", subConfig.Access.Type)
-	require.Equal(t, filepath.Join(baseDir, "sub"), subConfig.DataDir)
+	require.Equal(t, baseDir, subConfig.DataDir)
 }
 
-// TestImportAndClearUseBaseDirSubInputs 验证 import/clear 固定操作 base-dir 下的 sub/inputs。
+// TestImportAndClearUseBaseDirSubInputs 验证 import/clear 固定操作 base-dir 下的 inputs。
 func TestImportAndClearUseBaseDirSubInputs(t *testing.T) {
 	baseDir := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "sub"), 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "sub", "config.yaml"), []byte("access:\n  type: none\n"), 0o640))
+	require.NoError(t, os.MkdirAll(baseDir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "config.yaml"), []byte("access:\n  type: none\n"), 0o640))
 	bundlePath := writeTestBundle(t)
 
 	importCommand := NewRootCommand()
 	importCommand.SetArgs([]string{"--base-dir", baseDir, "import", bundlePath})
 	require.NoError(t, importCommand.Execute())
-	inputPath := filepath.Join(baseDir, "sub", "inputs", "manual.yaml")
+	inputPath := filepath.Join(baseDir, "inputs", "manual.yaml")
 	require.FileExists(t, inputPath)
 
 	clearCommand := NewRootCommand()
@@ -395,7 +398,9 @@ func TestServiceInstallUsesSubOnlyConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "sub", manager.installedTarget)
 	require.Equal(t, baseDir, manager.installedConfig.BaseDir)
+	require.Equal(t, ".", manager.installedConfig.Paths.Sub)
 	require.Equal(t, baseDir, repairedConfig.BaseDir)
+	require.Equal(t, ".", repairedConfig.Paths.Sub)
 	require.NoFileExists(t, filepath.Join(baseDir, "config.yaml"))
 	require.Contains(t, output.String(), "Installed units:")
 }

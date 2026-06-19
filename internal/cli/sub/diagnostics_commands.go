@@ -63,13 +63,13 @@ func runSubDoctor(configPath string, managerKind string) (subDoctorReport, error
 	subConfig, err := config.LoadSubServerConfig(configPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			baseDir := filepath.Dir(filepath.Dir(configPath))
+			baseDir := filepath.Dir(configPath)
 			return subDoctorReport{}, fmt.Errorf("sub config is missing: %s; run `ps-sub --base-dir %s init` first", configPath, baseDir)
 		}
 		return subDoctorReport{}, fmt.Errorf("doctor config failed: %w", err)
 	}
-	baseDir := filepath.Dir(filepath.Dir(configPath))
-	subConfig.DataDir = filepath.Join(baseDir, "sub")
+	baseDir := filepath.Dir(configPath)
+	subConfig.DataDir = subDataDir(baseDir)
 	report := subDoctorReport{Checks: []string{"config loaded"}}
 	addSubDoctorInputIssues(&report, subConfig)
 	uid, gid, hasServiceAccount := addSubDoctorServiceAccountIssues(&report)

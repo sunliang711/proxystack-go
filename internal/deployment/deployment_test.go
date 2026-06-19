@@ -30,9 +30,13 @@ func TestDeploymentScriptsUseReleaseBinaryBootstrap(t *testing.T) {
 			require.Contains(t, content, "install_release_binaries")
 			require.Contains(t, content, "go build -trimpath")
 			require.Contains(t, content, "go_build_ldflags")
-			require.Contains(t, content, "ps-agent")
 			require.Contains(t, content, "ps-sub")
-			require.Contains(t, content, "install_file \"${agent_binary}\" \"${bin_dir}/ps-agent\" \"0755\"")
+			if scriptName == "install-agent.sh" {
+				require.Contains(t, content, "ps-agent")
+				require.Contains(t, content, "install_file \"${agent_binary}\" \"${bin_dir}/ps-agent\" \"0755\"")
+			} else {
+				require.NotContains(t, content, "install_file \"${agent_binary}\" \"${bin_dir}/ps-agent\" \"0755\"")
+			}
 			require.NotContains(t, content, "scripts/lib/common.sh")
 			require.NotContains(t, content, "python3 -m venv")
 			require.NotContains(t, content, "pip install")
@@ -72,7 +76,7 @@ func TestDockerSubDeploymentUsesSecureDefaults(t *testing.T) {
 	require.Contains(t, compose, "cap_drop:")
 	require.Contains(t, compose, "- ALL")
 	require.Contains(t, compose, "no-new-privileges:true")
-	require.Contains(t, compose, "/opt/proxystack:/data")
+	require.Contains(t, compose, "/opt/proxystack-sub:/data")
 	require.Contains(t, compose, "user: \"10001:10001\"")
 	require.Contains(t, compose, "- ps-sub")
 	require.NotContains(t, compose, "- proxystack-sub")
@@ -96,8 +100,8 @@ func TestDockerSubDeployDryRunUsesBaseDir(t *testing.T) {
 
 	require.NoError(t, err, output)
 	require.Contains(t, output, "install -d -m 0750 "+baseDir)
-	require.Contains(t, output, "install -d -m 0750 "+filepath.Join(baseDir, "sub"))
-	require.Contains(t, output, "install -d -m 0750 "+filepath.Join(baseDir, "sub", "inputs"))
+	require.Contains(t, output, "install -d -m 0750 "+filepath.Join(baseDir, "inputs"))
+	require.Contains(t, output, "install -d -m 0750 "+filepath.Join(baseDir, "templates"))
 	require.Contains(t, output, "--volume "+baseDir+":/data")
 	require.Contains(t, output, "ps-sub --base-dir /data serve")
 }
@@ -116,8 +120,12 @@ func TestInstallScriptsDryRunDownloadRelease(t *testing.T) {
 			require.Contains(t, output, "https://github.com/"+defaultReleaseRepo+"/releases/download/v1.2.3/SHA256SUMS")
 			require.Contains(t, output, "tar -xzf")
 			require.Contains(t, output, "proxystack-release-dry-run")
-			require.Contains(t, output, filepath.Join(binDir, "ps-agent"))
 			require.Contains(t, output, filepath.Join(binDir, "ps-sub"))
+			if scriptName == "install-agent.sh" {
+				require.Contains(t, output, filepath.Join(binDir, "ps-agent"))
+			} else {
+				require.NotContains(t, output, filepath.Join(binDir, "ps-agent"))
+			}
 			require.NotContains(t, output, filepath.Join(baseDir, "bin", "ps-agent"))
 		})
 	}

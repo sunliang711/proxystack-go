@@ -26,7 +26,7 @@
 - 未变化文件不改写。
 - 生成前必须完整校验。
 - `start` 不隐式生成订阅发布包。
-- `sub export` 不直接写 `sub/inputs`。
+- `sub export` 不直接写 ps-sub `inputs`。
 
 ## 2. Runtime Plan
 

@@ -36,7 +36,8 @@ func TestEnsureProjectLayoutDoesNotOverwriteConfig(t *testing.T) {
 	require.Equal(t, configData, data)
 	require.DirExists(t, filepath.Join(baseDir, "bin"))
 	require.DirExists(t, filepath.Join(baseDir, "runtime", "generated"))
-	require.FileExists(t, filepath.Join(baseDir, "sub", "config.yaml"))
+	require.NoDirExists(t, filepath.Join(baseDir, "sub"))
+	require.NoFileExists(t, filepath.Join(baseDir, "sub", "config.yaml"))
 }
 
 // TestInitProjectWritesConfigWithoutBaseDir 验证初始化配置不再写入 base_dir 字段。
@@ -49,6 +50,23 @@ func TestInitProjectWritesConfigWithoutBaseDir(t *testing.T) {
 	data, err := os.ReadFile(configPath)
 	require.NoError(t, err)
 	require.NotContains(t, string(data), "base_dir:")
+}
+
+// TestInitProjectWritesCommentedAgentConfig 验证 init 生成的 agent 配置包含字段说明注释。
+func TestInitProjectWritesCommentedAgentConfig(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "config.yaml")
+
+	require.NoError(t, InitProject(InitOptions{BaseDir: baseDir, ExternalHost: "proxy.example.com"}))
+
+	data, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	content := string(data)
+	require.Contains(t, content, "# default agent 配置。")
+	require.Contains(t, content, "# 路径配置。相对路径均以 <base-dir> 为基准解析。")
+	require.Contains(t, content, "# 自动分配端口范围。仅 add/clone --allocate-ports 使用；手工配置端口可在范围外。")
+	require.Contains(t, content, "# 安全策略。默认禁止公开 noauth socks/http。")
+	require.Contains(t, content, "# 核心组件安装来源配置。")
 }
 
 // TestAddCloneAndMemberCommands 验证模板创建、端口分配、clone 和 member 写入行为。

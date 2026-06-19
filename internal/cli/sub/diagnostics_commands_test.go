@@ -27,7 +27,7 @@ func TestDoctorCommandIsRegistered(t *testing.T) {
 
 // TestRunSubDoctorMissingConfigSuggestsInit 验证未初始化时 doctor 会提示先执行 init。
 func TestRunSubDoctorMissingConfigSuggestsInit(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "sub", "config.yaml")
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
 
 	_, err := runSubDoctor(configPath, "test")
 
@@ -41,13 +41,13 @@ func TestRunSubDoctorMissingConfigSuggestsInit(t *testing.T) {
 func TestRunSubDoctorValidatesConfigAndInputs(t *testing.T) {
 	baseDir := t.TempDir()
 	writeSubDoctorConfig(t, baseDir)
-	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	inputDir := filepath.Join(baseDir, "inputs")
 	require.NoError(t, os.MkdirAll(inputDir, 0o750))
 	inputData, err := os.ReadFile(testutil.RepoPath(t, "tests", "fixtures", "sub", "manual.yaml"))
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(inputDir, "manual.yaml"), inputData, 0o640))
 
-	report, err := runSubDoctor(filepath.Join(baseDir, "sub", "config.yaml"), "test")
+	report, err := runSubDoctor(filepath.Join(baseDir, "config.yaml"), "test")
 
 	require.NoError(t, err)
 	checks := strings.Join(report.Checks, "\n")
@@ -62,11 +62,11 @@ func TestRunSubDoctorValidatesConfigAndInputs(t *testing.T) {
 func TestRunSubDoctorReportsInvalidInputs(t *testing.T) {
 	baseDir := t.TempDir()
 	writeSubDoctorConfig(t, baseDir)
-	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	inputDir := filepath.Join(baseDir, "inputs")
 	require.NoError(t, os.MkdirAll(inputDir, 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(inputDir, "bad.yaml"), []byte("bad: ["), 0o640))
 
-	report, err := runSubDoctor(filepath.Join(baseDir, "sub", "config.yaml"), "test")
+	report, err := runSubDoctor(filepath.Join(baseDir, "config.yaml"), "test")
 
 	require.NoError(t, err)
 	require.Contains(t, strings.Join(report.Issues, "\n"), "subscription inputs validation failed")
@@ -76,7 +76,7 @@ func TestRunSubDoctorReportsInvalidInputs(t *testing.T) {
 func TestAddSubDoctorMetadataIssuesReportsModeMismatch(t *testing.T) {
 	baseDir := t.TempDir()
 	writeSubDoctorConfig(t, baseDir)
-	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	inputDir := filepath.Join(baseDir, "inputs")
 	require.NoError(t, os.MkdirAll(inputDir, 0o750))
 	inputPath := filepath.Join(inputDir, "manual.yaml")
 	require.NoError(t, os.WriteFile(inputPath, []byte("nodes: []\n"), 0o644))
@@ -90,7 +90,7 @@ func TestAddSubDoctorMetadataIssuesReportsModeMismatch(t *testing.T) {
 // writeSubDoctorConfig 写入 doctor 测试使用的最小 sub 配置。
 func writeSubDoctorConfig(t *testing.T, baseDir string) {
 	t.Helper()
-	configPath := filepath.Join(baseDir, "sub", "config.yaml")
+	configPath := filepath.Join(baseDir, "config.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, []byte("access:\n  type: none\n"), 0o640))
 }

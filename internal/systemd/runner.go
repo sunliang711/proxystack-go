@@ -250,7 +250,7 @@ func RenderUnits(config domain.GlobalConfig) map[string]string {
 	binDir := resolvePath(config, config.Paths.Bin, filepath.Join(baseDir, "bin"))
 	runtimeDir := resolvePath(config, config.Paths.Runtime, filepath.Join(baseDir, "runtime"))
 	generatedDir := resolvePath(config, config.Paths.Generated, filepath.Join(baseDir, "runtime", "generated"))
-	subDir := filepath.Join(baseDir, "sub")
+	subDir := resolvePath(config, config.Paths.Sub, filepath.Join(baseDir, "sub"))
 	return map[string]string{
 		XrayUnitTemplate: `[Unit]
 Description=Proxystack Xray %i

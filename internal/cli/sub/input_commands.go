@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newInputCommand 创建 sub/inputs 文件级查询和维护命令集合。
+// newInputCommand 创建 inputs 文件级查询和维护命令集合。
 func newInputCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "input",
@@ -250,13 +250,13 @@ func newInputRemoveCommand() *cobra.Command {
 	}
 }
 
-// subInputDir 返回当前 base dir 下固定的 sub/inputs 路径。
+// subInputDir 返回当前 base dir 下固定的 inputs 路径。
 func subInputDir(command *cobra.Command) (string, error) {
 	baseDir, err := subBaseDir(command)
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(baseDir, "sub", "inputs"), nil
+	return filepath.Join(subDataDir(baseDir), "inputs"), nil
 }
 
 // editSubInput 把原 input 复制到临时文件编辑，严格校验通过后再原子替换。

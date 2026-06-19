@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	defaultBaseDir        = "/opt/proxystack"
+	defaultBaseDir        = "/opt/proxystack-sub"
 	defaultListen         = "0.0.0.0:3003"
 	defaultServiceManager = servicemanager.ManagerAuto
 )
@@ -116,7 +116,7 @@ func newInitCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(command.OutOrStdout(), "Initialized subscription layout: data_dir=%s input_dir=%s config=%s created_config=%t\n", result.DataDir, result.InputDir, result.ConfigPath, result.CreatedConfig)
+			fmt.Fprintf(command.OutOrStdout(), "Initialized subscription layout: data_dir=%s input_dir=%s template_dir=%s config=%s created_config=%t\n", result.DataDir, result.InputDir, result.TemplatesDir, result.ConfigPath, result.CreatedConfig)
 			return nil
 		},
 	}
@@ -284,7 +284,7 @@ func newClearCommand() *cobra.Command {
 	}
 }
 
-// editSubConfig 通过临时文件编辑 sub/config.yaml，校验通过后再替换真实文件。
+// editSubConfig 通过临时文件编辑 config.yaml，校验通过后再替换真实文件。
 func editSubConfig(command *cobra.Command, editor string) (string, bool, error) {
 	configPath, err := subConfigPath(command)
 	if err != nil {
@@ -341,17 +341,19 @@ func editSubConfig(command *cobra.Command, editor string) (string, bool, error) 
 type initSubResult struct {
 	DataDir       string
 	InputDir      string
+	TemplatesDir  string
 	ConfigPath    string
 	CreatedConfig bool
 }
 
 // initSubLayout 幂等创建 ps-sub 独立运行所需的目录和默认配置文件。
 func initSubLayout(baseDir string, force bool) (initSubResult, error) {
-	dataDir := filepath.Join(baseDir, "sub")
+	dataDir := subDataDir(baseDir)
 	inputDir := filepath.Join(dataDir, "inputs")
-	configPath := filepath.Join(dataDir, "config.yaml")
-	result := initSubResult{DataDir: dataDir, InputDir: inputDir, ConfigPath: configPath}
-	for _, dir := range []string{baseDir, dataDir, inputDir} {
+	templatesDir := filepath.Join(dataDir, "templates")
+	configPath := subConfigPathForBaseDir(baseDir)
+	result := initSubResult{DataDir: dataDir, InputDir: inputDir, TemplatesDir: templatesDir, ConfigPath: configPath}
+	for _, dir := range []string{dataDir, inputDir, templatesDir} {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return initSubResult{}, err
 		}
@@ -389,8 +391,8 @@ func loadRuntimeConfig(command *cobra.Command) (config.SubServerConfig, error) {
 	if err != nil {
 		return config.SubServerConfig{}, err
 	}
-	dataDir := filepath.Join(baseDir, "sub")
-	configPath := filepath.Join(dataDir, "config.yaml")
+	dataDir := subDataDir(baseDir)
+	configPath := subConfigPathForBaseDir(baseDir)
 	var subConfig config.SubServerConfig
 	if _, err := os.Stat(configPath); err == nil {
 		subConfig, err = config.LoadSubServerConfig(configPath)
@@ -420,13 +422,23 @@ func loadRuntimeConfig(command *cobra.Command) (config.SubServerConfig, error) {
 	return subConfig, nil
 }
 
-// subConfigPath 返回当前 base dir 下固定的 sub/config.yaml 路径。
+// subConfigPath 返回当前 base dir 下固定的 config.yaml 路径。
 func subConfigPath(command *cobra.Command) (string, error) {
 	baseDir, err := subBaseDir(command)
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(baseDir, "sub", "config.yaml"), nil
+	return subConfigPathForBaseDir(baseDir), nil
+}
+
+// subDataDir 返回 ps-sub 的运行数据根目录。
+func subDataDir(baseDir string) string {
+	return baseDir
+}
+
+// subConfigPathForBaseDir 返回 ps-sub 根目录下的配置文件路径。
+func subConfigPathForBaseDir(baseDir string) string {
+	return filepath.Join(subDataDir(baseDir), "config.yaml")
 }
 
 // subBaseDir 读取 ps-sub 全局 base dir，并解析为绝对路径。
@@ -594,7 +606,9 @@ func subServiceManager(command *cobra.Command) (servicemanager.Manager, error) {
 
 // subOnlyGlobalConfig 构造只用于渲染订阅服务文件的最小全局配置。
 func subOnlyGlobalConfig(baseDir string) domain.GlobalConfig {
-	return domain.GlobalConfig{BaseDir: baseDir, Paths: domain.DefaultConfigPaths()}
+	paths := domain.DefaultConfigPaths()
+	paths.Sub = "."
+	return domain.GlobalConfig{BaseDir: baseDir, Paths: paths}
 }
 
 // repairSubServiceMetadata 在 Linux root 启动订阅服务前修复 sub 目录 owner 和 mode。

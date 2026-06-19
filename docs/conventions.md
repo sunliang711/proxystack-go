@@ -81,7 +81,7 @@ json:"-" yaml:"-"
 示例：
 
 ```text
-Subscription inputs reloaded input_dir=/opt/proxystack/sub/inputs inputs=3 sources=3 nodes=4 users=1
+Subscription inputs reloaded input_dir=/opt/proxystack-sub/inputs inputs=3 sources=3 nodes=4 users=1
 ```
 
 ## 7. 并发

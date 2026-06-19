@@ -393,6 +393,8 @@ install_release_binaries() {
 	os_name="$(detect_release_os)"
 	arch_name="$(detect_release_arch)"
 	asset_name="$(release_asset_name "${version_value}" "${os_name}" "${arch_name}")"
+	log "Download release: ${repo_name} ${version_value} ${os_name}/${arch_name}"
+	log "Download asset: ${asset_name}"
 	if is_dry_run; then
 		temp_dir="${base_dir}/runtime/proxystack-release-dry-run"
 		run install -d -m 0750 "${temp_dir}"

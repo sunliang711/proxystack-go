@@ -116,6 +116,8 @@ func TestInstallScriptsDryRunDownloadRelease(t *testing.T) {
 			output, err := runScript(t, filepath.Join("scripts", scriptName), "--dry-run", "--base-dir", baseDir, "--bin-dir", binDir, "--version", "1.2.3")
 
 			require.NoError(t, err, output)
+			require.Contains(t, output, "[proxystack] Download release: "+defaultReleaseRepo+" v1.2.3 ")
+			require.Contains(t, output, "[proxystack] Download asset: proxystack-go_v1.2.3_")
 			require.Contains(t, output, "https://github.com/"+defaultReleaseRepo+"/releases/download/v1.2.3/proxystack-go_v1.2.3_")
 			require.Contains(t, output, "https://github.com/"+defaultReleaseRepo+"/releases/download/v1.2.3/SHA256SUMS")
 			require.Contains(t, output, "tar -xzf")
@@ -142,6 +144,8 @@ func TestInstallScriptsDryRunLatestKeepsStableAssetAlias(t *testing.T) {
 			output, err := runScript(t, filepath.Join("scripts", scriptName), "--dry-run", "--base-dir", baseDir, "--bin-dir", binDir)
 
 			require.NoError(t, err, output)
+			require.Contains(t, output, "[proxystack] Download release: "+defaultReleaseRepo+" latest ")
+			require.Contains(t, output, "[proxystack] Download asset: proxystack-go_")
 			require.Contains(t, output, "https://github.com/"+defaultReleaseRepo+"/releases/latest/download/proxystack-go_")
 			require.NotContains(t, output, "releases/latest/download/proxystack-go_latest_")
 			require.Contains(t, output, "https://github.com/"+defaultReleaseRepo+"/releases/latest/download/SHA256SUMS")

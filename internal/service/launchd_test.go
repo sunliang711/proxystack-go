@@ -34,18 +34,14 @@ func (f *fakeRunner) Run(ctx context.Context, name string, args ...string) (Resu
 func TestRenderLaunchdPlistsUsesStackInstances(t *testing.T) {
 	cfg := prepareLaunchdConfig(t)
 
-	plists, err := RenderLaunchdPlists(cfg, "all")
+	plists, err := RenderLaunchdPlists(cfg, "")
 
 	require.NoError(t, err)
-	require.Contains(t, plists, LaunchdSubLabel+".plist")
 	require.Contains(t, plists, LaunchdXrayLabel("usa1")+".plist")
 	require.Contains(t, plists, LaunchdMihomoLabel("usa1")+".plist")
 	require.Contains(t, plists[LaunchdXrayLabel("usa1")+".plist"], filepath.Join(cfg.BaseDir, "runtime", "generated", "xray", "usa1.json"))
 	require.Contains(t, plists[LaunchdMihomoLabel("usa1")+".plist"], filepath.Join(cfg.BaseDir, "runtime", "generated", "mihomo", "usa1.yaml"))
-	require.NotContains(t, plists[LaunchdSubLabel+".plist"], "<key>UserName</key>")
-	require.NotContains(t, plists[LaunchdSubLabel+".plist"], "<key>GroupName</key>")
-	require.Contains(t, plists[LaunchdSubLabel+".plist"], "<key>RunAtLoad</key>\n\t<false/>")
-	require.NotContains(t, plists[LaunchdSubLabel+".plist"], "<key>KeepAlive</key>")
+	require.NotContains(t, plists, LaunchdSubLabel+".plist")
 }
 
 // TestLaunchdManagerInstallReconcilesPlists 验证 launchd install 会写入期望 plist 并清理陈旧 plist。
@@ -57,10 +53,10 @@ func TestLaunchdManagerInstallReconcilesPlists(t *testing.T) {
 	stalePath := filepath.Join(dir, LaunchdXrayLabel("removed")+".plist")
 	require.NoError(t, os.WriteFile(stalePath, []byte("stale"), 0o644))
 
-	paths, err := manager.InstallUnits(cfg, "all")
+	paths, err := manager.InstallUnits(cfg, "")
 
 	require.NoError(t, err)
-	require.Contains(t, paths, filepath.Join(dir, LaunchdSubLabel+".plist"))
+	require.NotContains(t, paths, filepath.Join(dir, LaunchdSubLabel+".plist"))
 	require.Contains(t, paths, filepath.Join(dir, LaunchdXrayLabel("usa1")+".plist"))
 	require.FileExists(t, filepath.Join(dir, LaunchdMihomoLabel("usa1")+".plist"))
 	require.NoFileExists(t, stalePath)
@@ -78,7 +74,7 @@ func TestLaunchdManagerUninstallBootsOutLoadedJobs(t *testing.T) {
 	path := filepath.Join(dir, LaunchdSubLabel+".plist")
 	require.NoError(t, os.WriteFile(path, []byte("plist"), 0o644))
 
-	removed, err := manager.UninstallUnits("sub")
+	removed, err := manager.UninstallUnits(domain.GlobalConfig{BaseDir: "/opt/proxystack", Paths: domain.DefaultConfigPaths()}, "sub")
 
 	require.NoError(t, err)
 	require.Equal(t, []string{path}, removed)

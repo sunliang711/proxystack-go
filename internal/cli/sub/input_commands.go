@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ func newInputCommand() *cobra.Command {
 	command.AddCommand(newInputShowCommand())
 	command.AddCommand(newInputValidateCommand())
 	command.AddCommand(newInputEditCommand())
+	command.AddCommand(newInputSetHostCommand())
 	command.AddCommand(newInputRemoveCommand())
 	return command
 }
@@ -167,6 +169,63 @@ func newInputEditCommand() *cobra.Command {
 	return command
 }
 
+// newInputSetHostCommand 创建批量修改 input 节点 server 的命令。
+func newInputSetHostCommand() *cobra.Command {
+	var all bool
+	command := &cobra.Command{
+		Use:   "set-host HOST [SOURCE]",
+		Short: "Set subscription input node host",
+		Args:  cobra.RangeArgs(1, 2),
+		RunE: func(command *cobra.Command, args []string) error {
+			host := strings.TrimSpace(args[0])
+			if host == "" {
+				return fmt.Errorf("input host must not be empty")
+			}
+			if all && len(args) == 2 {
+				return fmt.Errorf("SOURCE and --all cannot be used together")
+			}
+			if !all && len(args) == 1 {
+				return fmt.Errorf("SOURCE or --all is required")
+			}
+			inputDir, err := subInputDir(command)
+			if err != nil {
+				return err
+			}
+			var paths []string
+			if all {
+				paths, err = scanSubInputFiles(inputDir)
+			} else {
+				var path string
+				path, err = resolveSubInputPath(inputDir, args[1])
+				paths = []string{path}
+			}
+			if err != nil {
+				return err
+			}
+			changed, unchanged, err := setSubInputHostFiles(paths, host)
+			if err != nil {
+				return err
+			}
+			if all {
+				if changed == 0 {
+					fmt.Fprintf(command.OutOrStdout(), "Input hosts unchanged: total=%d\n", unchanged)
+					return nil
+				}
+				fmt.Fprintf(command.OutOrStdout(), "Input hosts updated: changed=%d unchanged=%d total=%d\n", changed, unchanged, changed+unchanged)
+				return nil
+			}
+			if changed == 0 {
+				fmt.Fprintf(command.OutOrStdout(), "Input host unchanged: %s\n", filepath.Base(paths[0]))
+				return nil
+			}
+			fmt.Fprintf(command.OutOrStdout(), "Input host updated: %s\n", filepath.Base(paths[0]))
+			return nil
+		},
+	}
+	command.Flags().BoolVar(&all, "all", false, "Set host on all subscription input files")
+	return command
+}
+
 // newInputRemoveCommand 创建删除单个 input 文件的命令。
 func newInputRemoveCommand() *cobra.Command {
 	return &cobra.Command{
@@ -241,6 +300,86 @@ func editSubInput(path string, editor string) (bool, error) {
 		return false, err
 	}
 	return writeTextFileIfChanged(path, edited)
+}
+
+// subInputHostUpdate 保存一次 set-host 预校验后的待写入内容。
+type subInputHostUpdate struct {
+	Path    string
+	Data    []byte
+	Changed bool
+}
+
+// setSubInputHostFiles 先校验全部目标 input，再把所有节点 server 写成指定 host。
+func setSubInputHostFiles(paths []string, host string) (int, int, error) {
+	updates := make([]subInputHostUpdate, 0, len(paths))
+	inputs := make([]subgen.InputFile, 0, len(paths))
+	for _, path := range paths {
+		input, err := subgen.LoadInputFile(path)
+		if err != nil {
+			return 0, 0, fmt.Errorf("subscription input host update failed: %s: %w", filepath.Base(path), err)
+		}
+		changed := setSubInputHost(&input, host)
+		data, err := subInputWriteData(path, input)
+		if err != nil {
+			return 0, 0, fmt.Errorf("subscription input host update failed: %s: %w", filepath.Base(path), err)
+		}
+		validatedInput, err := validateSubInputContent(filepath.Base(path), data)
+		if err != nil {
+			return 0, 0, fmt.Errorf("subscription input host update failed: %s: %w", filepath.Base(path), err)
+		}
+		updates = append(updates, subInputHostUpdate{Path: path, Data: data, Changed: changed})
+		inputs = append(inputs, subgen.InputFile{Name: filepath.Base(path), Input: validatedInput})
+	}
+	if _, err := subgen.MergeInputs(inputs, subgen.Access{Type: "none"}, nowISO()); err != nil {
+		return 0, 0, fmt.Errorf("subscription input host update failed: %w", err)
+	}
+	changedCount := 0
+	unchangedCount := 0
+	for _, update := range updates {
+		if !update.Changed {
+			unchangedCount++
+			continue
+		}
+		changed, err := writeTextFileIfChanged(update.Path, update.Data)
+		if err != nil {
+			return changedCount, unchangedCount, fmt.Errorf("subscription input host write failed: %s: %w", filepath.Base(update.Path), err)
+		}
+		if changed {
+			changedCount++
+		} else {
+			unchangedCount++
+		}
+	}
+	return changedCount, unchangedCount, nil
+}
+
+// setSubInputHost 修改 input 内全部节点的 server，并返回是否存在语义变化。
+func setSubInputHost(input *subgen.Input, host string) bool {
+	changed := false
+	if input.ExternalHost != "" && input.ExternalHost != host {
+		input.ExternalHost = host
+		changed = true
+	}
+	for index := range input.Nodes {
+		if input.Nodes[index].Server == host {
+			continue
+		}
+		input.Nodes[index].Server = host
+		changed = true
+	}
+	return changed
+}
+
+// subInputWriteData 按文件扩展名生成可再次严格读取的规范内容。
+func subInputWriteData(path string, input subgen.Input) ([]byte, error) {
+	if filepath.Ext(path) == ".json" {
+		data, err := json.MarshalIndent(input, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		return append(data, '\n'), nil
+	}
+	return []byte(subgen.InputToYAML(input)), nil
 }
 
 // redactSubInputSecrets 返回已脱敏的 input 副本，用于默认 show 摘要输出。

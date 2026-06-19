@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -41,7 +40,7 @@ func (m LaunchdManager) InstallUnits(config domain.GlobalConfig, target string) 
 		}
 		written = append(written, path)
 	}
-	if err := m.removeStaleLaunchdPlists(target, plists); err != nil {
+	if err := m.removeStaleLaunchdPlists(config, target, plists); err != nil {
 		return nil, err
 	}
 	sort.Strings(written)
@@ -49,8 +48,8 @@ func (m LaunchdManager) InstallUnits(config domain.GlobalConfig, target string) 
 }
 
 // UninstallUnits 删除 launchd plist 文件。
-func (m LaunchdManager) UninstallUnits(target string) ([]string, error) {
-	names, err := m.selectLaunchdPlists(target)
+func (m LaunchdManager) UninstallUnits(config domain.GlobalConfig, target string) ([]string, error) {
+	names, err := m.selectLaunchdPlists(config, target)
 	if err != nil {
 		return nil, err
 	}
@@ -223,26 +222,35 @@ func (m LaunchdManager) SubService() string {
 // RenderLaunchdPlists 根据配置和 target 渲染 launchd plist 文件内容。
 func RenderLaunchdPlists(config domain.GlobalConfig, target string) (map[string]string, error) {
 	selected := map[string]string{}
-	switch target {
-	case "", "all":
+	if target == "sub" && config.ConfigPath == "" {
 		selected[LaunchdSubLabel+".plist"] = renderLaunchdPlist(LaunchdSubLabel, []string{"/usr/local/bin/ps-sub", "--base-dir", launchdBaseDir(config), "serve"}, launchdBaseDir(config))
-		stackSet, err := configloader.LoadStacks(config, false)
-		if err != nil {
-			return nil, err
-		}
-		addLaunchdStackPlists(selected, config, stackSet.Stacks, "all")
-	case "sub":
-		selected[LaunchdSubLabel+".plist"] = renderLaunchdPlist(LaunchdSubLabel, []string{"/usr/local/bin/ps-sub", "--base-dir", launchdBaseDir(config), "serve"}, launchdBaseDir(config))
-	case "xrelay", "xray", "clash", "mihomo":
-		stackSet, err := configloader.LoadStacks(config, false)
-		if err != nil {
-			return nil, err
-		}
-		addLaunchdStackPlists(selected, config, stackSet.Stacks, target)
-	default:
-		return nil, fmt.Errorf("unsupported launchd target: %s", target)
+		return selected, nil
+	}
+	nodes, err := launchdTargetNodes(config, target)
+	if err != nil {
+		return nil, err
+	}
+	for _, node := range nodes {
+		addLaunchdNodePlist(selected, config, node)
 	}
 	return selected, nil
+}
+
+// launchdTargetNodes 解析 stack target 到 launchd plist 需要覆盖的组件集合。
+func launchdTargetNodes(config domain.GlobalConfig, target string) ([]graph.ServiceNode, error) {
+	stackSet, err := configloader.LoadStacks(config, false)
+	if err != nil {
+		return nil, err
+	}
+	referenceGraph, err := graph.BuildReferenceGraph(stackSet)
+	if err != nil {
+		return nil, err
+	}
+	scope, err := graph.ResolveTargetScope(referenceGraph, target)
+	if err != nil {
+		return nil, err
+	}
+	return scope.Nodes, nil
 }
 
 // LaunchdXrayLabel 返回指定 stack 的 xray launchd label。
@@ -255,31 +263,26 @@ func LaunchdMihomoLabel(stack string) string {
 	return "com.proxystack.mihomo." + stack
 }
 
-// addLaunchdStackPlists 按 stack 和 target 追加 xray/mihomo plist。
-func addLaunchdStackPlists(selected map[string]string, config domain.GlobalConfig, stacks []domain.Stack, target string) {
-	for _, stack := range stacks {
-		if !stack.Enabled {
-			continue
-		}
-		if (target == "all" || target == "xrelay" || target == "xray") && stack.Xrelay.Enabled {
-			label := LaunchdXrayLabel(stack.Name)
-			selected[label+".plist"] = renderLaunchdPlist(label, []string{
-				filepath.Join(launchdBinDir(config), "xray"),
-				"run",
-				"-config",
-				filepath.Join(launchdGeneratedDir(config), "xray", stack.Name+".json"),
-			}, launchdBaseDir(config))
-		}
-		if (target == "all" || target == "clash" || target == "mihomo") && stack.Clash.Enabled {
-			label := LaunchdMihomoLabel(stack.Name)
-			selected[label+".plist"] = renderLaunchdPlist(label, []string{
-				filepath.Join(launchdBinDir(config), "mihomo"),
-				"-d",
-				filepath.Join(launchdRuntimeDir(config), "mihomo", stack.Name),
-				"-f",
-				filepath.Join(launchdGeneratedDir(config), "mihomo", stack.Name+".yaml"),
-			}, launchdBaseDir(config))
-		}
+// addLaunchdNodePlist 按单个 stack 组件追加 xray/mihomo plist。
+func addLaunchdNodePlist(selected map[string]string, config domain.GlobalConfig, node graph.ServiceNode) {
+	switch node.Component {
+	case "xrelay":
+		label := LaunchdXrayLabel(node.Stack)
+		selected[label+".plist"] = renderLaunchdPlist(label, []string{
+			filepath.Join(launchdBinDir(config), "xray"),
+			"run",
+			"-config",
+			filepath.Join(launchdGeneratedDir(config), "xray", node.Stack+".json"),
+		}, launchdBaseDir(config))
+	case "clash":
+		label := LaunchdMihomoLabel(node.Stack)
+		selected[label+".plist"] = renderLaunchdPlist(label, []string{
+			filepath.Join(launchdBinDir(config), "mihomo"),
+			"-d",
+			filepath.Join(launchdRuntimeDir(config), "mihomo", node.Stack),
+			"-f",
+			filepath.Join(launchdGeneratedDir(config), "mihomo", node.Stack+".yaml"),
+		}, launchdBaseDir(config))
 	}
 }
 
@@ -316,19 +319,15 @@ func renderLaunchdPlist(label string, args []string, workingDirectory string) st
 }
 
 // selectLaunchdPlists 返回 uninstall 需要删除的 plist 文件名。
-func (m LaunchdManager) selectLaunchdPlists(target string) ([]string, error) {
-	switch target {
-	case "", "all":
-		return m.expandLaunchdPlistPatterns([]string{LaunchdSubLabel + ".plist", "com.proxystack.xray.*.plist", "com.proxystack.mihomo.*.plist"}), nil
-	case "sub":
+func (m LaunchdManager) selectLaunchdPlists(config domain.GlobalConfig, target string) ([]string, error) {
+	if target == "sub" && config.ConfigPath == "" {
 		return []string{LaunchdSubLabel + ".plist"}, nil
-	case "xrelay", "xray":
-		return m.expandLaunchdPlistPatterns([]string{"com.proxystack.xray.*.plist"}), nil
-	case "clash", "mihomo":
-		return m.expandLaunchdPlistPatterns([]string{"com.proxystack.mihomo.*.plist"}), nil
-	default:
-		return nil, fmt.Errorf("unsupported launchd target: %s", target)
 	}
+	patterns, err := managedLaunchdPatterns(config, target)
+	if err != nil {
+		return nil, err
+	}
+	return m.expandLaunchdPlistPatterns(patterns), nil
 }
 
 // expandLaunchdPlistPatterns 展开 plist glob，并保留非 glob 的固定文件名。
@@ -360,8 +359,8 @@ func (m LaunchdManager) expandLaunchdPlistPatterns(patterns []string) []string {
 }
 
 // removeStaleLaunchdPlists 删除当前 target 下不再由配置生成的旧 plist。
-func (m LaunchdManager) removeStaleLaunchdPlists(target string, expected map[string]string) error {
-	patterns, err := managedLaunchdPatterns(target)
+func (m LaunchdManager) removeStaleLaunchdPlists(config domain.GlobalConfig, target string, expected map[string]string) error {
+	patterns, err := managedLaunchdPatterns(config, target)
 	if err != nil {
 		return err
 	}
@@ -385,19 +384,27 @@ func (m LaunchdManager) removeStaleLaunchdPlists(target string, expected map[str
 }
 
 // managedLaunchdPatterns 返回 target 对应的 proxystack plist 管理范围。
-func managedLaunchdPatterns(target string) ([]string, error) {
-	switch target {
-	case "", "all":
-		return []string{LaunchdSubLabel + ".plist", "com.proxystack.xray.*.plist", "com.proxystack.mihomo.*.plist"}, nil
-	case "sub":
+func managedLaunchdPatterns(config domain.GlobalConfig, target string) ([]string, error) {
+	if target == "sub" && config.ConfigPath == "" {
 		return []string{LaunchdSubLabel + ".plist"}, nil
-	case "xrelay", "xray":
-		return []string{"com.proxystack.xray.*.plist"}, nil
-	case "clash", "mihomo":
-		return []string{"com.proxystack.mihomo.*.plist"}, nil
-	default:
-		return nil, fmt.Errorf("unsupported launchd target: %s", target)
 	}
+	if target == "" {
+		return []string{"com.proxystack.xray.*.plist", "com.proxystack.mihomo.*.plist"}, nil
+	}
+	nodes, err := launchdTargetNodes(config, target)
+	if err != nil {
+		return nil, err
+	}
+	patterns := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		switch node.Component {
+		case "xrelay":
+			patterns = append(patterns, LaunchdXrayLabel(node.Stack)+".plist")
+		case "clash":
+			patterns = append(patterns, LaunchdMihomoLabel(node.Stack)+".plist")
+		}
+	}
+	return patterns, nil
 }
 
 // runForServices 对多个 launchd label 逐一执行命令并合并输出。

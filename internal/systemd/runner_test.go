@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eagle/proxystack-go/internal/agentconfig"
+	configloader "github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/domain"
 	"github.com/eagle/proxystack-go/internal/graph"
 	"github.com/stretchr/testify/require"
@@ -123,11 +125,13 @@ func TestRenderUnitsUsesCustomBaseDir(t *testing.T) {
 // TestInstallUnitsRejectsUnknownTarget 验证 unit install/uninstall 不会把未知 target 当作 all。
 func TestInstallUnitsRejectsUnknownTarget(t *testing.T) {
 	manager := Manager{UnitDir: t.TempDir()}
+	cfg := domain.GlobalConfig{BaseDir: t.TempDir(), Paths: domain.DefaultConfigPaths(), ConfigPath: filepath.Join(t.TempDir(), "config.yaml")}
+	require.NoError(t, os.MkdirAll(cfg.ResolvePath(cfg.Paths.Stacks), 0o750))
 
-	_, err := manager.InstallUnits(domain.GlobalConfig{BaseDir: "/opt/proxystack", Paths: domain.DefaultConfigPaths()}, "typo")
+	_, err := manager.InstallUnits(cfg, "typo")
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unsupported unit target")
+	require.Contains(t, err.Error(), "stack does not exist: typo")
 }
 
 // TestInstallUnitsReloadsSystemdDaemon 验证 unit 文件写入后会刷新 systemd 配置。
@@ -135,10 +139,11 @@ func TestInstallUnitsReloadsSystemdDaemon(t *testing.T) {
 	runner := &fakeRunner{result: Result{ExitCode: 0}}
 	manager := Manager{Runner: runner, UnitDir: t.TempDir()}
 
-	paths, err := manager.InstallUnits(domain.GlobalConfig{BaseDir: "/opt/proxystack", Paths: domain.DefaultConfigPaths()}, "xray")
+	paths, err := manager.InstallUnits(domain.GlobalConfig{BaseDir: "/opt/proxystack", Paths: domain.DefaultConfigPaths()}, "")
 
 	require.NoError(t, err)
-	require.Len(t, paths, 1)
+	require.Len(t, paths, 2)
+	require.NotContains(t, paths, filepath.Join(manager.UnitDir, SubUnit))
 	require.Equal(t, []string{"systemctl daemon-reload"}, runner.calls)
 }
 
@@ -147,13 +152,47 @@ func TestInstallUnitsReturnsDaemonReloadError(t *testing.T) {
 	runner := &fakeRunner{result: Result{ExitCode: 1, Stderr: "reload failed"}}
 	manager := Manager{Runner: runner, UnitDir: t.TempDir()}
 
-	paths, err := manager.InstallUnits(domain.GlobalConfig{BaseDir: "/opt/proxystack", Paths: domain.DefaultConfigPaths()}, "xray")
+	paths, err := manager.InstallUnits(domain.GlobalConfig{BaseDir: "/opt/proxystack", Paths: domain.DefaultConfigPaths()}, "")
 
 	require.Error(t, err)
-	require.Len(t, paths, 1)
+	require.Len(t, paths, 2)
 	require.Contains(t, err.Error(), "systemd daemon-reload failed")
 	require.Contains(t, err.Error(), "reload failed")
 	require.Equal(t, []string{"systemctl daemon-reload"}, runner.calls)
+}
+
+// TestUninstallUnitsKeepsSharedSystemdTemplates 验证单 stack target 不会误删其它 stack 仍依赖的共享模板。
+func TestUninstallUnitsKeepsSharedSystemdTemplates(t *testing.T) {
+	cfg := systemdTestConfigWithStacks(t, "usa1", "usa2")
+	unitDir := t.TempDir()
+	manager := Manager{UnitDir: unitDir}
+	require.NoError(t, os.WriteFile(filepath.Join(unitDir, XrayUnitTemplate), []byte("xray"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(unitDir, ClashUnitTemplate), []byte("clash"), 0o644))
+
+	removed, err := manager.UninstallUnits(cfg, "xrelay/usa1")
+
+	require.NoError(t, err)
+	require.Empty(t, removed)
+	require.FileExists(t, filepath.Join(unitDir, XrayUnitTemplate))
+	require.FileExists(t, filepath.Join(unitDir, ClashUnitTemplate))
+}
+
+// TestUninstallUnitsRemovesUnsharedSystemdTemplate 验证没有其它 stack 依赖时可删除目标组件模板。
+func TestUninstallUnitsRemovesUnsharedSystemdTemplate(t *testing.T) {
+	cfg := systemdTestConfigWithStacks(t, "usa1")
+	unitDir := t.TempDir()
+	manager := Manager{UnitDir: unitDir}
+	xrayPath := filepath.Join(unitDir, XrayUnitTemplate)
+	clashPath := filepath.Join(unitDir, ClashUnitTemplate)
+	require.NoError(t, os.WriteFile(xrayPath, []byte("xray"), 0o644))
+	require.NoError(t, os.WriteFile(clashPath, []byte("clash"), 0o644))
+
+	removed, err := manager.UninstallUnits(cfg, "xrelay/usa1")
+
+	require.NoError(t, err)
+	require.Equal(t, []string{xrayPath}, removed)
+	require.NoFileExists(t, xrayPath)
+	require.FileExists(t, clashPath)
 }
 
 // TestUnitsForNodes 验证服务节点到 unit 名称的映射。
@@ -217,6 +256,20 @@ func TestRepairStandardMetadataUsesOwner(t *testing.T) {
 	require.Contains(t, owners, filepath.Join(baseDir, "runtime", "generated", "xray", "usa1.json"))
 	require.Contains(t, owners, filepath.Join(baseDir, "runtime", "generated", "mihomo", "usa1.yaml"))
 	require.Contains(t, owners, filepath.Join(baseDir, "runtime", "manifest.json"))
+}
+
+// systemdTestConfigWithStacks 创建包含指定 stack 的 systemd 测试配置。
+func systemdTestConfigWithStacks(t *testing.T, names ...string) domain.GlobalConfig {
+	t.Helper()
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "config.yaml")
+	require.NoError(t, agentconfig.InitProject(agentconfig.InitOptions{BaseDir: baseDir, ExternalHost: "proxy.example.com"}))
+	for _, name := range names {
+		require.NoError(t, agentconfig.AddStack(agentconfig.AddOptions{ConfigPath: configPath, Name: name, Template: "pair", AllocatePorts: true}))
+	}
+	cfg, err := configloader.LoadConfig(configPath)
+	require.NoError(t, err)
+	return cfg
 }
 
 // TestRepairSubMetadataRecursesSubTree 验证 sub 运行目录下的子目录和文件都会修复 owner。

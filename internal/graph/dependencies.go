@@ -189,7 +189,7 @@ func (r ReferenceGraph) BuildPlan(target string) (DependencyPlan, error) {
 
 // SelectTargetNodes 选择依赖图目标节点；未指定目标时选择全部服务。
 func (r ReferenceGraph) SelectTargetNodes(target string) (map[ServiceNode]bool, error) {
-	if target == "" || target == "all" {
+	if target == "" {
 		return cloneNodeSet(r.Nodes), nil
 	}
 	if !r.StackNames[target] {
@@ -243,7 +243,7 @@ type TargetScope struct {
 
 // ResolveTargetScope 解析空、stack、xrelay/name 和 clash/name 四种 target 形态。
 func ResolveTargetScope(graph ReferenceGraph, target string) (TargetScope, error) {
-	if target == "" || target == "all" {
+	if target == "" {
 		return TargetScope{Raw: target, Nodes: graph.TopologicalOrder(nil)}, nil
 	}
 	if strings.HasPrefix(target, "xrelay/") || strings.HasPrefix(target, "clash/") {

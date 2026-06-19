@@ -539,7 +539,7 @@ func (f *fakeSubManager) InstallUnits(config domain.GlobalConfig, target string)
 }
 
 // UninstallUnits 满足 service.Manager 接口，当前 ps-sub 测试不会调用。
-func (f *fakeSubManager) UninstallUnits(target string) ([]string, error) {
+func (f *fakeSubManager) UninstallUnits(config domain.GlobalConfig, target string) ([]string, error) {
 	return nil, nil
 }
 

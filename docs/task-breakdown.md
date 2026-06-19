@@ -116,7 +116,7 @@
 - 目标：实现 `start/stop/restart/status/logs/enable/disable/service`。
 - 输入：`docs/cli-spec.md`、`src/proxystack/systemd/service.py`、fake runner 测试。
 - 输出：target scope 解析、systemd runner、日志查看、服务 wrapper。
-- 验收标准：`start sub` 不读取 stack、不创建 runtime/generated；代理目标启动前检查二进制；`journalctl -f` 多 unit 一次调用；inactive status 退出码 3 不当作失败。
+- 验收标准：订阅服务生命周期由 `ps-sub` 管理；代理目标启动前检查二进制；`journalctl -f` 多 unit 一次调用；inactive status 退出码 3 不当作失败。
 - 依赖：T12。
 
 ## T14 systemd unit 与权限

@@ -23,7 +23,7 @@ type Result = systemd.Result
 // Manager 统一封装 systemd 和 launchd 的服务管理能力。
 type Manager interface {
 	InstallUnits(config domain.GlobalConfig, target string) ([]string, error)
-	UninstallUnits(target string) ([]string, error)
+	UninstallUnits(config domain.GlobalConfig, target string) ([]string, error)
 	Start(ctx context.Context, services []string) error
 	Stop(ctx context.Context, services []string) error
 	Restart(ctx context.Context, services []string) error
@@ -129,8 +129,8 @@ func (m SystemdManager) InstallUnits(config domain.GlobalConfig, target string) 
 }
 
 // UninstallUnits 删除 systemd unit 文件。
-func (m SystemdManager) UninstallUnits(target string) ([]string, error) {
-	return m.inner.UninstallUnits(target)
+func (m SystemdManager) UninstallUnits(config domain.GlobalConfig, target string) ([]string, error) {
+	return m.inner.UninstallUnits(config, target)
 }
 
 // Start 调用 systemctl start。

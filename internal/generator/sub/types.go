@@ -137,25 +137,42 @@ type Input struct {
 	InputVersion int    `json:"input_version" yaml:"input_version"`
 	Source       string `json:"source" yaml:"source"`
 	GeneratedAt  string `json:"generated_at" yaml:"generated_at"`
+	ExternalHost string `json:"external_host,omitempty" yaml:"external_host,omitempty"`
 	Nodes        []Node `json:"nodes" yaml:"nodes"`
+}
+
+// resolveExternalHostDefault 返回补齐文件级 external_host 后的 input。
+func (i Input) resolveExternalHostDefault() Input {
+	if i.ExternalHost == "" {
+		return i
+	}
+	input := i
+	input.Nodes = append([]Node(nil), i.Nodes...)
+	for index := range input.Nodes {
+		if input.Nodes[index].Server == "" {
+			input.Nodes[index].Server = input.ExternalHost
+		}
+	}
+	return input
 }
 
 // Validate 校验 input schema、版本和内部 node.id 唯一性。
 func (i Input) Validate() error {
-	if i.InputSchema != "" && i.InputSchema != InputSchema {
-		return fmt.Errorf("unsupported subscription input schema: %s", i.InputSchema)
+	input := i.resolveExternalHostDefault()
+	if input.InputSchema != "" && input.InputSchema != InputSchema {
+		return fmt.Errorf("unsupported subscription input schema: %s", input.InputSchema)
 	}
-	if i.InputVersion != InputVersion {
-		return fmt.Errorf("unsupported subscription input version: %d", i.InputVersion)
+	if input.InputVersion != InputVersion {
+		return fmt.Errorf("unsupported subscription input version: %d", input.InputVersion)
 	}
-	if i.Source == "" {
+	if input.Source == "" {
 		return fmt.Errorf("input.source is required")
 	}
-	if i.GeneratedAt == "" {
+	if input.GeneratedAt == "" {
 		return fmt.Errorf("input.generated_at is required")
 	}
 	seen := map[string]bool{}
-	for _, node := range i.Nodes {
+	for _, node := range input.Nodes {
 		if err := node.Validate(); err != nil {
 			return err
 		}
@@ -233,13 +250,17 @@ type InputFile struct {
 
 // InputToYAML 把订阅 input 编码为稳定 YAML 文本。
 func InputToYAML(input Input) string {
-	root := yamlMapping(
+	pairs := []yamlNodePair{
 		yamlPair("input_schema", yamlString(InputSchema)),
 		yamlPair("input_version", yamlInt(InputVersion)),
 		yamlPair("source", yamlString(input.Source)),
 		yamlPair("generated_at", yamlSingleQuotedString(input.GeneratedAt)),
-		yamlPair("nodes", nodesToYAML(input.Nodes)),
-	)
+	}
+	if input.ExternalHost != "" {
+		pairs = append(pairs, yamlPair("external_host", yamlString(input.ExternalHost)))
+	}
+	pairs = append(pairs, yamlPair("nodes", nodesToYAML(input.Nodes)))
+	root := yamlMapping(pairs...)
 	return encodeYAML(root)
 }
 

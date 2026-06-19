@@ -45,11 +45,11 @@ func TestTargetScopeParsesComponentTarget(t *testing.T) {
 	require.Equal(t, []graph.ServiceNode{{Stack: "usa1", Component: "xrelay"}}, scope.Nodes)
 }
 
-// TestBuildPlanAcceptsAllTarget 验证 dependency plan 和 target scope 对 all 的语义一致。
-func TestBuildPlanAcceptsAllTarget(t *testing.T) {
+// TestBuildPlanUsesEmptyTargetForAllServices 验证空 target 表示全部服务。
+func TestBuildPlanUsesEmptyTargetForAllServices(t *testing.T) {
 	referenceGraph := loadExampleGraph(t)
 
-	plan, err := referenceGraph.BuildPlan("all")
+	plan, err := referenceGraph.BuildPlan("")
 
 	require.NoError(t, err)
 	require.NotEmpty(t, plan.OperationOrder)

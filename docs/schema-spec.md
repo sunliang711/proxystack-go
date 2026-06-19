@@ -329,6 +329,7 @@ input_schema: proxystack.subscription-input
 input_version: 1
 source: usa1
 generated_at: "2026-06-05T12:00:00+08:00"
+external_host: proxy.example.com
 nodes: []
 ```
 
@@ -338,6 +339,7 @@ nodes: []
 | `input_version` | int | 是 | `1` |
 | `source` | string | 是 | 来源 stack 或手工来源 |
 | `generated_at` | string | 是 | ISO 时间 |
+| `external_host` | string | 否 | 文件级订阅 server 缺省值；仅在 `nodes[].server` 缺失或为空时使用，不覆盖局部 server |
 | `nodes` | list | 是 | 订阅节点 |
 
 ### 7.1 SubscriptionNode
@@ -347,7 +349,7 @@ nodes: []
 | `id` | string | 是 | 全局唯一 |
 | `user` | string | 是 | HTTP 路由过滤用户 |
 | `protocol` | string | 是 | `vmess`、`shadowsocks`、`socks5`、`http` |
-| `server` | string | 是 | 客户端连接地址 |
+| `server` | string | 条件必填 | 客户端连接地址；有值时优先于文件级 `external_host`，否则要求文件级 `external_host` 有值 |
 | `port` | int | 是 | 客户端连接端口 |
 | `tag` | string | 是 | 唯一 tag |
 | `remark` | string | 是 | 展示名 |
@@ -359,6 +361,7 @@ nodes: []
 
 合并规则：
 
+- 加载 input 时先用文件级 `external_host` 补齐缺失或空的 `nodes[].server`。
 - 文件按文件名排序。
 - `nodes[].id` 全局唯一。
 - 同一个 `user` 下 `proxy name` 不允许重复。

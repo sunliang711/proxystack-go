@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/eagle/proxystack-go/internal/config"
+	"github.com/eagle/proxystack-go/internal/domain"
 	"github.com/eagle/proxystack-go/internal/graph"
 	agentruntime "github.com/eagle/proxystack-go/internal/runtime"
 	servicemanager "github.com/eagle/proxystack-go/internal/service"
@@ -18,8 +19,13 @@ func newLifecycleCommand(action string) *cobra.Command {
 	var follow bool
 	command := &cobra.Command{
 		Use:   action + " [TARGET]",
-		Short: "Run service manager " + action + " for proxystack services",
-		Args:  cobra.MaximumNArgs(1),
+		Short: "Run service manager " + action + " for stack services",
+		Long:  lifecycleCommandLong(action),
+		Example: "  ps-agent " + action + "\n" +
+			"  ps-agent " + action + " usa1\n" +
+			"  ps-agent " + action + " xrelay/usa1\n" +
+			"  ps-agent " + action + " clash/usa1",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			return runLifecycle(command, action, optionalArg(args), follow)
 		},
@@ -54,8 +60,12 @@ func newServiceInstallCommand(uninstall bool) *cobra.Command {
 	}
 	return &cobra.Command{
 		Use:   name + " [TARGET]",
-		Short: name + " service files",
-		Args:  cobra.MaximumNArgs(1),
+		Short: name + " stack service files",
+		Long:  serviceInstallCommandLong(name),
+		Example: "  ps-agent service " + name + "\n" +
+			"  ps-agent service " + name + " xrelay/usa1\n" +
+			"  ps-agent service " + name + " clash/usa1",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			configPath, err := agentConfigPath(command)
 			if err != nil {
@@ -67,7 +77,11 @@ func newServiceInstallCommand(uninstall bool) *cobra.Command {
 			}
 			target := optionalArg(args)
 			if uninstall {
-				paths, err := manager.UninstallUnits(target)
+				cfg, err := serviceUninstallConfig(command, configPath, target)
+				if err != nil {
+					return err
+				}
+				paths, err := manager.UninstallUnits(cfg, target)
 				if err != nil {
 					return err
 				}
@@ -88,6 +102,18 @@ func newServiceInstallCommand(uninstall bool) *cobra.Command {
 	}
 }
 
+// serviceUninstallConfig 返回 service uninstall 使用的配置；空 target 允许在 config 缺失时清理通用 stack 服务文件。
+func serviceUninstallConfig(command *cobra.Command, configPath string, target string) (domain.GlobalConfig, error) {
+	if target != "" {
+		return config.LoadConfig(configPath)
+	}
+	baseDir, err := agentBaseDir(command)
+	if err != nil {
+		return domain.GlobalConfig{}, err
+	}
+	return uninstallConfig(configPath, baseDir)
+}
+
 // runLifecycle 执行顶层或 service wrapper 生命周期动作。
 func runLifecycle(command *cobra.Command, action string, target string, follow bool) error {
 	manager, err := agentServiceManager(command)
@@ -95,9 +121,6 @@ func runLifecycle(command *cobra.Command, action string, target string, follow b
 		return err
 	}
 	ctx := context.Background()
-	if target == "sub" {
-		return runServiceAction(command, ctx, manager, action, []string{manager.SubService()}, follow)
-	}
 	configPath, err := agentConfigPath(command)
 	if err != nil {
 		return err
@@ -107,6 +130,11 @@ func runLifecycle(command *cobra.Command, action string, target string, follow b
 		return err
 	}
 	services := manager.ServicesForNodes(plan.Scope.Nodes)
+	if shouldPrintServicePlan(action) {
+		printServicePlan(command, action, target, plan.Scope.Nodes, services)
+	} else if len(services) == 0 {
+		printNoServicesMatched(command, target)
+	}
 	if action == "start" || action == "restart" {
 		if err := checkRequiredBinaries(plan); err != nil {
 			return err
@@ -118,6 +146,9 @@ func runLifecycle(command *cobra.Command, action string, target string, follow b
 			return err
 		}
 	}
+	if len(services) == 0 {
+		return nil
+	}
 	return runServiceAction(command, ctx, manager, action, services, follow)
 }
 
@@ -126,8 +157,13 @@ func newServiceActionCommand(action string) *cobra.Command {
 	var follow bool
 	command := &cobra.Command{
 		Use:   action + " [TARGET]",
-		Short: "Run service manager " + action + " without applying runtime plan",
-		Args:  cobra.MaximumNArgs(1),
+		Short: "Run service manager " + action + " for installed stack services",
+		Long:  lifecycleCommandLong(action),
+		Example: "  ps-agent service " + action + "\n" +
+			"  ps-agent service " + action + " usa1\n" +
+			"  ps-agent service " + action + " xrelay/usa1\n" +
+			"  ps-agent service " + action + " clash/usa1",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			configPath, err := agentConfigPath(command)
 			if err != nil {
@@ -137,9 +173,18 @@ func newServiceActionCommand(action string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			services, err := resolveServiceNames(configPath, optionalArg(args), manager)
+			target := optionalArg(args)
+			scope, services, err := resolveServiceTargets(configPath, target, manager)
 			if err != nil {
 				return err
+			}
+			if shouldPrintServicePlan(action) {
+				printServicePlan(command, action, target, scope.Nodes, services)
+			} else if len(services) == 0 {
+				printNoServicesMatched(command, target)
+			}
+			if len(services) == 0 {
+				return nil
 			}
 			return runServiceAction(command, context.Background(), manager, action, services, follow)
 		},
@@ -151,32 +196,38 @@ func newServiceActionCommand(action string) *cobra.Command {
 	return command
 }
 
-// resolveServiceNames 只解析 target 到服务名称，不生成或写入 runtime 文件。
-func resolveServiceNames(configPath string, target string, manager servicemanager.Manager) ([]string, error) {
-	if target == "sub" {
-		return []string{manager.SubService()}, nil
-	}
+// resolveServiceTargets 只解析 target 到 stack 服务节点和服务名称，不生成或写入 runtime 文件。
+func resolveServiceTargets(configPath string, target string, manager servicemanager.Manager) (graph.TargetScope, []string, error) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		return nil, err
+		return graph.TargetScope{}, nil, err
 	}
 	stackSet, err := config.LoadStacks(cfg, false)
 	if err != nil {
-		return nil, err
+		return graph.TargetScope{}, nil, err
 	}
 	referenceGraph, err := graph.BuildReferenceGraph(stackSet)
 	if err != nil {
-		return nil, err
+		return graph.TargetScope{}, nil, err
 	}
 	scope, err := graph.ResolveTargetScope(referenceGraph, target)
 	if err != nil {
-		return nil, err
+		return graph.TargetScope{}, nil, err
 	}
-	return manager.ServicesForNodes(scope.Nodes), nil
+	return scope, manager.ServicesForNodes(scope.Nodes), nil
+}
+
+// resolveServiceNames 只解析 target 到服务名称，不生成或写入 runtime 文件。
+func resolveServiceNames(configPath string, target string, manager servicemanager.Manager) ([]string, error) {
+	_, services, err := resolveServiceTargets(configPath, target, manager)
+	return services, err
 }
 
 // runServiceAction 分派具体服务管理操作并输出 status/logs 内容。
 func runServiceAction(command *cobra.Command, ctx context.Context, manager servicemanager.Manager, action string, services []string, follow bool) error {
+	if len(services) == 0 {
+		return nil
+	}
 	switch action {
 	case "start":
 		return manager.Start(ctx, services)
@@ -199,6 +250,66 @@ func runServiceAction(command *cobra.Command, ctx context.Context, manager servi
 	default:
 		return fmt.Errorf("unsupported lifecycle action: %s", action)
 	}
+}
+
+// lifecycleCommandLong 返回 stack 生命周期 target 的说明文本。
+func lifecycleCommandLong(action string) string {
+	return "Run service manager " + action + " for stack services.\n\n" +
+		"TARGET rules:\n" +
+		"  omitted       all enabled stack services\n" +
+		"  NAME          xrelay and clash services for one stack\n" +
+		"  xrelay/NAME   xray service for one stack\n" +
+		"  clash/NAME    mihomo service for one stack"
+}
+
+// serviceInstallCommandLong 返回 service install/uninstall target 的说明文本。
+func serviceInstallCommandLong(action string) string {
+	return "Run service file " + action + " for stack services.\n\n" +
+		"TARGET rules:\n" +
+		"  omitted       all enabled stack services\n" +
+		"  NAME          xrelay and clash services for one stack\n" +
+		"  xrelay/NAME   xray service for one stack\n" +
+		"  clash/NAME    mihomo service for one stack"
+}
+
+// shouldPrintServicePlan 判断动作执行前是否需要向用户展示服务计划。
+func shouldPrintServicePlan(action string) bool {
+	switch action {
+	case "start", "stop", "restart", "enable", "disable":
+		return true
+	default:
+		return false
+	}
+}
+
+// printServicePlan 输出生命周期动作即将操作的 stack 组件和底层服务名。
+func printServicePlan(command *cobra.Command, action string, target string, nodes []graph.ServiceNode, services []string) {
+	writer := command.OutOrStdout()
+	if len(services) == 0 {
+		printNoServicesMatched(command, target)
+		return
+	}
+	fmt.Fprintf(writer, "Service plan for %s (target: %s):\n", action, serviceTargetLabel(target))
+	for index, service := range services {
+		label := service
+		if index < len(nodes) {
+			label = nodes[index].Label()
+		}
+		fmt.Fprintf(writer, "- %s -> %s\n", label, service)
+	}
+}
+
+// printNoServicesMatched 输出 target 未匹配任何启用服务的提示。
+func printNoServicesMatched(command *cobra.Command, target string) {
+	fmt.Fprintf(command.OutOrStdout(), "No services matched target: %s\n", serviceTargetLabel(target))
+}
+
+// serviceTargetLabel 返回适合 CLI 展示的 target 名称。
+func serviceTargetLabel(target string) string {
+	if target == "" {
+		return "all enabled stacks"
+	}
+	return target
 }
 
 // writeCommandResult 把服务管理器捕获输出转发到 Cobra 的 stdout/stderr。

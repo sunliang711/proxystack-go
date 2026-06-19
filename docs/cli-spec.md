@@ -35,7 +35,7 @@
 
 `check` 必须只做完整编译和 diff 预览，不能写 `runtime`，不能调用服务管理器。
 
-`start sub` 必须只操作本地订阅服务，不能读取 `config.yaml` 和 `stacks/*.yaml`，不能创建 `runtime/generated`。
+订阅服务生命周期必须通过 `ps-sub start|stop|restart|status|logs|enable|disable` 管理；`ps-agent` 生命周期命令不提供订阅服务 target。
 
 ## 3. `ps-agent` 命令
 
@@ -299,11 +299,10 @@ ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] disable [TARG
 
 target 规则：
 
-- 空或 `all`：全部 enabled stack。
+- 空：全部 enabled stack。
 - `NAME`：该 stack 的 xray + clash。
 - `xrelay/NAME`：只操作 xray。
 - `clash/NAME`：只操作 mihomo。
-- `sub`：只操作本地订阅服务。
 
 副作用：
 
@@ -315,6 +314,8 @@ target 规则：
 - `start/restart` 调服务管理器前必须检查所需二进制存在且可执行。
 - 生命周期命令默认跳过系统端口占用检查。
 - `logs NAME -f` 对该 stack 的 xray 和 clash 服务使用一次日志查询调用；systemd 后端使用 `journalctl`，launchd 后端使用 `log`。
+- `start/stop/restart/enable/disable` 执行前必须输出将要操作的 stack 组件和底层服务名；没有匹配服务时输出明确提示。
+- `all` 和 `sub` 不作为保留 target；如存在同名 stack，按普通 stack 名处理。
 
 ### 3.13 `service`
 
@@ -337,8 +338,8 @@ ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] service logs|
 
 验收：
 
-- `install all` 在 systemd 后端安装三个 unit 模板，在 launchd 后端按当前 enabled stack 渲染 plist。
-- `sub` 只安装或操作订阅服务。
+- 不传 target 时只安装或卸载 agent stack 服务文件；不得安装或卸载订阅服务文件。
+- `all` 和 `sub` 不作为保留 target；如存在同名 stack，按普通 stack 名处理。
 - 服务管理器错误必须保留 stdout/stderr 摘要。
 
 ### 3.14 `install/update/version`
@@ -562,6 +563,7 @@ ps-sub [--base-dir DIR] input list
 ps-sub [--base-dir DIR] input show SOURCE [--raw] [--show-secrets]
 ps-sub [--base-dir DIR] input validate [SOURCE]
 ps-sub [--base-dir DIR] input edit SOURCE [--editor CMD]
+ps-sub [--base-dir DIR] input set-host HOST [SOURCE] [--all]
 ps-sub [--base-dir DIR] input remove SOURCE
 ```
 
@@ -571,12 +573,14 @@ ps-sub [--base-dir DIR] input remove SOURCE
 - `show` 打印单个 input，默认输出脱敏后的规范 YAML；`--raw` 输出原始文件内容；`--show-secrets` 仅影响非 raw 输出。
 - `validate` 严格校验单个 input，或对全部 inputs 执行合并校验。
 - `edit` 通过临时文件编辑单个 input，保存前必须 strict decode 并通过 schema 校验。
+- `set-host` 把目标 input 的所有 `nodes[].server` 写成 trim 后的 `HOST`；指定 `SOURCE` 时只修改单文件，传 `--all` 时扫描全部安全 input 文件；`SOURCE` 与 `--all` 互斥且必须选择其一。
 - `remove` 删除单个 input 文件。
 
 副作用：
 
 - `list`、`show`、`validate` 只读。
 - `edit` 可写目标 input 文件。
+- `set-host` 可写目标 input 文件，或在 `--all` 模式写多个 input 文件；写回前必须 strict decode 并通过合并校验，没有实际变化时只输出 unchanged。
 - `remove` 可删除目标 input 文件。
 
 验收：
@@ -584,6 +588,7 @@ ps-sub [--base-dir DIR] input remove SOURCE
 - SOURCE 只能解析为 `<base-dir>/sub/inputs` 下的 `.yaml`、`.yml` 或 `.json` 普通文件，不允许路径穿越。
 - `show` 默认不得输出 password、token、uuid 等敏感值。
 - `edit` 校验失败时不得覆盖原文件。
+- `set-host` 校验失败时不得覆盖原文件。
 - `validate` 全量模式必须发现重复 `node.id` 和同用户重复代理名。
 - 不读取 agent `config.yaml`。
 

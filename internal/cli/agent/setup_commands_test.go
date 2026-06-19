@@ -48,7 +48,7 @@ func TestSetupContinuesWhenConfigExists(t *testing.T) {
 	output := runAgentCommandForTest(t, "--base-dir", baseDir, "setup")
 
 	require.Equal(t, install.TargetAll, installRequest.Target)
-	require.Equal(t, "all", manager.target)
+	require.Equal(t, "", manager.target)
 	require.Equal(t, baseDir, manager.config.BaseDir)
 	require.DirExists(t, filepath.Join(baseDir, "bin"))
 	require.FileExists(t, filepath.Join(baseDir, "sub", "config.yaml"))
@@ -75,12 +75,11 @@ func TestSetupStartRunsLifecycle(t *testing.T) {
 		return nil
 	})
 
-	output := runAgentCommandForTest(t, "--base-dir", baseDir, "setup", "--start")
+	runAgentCommandForTest(t, "--base-dir", baseDir, "setup", "--start")
 
 	require.Equal(t, "start", lifecycleAction)
 	require.Equal(t, "", lifecycleTarget)
 	require.False(t, lifecycleFollow)
-	require.Contains(t, output, "Started services")
 }
 
 // TestSetupStartWrapsLifecycleError 验证 setup --start 的启动失败会保留步骤上下文。

@@ -67,7 +67,7 @@ func newSetupCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			paths, err := manager.InstallUnits(cfg, "all")
+			paths, err := manager.InstallUnits(cfg, "")
 			if err != nil {
 				return fmt.Errorf("setup service install failed: %w", err)
 			}
@@ -76,7 +76,6 @@ func newSetupCommand() *cobra.Command {
 				if err := setupRunLifecycleFunc(command, "start", "", false); err != nil {
 					return fmt.Errorf("setup start failed: %w", err)
 				}
-				fmt.Fprintln(command.OutOrStdout(), "Started services")
 			}
 			return nil
 		},

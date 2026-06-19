@@ -310,6 +310,7 @@ socks5/http：
 
 `merge_inputs`：
 
+- 合并前先应用 input 文件级 `external_host`，仅补齐缺失或空的 `nodes[].server`，不覆盖局部 server。
 - 文件名排序。
 - 校验重复 node id。
 - 校验同 user 下重复 proxy name。

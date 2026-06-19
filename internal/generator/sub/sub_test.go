@@ -21,6 +21,108 @@ func TestInputYAMLMatchesGolden(t *testing.T) {
 	require.Equal(t, readSubGolden(t, "input.yaml"), output)
 }
 
+// TestLoadInputFileKeepsExistingServer 验证旧 input 文件继续保留节点 server。
+func TestLoadInputFileKeepsExistingServer(t *testing.T) {
+	input := loadManualInput(t)
+
+	require.Empty(t, input.ExternalHost)
+	require.Equal(t, "proxy.example.com", input.Nodes[0].Server)
+}
+
+// TestLoadInputContentAppliesExternalHostDefault 验证文件级 external_host 可补齐缺失或空 server。
+func TestLoadInputContentAppliesExternalHostDefault(t *testing.T) {
+	tests := []struct {
+		name string
+		node string
+	}{
+		{
+			name: "missing server",
+			node: `  - id: manual:relay
+    user: alice
+    protocol: socks5
+    port: 24001
+    tag: socks5:24001:relay
+    remark: Manual Relay
+`,
+		},
+		{
+			name: "empty server",
+			node: `  - id: manual:relay
+    user: alice
+    protocol: socks5
+    server: ""
+    port: 24001
+    tag: socks5:24001:relay
+    remark: Manual Relay
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input, err := subgen.LoadInputContent("manual.yaml", []byte(`input_schema: proxystack.subscription-input
+input_version: 1
+source: manual
+generated_at: "2026-06-05T12:00:00+08:00"
+external_host: default.example.com
+nodes:
+`+tt.node))
+
+			require.NoError(t, err)
+			require.Equal(t, "default.example.com", input.Nodes[0].Server)
+		})
+	}
+}
+
+// TestLoadInputContentKeepsNodeServer 验证局部 server 优先于文件级 external_host。
+func TestLoadInputContentKeepsNodeServer(t *testing.T) {
+	input, err := subgen.LoadInputContent("manual.yaml", []byte(`input_schema: proxystack.subscription-input
+input_version: 1
+source: manual
+generated_at: "2026-06-05T12:00:00+08:00"
+external_host: default.example.com
+nodes:
+  - id: manual:relay
+    user: alice
+    protocol: socks5
+    server: proxy.example.com
+    port: 24001
+    tag: socks5:24001:relay
+    remark: Manual Relay
+`))
+
+	require.NoError(t, err)
+	require.Equal(t, "proxy.example.com", input.Nodes[0].Server)
+}
+
+// TestLoadInputContentRejectsMissingServerWithoutExternalHost 验证无局部 server 且无文件级 external_host 时失败。
+func TestLoadInputContentRejectsMissingServerWithoutExternalHost(t *testing.T) {
+	_, err := subgen.LoadInputContent("manual.yaml", []byte(`input_schema: proxystack.subscription-input
+input_version: 1
+source: manual
+generated_at: "2026-06-05T12:00:00+08:00"
+nodes:
+  - id: manual:relay
+    user: alice
+    protocol: socks5
+    port: 24001
+    tag: socks5:24001:relay
+    remark: Manual Relay
+`))
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "node.server is required")
+}
+
+// TestInputYAMLIncludesExternalHost 验证 input YAML 会输出文件级 external_host 且字段顺序稳定。
+func TestInputYAMLIncludesExternalHost(t *testing.T) {
+	input := loadManualInput(t)
+	input.ExternalHost = "default.example.com"
+
+	output := subgen.InputToYAML(input)
+
+	require.Contains(t, output, "generated_at: '"+fixedGeneratedAt+"'\nexternal_host: default.example.com\nnodes:\n")
+}
+
 // TestIndexJSONMatchesGolden 验证合并后的 index JSON 稳定且包含 access。
 func TestIndexJSONMatchesGolden(t *testing.T) {
 	index := buildManualIndex(t)

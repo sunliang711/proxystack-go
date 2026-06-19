@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	configloader "github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/domain"
 	"github.com/eagle/proxystack-go/internal/graph"
 )
@@ -128,14 +129,6 @@ func UnitsForNodes(nodes []graph.ServiceNode) []string {
 	return units
 }
 
-// UnitsForTarget 返回 sub 或 graph scope 对应的 unit 列表。
-func UnitsForTarget(target string, nodes []graph.ServiceNode) []string {
-	if target == "sub" {
-		return []string{SubUnit}
-	}
-	return UnitsForNodes(nodes)
-}
-
 // Start 调用 systemctl start。
 func (m Manager) Start(ctx context.Context, units []string) error {
 	return m.systemctl(ctx, "start", units...)
@@ -211,7 +204,7 @@ func (m Manager) Logs(ctx context.Context, units []string, follow bool) (Result,
 // InstallUnits 渲染并写入指定 target 的 unit 文件。
 func (m Manager) InstallUnits(config domain.GlobalConfig, target string) ([]string, error) {
 	units := RenderUnits(config)
-	selected, err := selectUnitFiles(units, target)
+	selected, err := selectUnitFiles(config, units, target)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +217,9 @@ func (m Manager) InstallUnits(config domain.GlobalConfig, target string) ([]stri
 		written = append(written, path)
 	}
 	sort.Strings(written)
+	if len(written) == 0 {
+		return written, nil
+	}
 	if err := m.systemctl(context.Background(), "daemon-reload"); err != nil {
 		return written, fmt.Errorf("systemd daemon-reload failed: %w", err)
 	}
@@ -231,8 +227,8 @@ func (m Manager) InstallUnits(config domain.GlobalConfig, target string) ([]stri
 }
 
 // UninstallUnits 删除指定 target 的 unit 文件。
-func (m Manager) UninstallUnits(target string) ([]string, error) {
-	selected, err := selectUnitFiles(RenderUnits(domain.GlobalConfig{}), target)
+func (m Manager) UninstallUnits(config domain.GlobalConfig, target string) ([]string, error) {
+	selected, err := selectUnitFilesForUninstall(config, RenderUnits(config), target)
 	if err != nil {
 		return nil, err
 	}
@@ -491,22 +487,109 @@ func (m Manager) unitDir() string {
 	return DefaultUnitDir
 }
 
-func selectUnitFiles(units map[string]string, target string) (map[string]string, error) {
+func selectUnitFiles(config domain.GlobalConfig, units map[string]string, target string) (map[string]string, error) {
 	selected := map[string]string{}
-	switch target {
-	case "", "all":
-		for name, content := range units {
-			selected[name] = content
-		}
-	case "sub":
-		selected[SubUnit] = units[SubUnit]
-	case "xrelay", "xray":
+	if target == "sub" && config.ConfigPath == "" {
+		return selectLegacyUnitFiles(units, target)
+	}
+	if target == "" {
 		selected[XrayUnitTemplate] = units[XrayUnitTemplate]
-	case "clash", "mihomo":
 		selected[ClashUnitTemplate] = units[ClashUnitTemplate]
-	default:
+		return selected, nil
+	}
+	nodes, err := unitTargetNodes(config, target)
+	if err != nil {
+		return nil, err
+	}
+	for _, node := range nodes {
+		switch node.Component {
+		case "xrelay":
+			selected[XrayUnitTemplate] = units[XrayUnitTemplate]
+		case "clash":
+			selected[ClashUnitTemplate] = units[ClashUnitTemplate]
+		}
+	}
+	return selected, nil
+}
+
+// selectUnitFilesForUninstall 选择卸载范围；systemd 模板被多个 stack 共享，非空 target 只删除无人再用的模板。
+func selectUnitFilesForUninstall(config domain.GlobalConfig, units map[string]string, target string) (map[string]string, error) {
+	if target == "" || (target == "sub" && config.ConfigPath == "") {
+		return selectUnitFiles(config, units, target)
+	}
+	targetNodes, allNodes, err := unitTargetNodesWithAll(config, target)
+	if err != nil {
+		return nil, err
+	}
+	targetSet := serviceNodeSet(targetNodes)
+	selected := map[string]string{}
+	for _, node := range targetNodes {
+		if componentUsedOutsideTarget(allNodes, targetSet, node.Component) {
+			continue
+		}
+		switch node.Component {
+		case "xrelay":
+			selected[XrayUnitTemplate] = units[XrayUnitTemplate]
+		case "clash":
+			selected[ClashUnitTemplate] = units[ClashUnitTemplate]
+		}
+	}
+	return selected, nil
+}
+
+// unitTargetNodes 解析 stack target 到 systemd 模板需要覆盖的组件集合。
+func unitTargetNodes(config domain.GlobalConfig, target string) ([]graph.ServiceNode, error) {
+	targetNodes, _, err := unitTargetNodesWithAll(config, target)
+	return targetNodes, err
+}
+
+// unitTargetNodesWithAll 同时返回指定 target 和所有 enabled stack 的服务节点。
+func unitTargetNodesWithAll(config domain.GlobalConfig, target string) ([]graph.ServiceNode, []graph.ServiceNode, error) {
+	stackSet, err := configloader.LoadStacks(config, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	referenceGraph, err := graph.BuildReferenceGraph(stackSet)
+	if err != nil {
+		return nil, nil, err
+	}
+	scope, err := graph.ResolveTargetScope(referenceGraph, target)
+	if err != nil {
+		return nil, nil, err
+	}
+	allScope, err := graph.ResolveTargetScope(referenceGraph, "")
+	if err != nil {
+		return nil, nil, err
+	}
+	return scope.Nodes, allScope.Nodes, nil
+}
+
+// serviceNodeSet 把服务节点列表转为集合，方便比较 target 外引用。
+func serviceNodeSet(nodes []graph.ServiceNode) map[graph.ServiceNode]bool {
+	set := make(map[graph.ServiceNode]bool, len(nodes))
+	for _, node := range nodes {
+		set[node] = true
+	}
+	return set
+}
+
+// componentUsedOutsideTarget 判断同类 systemd 模板是否仍被 target 外的 enabled stack 使用。
+func componentUsedOutsideTarget(nodes []graph.ServiceNode, targetSet map[graph.ServiceNode]bool, component string) bool {
+	for _, node := range nodes {
+		if node.Component == component && !targetSet[node] {
+			return true
+		}
+	}
+	return false
+}
+
+// selectLegacyUnitFiles 保留 ps-sub 对订阅服务 unit 的显式安装入口。
+func selectLegacyUnitFiles(units map[string]string, target string) (map[string]string, error) {
+	selected := map[string]string{}
+	if target != "sub" {
 		return nil, fmt.Errorf("unsupported unit target: %s", target)
 	}
+	selected[SubUnit] = units[SubUnit]
 	return selected, nil
 }
 

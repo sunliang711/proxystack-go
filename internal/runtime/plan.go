@@ -344,7 +344,7 @@ func scopeServiceSet(scope graph.TargetScope) map[string]bool {
 
 func manifestFileMatchesTarget(file ManifestFile, scope graph.TargetScope) bool {
 	target := scope.Raw
-	if target == "" || target == "all" {
+	if target == "" {
 		return true
 	}
 	if strings.HasPrefix(target, "xrelay/") {

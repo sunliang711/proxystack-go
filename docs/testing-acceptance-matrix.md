@@ -72,7 +72,7 @@ tests/fixtures/sub/manual.yaml
 | `render *` | 写 runtime、调用服务管理器 |
 | `list` | 写文件；默认不做系统端口检测 |
 | `doctor` | 写文件、修复权限 |
-| `start sub` | 读取 stack、创建 generated、写 agent manifest |
+| `ps-sub start` | 读取 agent config 或 stack、创建 generated、写 agent manifest |
 | `sub export --summary` | 写 zip |
 | `ps-sub serve` | 读取 agent config 或 stack |
 | `ps-sub import` | 接受 native backup |

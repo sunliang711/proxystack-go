@@ -281,6 +281,7 @@ func LoadInputContent(name string, data []byte) (Input, error) {
 	if input.InputSchema == "" {
 		input.InputSchema = InputSchema
 	}
+	input = input.resolveExternalHostDefault()
 	if err := input.Validate(); err != nil {
 		return Input{}, GeneratorError{Message: fmt.Sprintf("invalid subscription input %s: %v", name, err)}
 	}
@@ -320,11 +321,12 @@ func MergeInputs(inputs []InputFile, access Access, generatedAt string) (Index, 
 	nodeSources := map[string]string{}
 	proxyNameSources := map[string]string{}
 	for _, inputFile := range inputs {
-		if err := inputFile.Input.Validate(); err != nil {
+		input := inputFile.Input.resolveExternalHostDefault()
+		if err := input.Validate(); err != nil {
 			return Index{}, err
 		}
-		sources = append(sources, inputFile.Input.Source)
-		for _, node := range inputFile.Input.Nodes {
+		sources = append(sources, input.Source)
+		for _, node := range input.Nodes {
 			if firstSource, ok := nodeSources[node.ID]; ok {
 				return Index{}, GeneratorError{Message: fmt.Sprintf("duplicate node id: %s, first seen in %s, repeated in %s", node.ID, firstSource, inputFile.Name)}
 			}

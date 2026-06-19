@@ -2,10 +2,12 @@ package sub
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
+	subgen "github.com/eagle/proxystack-go/internal/generator/sub"
 	"github.com/eagle/proxystack-go/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -206,6 +208,195 @@ EOF
 	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }
 
+// TestInputSetHostUpdatesSingleFile 验证 set-host 可修改单个 input 的所有节点 server。
+func TestInputSetHostUpdatesSingleFile(t *testing.T) {
+	baseDir := t.TempDir()
+	writeSubInputFixture(t, baseDir, "manual.yaml")
+	inputPath := filepath.Join(baseDir, "sub", "inputs", "manual.yaml")
+	command := NewRootCommand()
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"--base-dir", baseDir, "input", "set-host", "edge.example.com", "manual"})
+
+	err := command.Execute()
+
+	require.NoError(t, err)
+	require.Contains(t, output.String(), "Input host updated: manual.yaml")
+	data, err := os.ReadFile(inputPath)
+	require.NoError(t, err)
+	require.Contains(t, string(data), "server: edge.example.com")
+	require.NotContains(t, string(data), "server: proxy.example.com")
+}
+
+// TestInputSetHostUpdatesExistingExternalHost 验证 set-host 会同步更新已有文件级 external_host。
+func TestInputSetHostUpdatesExistingExternalHost(t *testing.T) {
+	baseDir := t.TempDir()
+	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	data := writeSubInputData(t, inputDir, "manual.yaml")
+	data = bytes.ReplaceAll(data, []byte("generated_at: \"2026-06-05T12:00:00+08:00\"\nnodes:"), []byte("generated_at: \"2026-06-05T12:00:00+08:00\"\nexternal_host: proxy.example.com\nnodes:"))
+	require.NoError(t, os.WriteFile(filepath.Join(inputDir, "manual.yaml"), data, 0o640))
+	command := NewRootCommand()
+	command.SetArgs([]string{"--base-dir", baseDir, "input", "set-host", "edge.example.com", "manual"})
+
+	err := command.Execute()
+
+	require.NoError(t, err)
+	updated, err := os.ReadFile(filepath.Join(inputDir, "manual.yaml"))
+	require.NoError(t, err)
+	require.Contains(t, string(updated), "external_host: edge.example.com")
+	require.Contains(t, string(updated), "server: edge.example.com")
+	require.NotContains(t, string(updated), "proxy.example.com")
+}
+
+// TestInputSetHostWritesDefaultedServer 验证 set-host 会把 external_host 默认出来的 server 写回节点。
+func TestInputSetHostWritesDefaultedServer(t *testing.T) {
+	baseDir := t.TempDir()
+	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	inputPath := filepath.Join(inputDir, "manual.yaml")
+	require.NoError(t, os.MkdirAll(inputDir, 0o750))
+	require.NoError(t, os.WriteFile(inputPath, []byte(`input_schema: proxystack.subscription-input
+input_version: 1
+source: manual
+generated_at: "2026-06-05T12:00:00+08:00"
+external_host: proxy.example.com
+nodes:
+  - id: manual:relay
+    user: alice
+    protocol: socks5
+    port: 24001
+    tag: socks5:24001:relay
+    remark: Manual Relay
+`), 0o640))
+	command := NewRootCommand()
+	command.SetArgs([]string{"--base-dir", baseDir, "input", "set-host", "edge.example.com", "manual"})
+
+	err := command.Execute()
+
+	require.NoError(t, err)
+	updated, err := os.ReadFile(inputPath)
+	require.NoError(t, err)
+	require.Contains(t, string(updated), "external_host: edge.example.com")
+	require.Contains(t, string(updated), "server: edge.example.com")
+}
+
+// TestInputSetHostUpdatesJSONInput 验证 set-host 支持 JSON input 的规范回写。
+func TestInputSetHostUpdatesJSONInput(t *testing.T) {
+	baseDir := t.TempDir()
+	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	require.NoError(t, os.MkdirAll(inputDir, 0o750))
+	input, err := subgen.LoadInputFile(testutil.RepoPath(t, "tests", "fixtures", "sub", "manual.yaml"))
+	require.NoError(t, err)
+	data, err := json.MarshalIndent(input, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(inputDir, "manual.json"), append(data, '\n'), 0o640))
+	command := NewRootCommand()
+	command.SetArgs([]string{"--base-dir", baseDir, "input", "set-host", "edge.example.com", "manual.json"})
+
+	err = command.Execute()
+
+	require.NoError(t, err)
+	updated, err := os.ReadFile(filepath.Join(inputDir, "manual.json"))
+	require.NoError(t, err)
+	require.Contains(t, string(updated), `"server": "edge.example.com"`)
+	require.NotContains(t, string(updated), "proxy.example.com")
+}
+
+// TestInputSetHostAllUpdatesSafeInputFiles 验证 --all 会扫描并修改全部安全 input 文件。
+func TestInputSetHostAllUpdatesSafeInputFiles(t *testing.T) {
+	baseDir := t.TempDir()
+	writeSubInputFixture(t, baseDir, "manual.yaml")
+	writeSubInputVariant(t, baseDir, "copy.yaml")
+	command := NewRootCommand()
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"--base-dir", baseDir, "input", "set-host", "edge.example.com", "--all"})
+
+	err := command.Execute()
+
+	require.NoError(t, err)
+	require.Contains(t, output.String(), "Input hosts updated: changed=2 unchanged=0 total=2")
+	manualData, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "manual.yaml"))
+	require.NoError(t, err)
+	require.Contains(t, string(manualData), "server: edge.example.com")
+	copyData, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "copy.yaml"))
+	require.NoError(t, err)
+	require.Contains(t, string(copyData), "server: edge.example.com")
+}
+
+// TestInputSetHostRejectsInvalidArguments 验证 set-host 的 HOST、SOURCE 和 --all 参数约束。
+func TestInputSetHostRejectsInvalidArguments(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "empty host",
+			args: []string{"--base-dir", t.TempDir(), "input", "set-host", "  ", "--all"},
+			want: "input host must not be empty",
+		},
+		{
+			name: "missing source or all",
+			args: []string{"--base-dir", t.TempDir(), "input", "set-host", "edge.example.com"},
+			want: "SOURCE or --all is required",
+		},
+		{
+			name: "source with all",
+			args: []string{"--base-dir", t.TempDir(), "input", "set-host", "edge.example.com", "manual", "--all"},
+			want: "SOURCE and --all cannot be used together",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			command := NewRootCommand()
+			command.SetArgs(tt.args)
+
+			err := command.Execute()
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.want)
+		})
+	}
+}
+
+// TestInputSetHostRejectsMergeFailureWithoutWrite 验证全量合并校验失败时不会写回任一 input。
+func TestInputSetHostRejectsMergeFailureWithoutWrite(t *testing.T) {
+	baseDir := t.TempDir()
+	manualOriginal := writeSubInputFixture(t, baseDir, "manual.yaml")
+	copyOriginal := writeSubInputFixture(t, baseDir, "copy.yaml")
+	command := NewRootCommand()
+	command.SetArgs([]string{"--base-dir", baseDir, "input", "set-host", "edge.example.com", "--all"})
+
+	err := command.Execute()
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate node id")
+	manualData, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "manual.yaml"))
+	require.NoError(t, err)
+	require.Equal(t, manualOriginal, manualData)
+	copyData, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "copy.yaml"))
+	require.NoError(t, err)
+	require.Equal(t, copyOriginal, copyData)
+}
+
+// TestInputSetHostReportsUnchanged 验证没有实际变化时命令成功并输出 unchanged。
+func TestInputSetHostReportsUnchanged(t *testing.T) {
+	baseDir := t.TempDir()
+	original := writeSubInputFixture(t, baseDir, "manual.yaml")
+	command := NewRootCommand()
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"--base-dir", baseDir, "input", "set-host", "proxy.example.com", "manual"})
+
+	err := command.Execute()
+
+	require.NoError(t, err)
+	require.Contains(t, output.String(), "Input host unchanged: manual.yaml")
+	data, err := os.ReadFile(filepath.Join(baseDir, "sub", "inputs", "manual.yaml"))
+	require.NoError(t, err)
+	require.Equal(t, original, data)
+}
+
 // TestInputRemoveRejectsPathTraversal 验证 remove 不允许 SOURCE 逃出 inputs 目录。
 func TestInputRemoveRejectsPathTraversal(t *testing.T) {
 	baseDir := t.TempDir()
@@ -300,6 +491,19 @@ func writeSubInputData(t *testing.T, inputDir string, name string) []byte {
 	require.NoError(t, os.MkdirAll(inputDir, 0o750))
 	data, err := os.ReadFile(testutil.RepoPath(t, "tests", "fixtures", "sub", "manual.yaml"))
 	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(inputDir, name), data, 0o640))
+	return data
+}
+
+// writeSubInputVariant 写入与 manual 不冲突的第二个测试 input。
+func writeSubInputVariant(t *testing.T, baseDir string, name string) []byte {
+	t.Helper()
+	inputDir := filepath.Join(baseDir, "sub", "inputs")
+	data := writeSubInputData(t, inputDir, name)
+	data = bytes.ReplaceAll(data, []byte("source: manual"), []byte("source: copy"))
+	data = bytes.ReplaceAll(data, []byte("manual:relay"), []byte("copy:relay"))
+	data = bytes.ReplaceAll(data, []byte("proxy.example.com"), []byte("copy.example.com"))
+	data = bytes.ReplaceAll(data, []byte("Manual Relay"), []byte("Copy Relay"))
 	require.NoError(t, os.WriteFile(filepath.Join(inputDir, name), data, 0o640))
 	return data
 }

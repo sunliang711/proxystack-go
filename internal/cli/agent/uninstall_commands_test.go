@@ -26,7 +26,7 @@ func (f *fakeUninstallManager) InstallUnits(config domain.GlobalConfig, target s
 }
 
 // UninstallUnits 记录卸载 target 并返回预设服务文件路径。
-func (f *fakeUninstallManager) UninstallUnits(target string) ([]string, error) {
+func (f *fakeUninstallManager) UninstallUnits(config domain.GlobalConfig, target string) ([]string, error) {
 	f.calls = append(f.calls, "uninstall")
 	f.target = target
 	return f.serviceFiles, nil
@@ -96,18 +96,17 @@ func (f *fakeUninstallManager) SubService() string {
 // TestAgentUninstallPreservesConfigAndStacks 验证普通卸载只保留用户配置数据。
 func TestAgentUninstallPreservesConfigAndStacks(t *testing.T) {
 	baseDir := prepareUninstallBaseDir(t)
-	manager := &fakeUninstallManager{serviceFiles: []string{"/tmp/proxystack-sub.service"}}
+	manager := &fakeUninstallManager{serviceFiles: []string{"/tmp/proxystack-xray@.service"}}
 	withAgentServiceManager(t, manager)
 
 	output := runAgentCommandForTest(t, "--base-dir", baseDir, "uninstall")
 
 	require.Equal(t, "", manager.target)
 	require.Equal(t, []string{"stop", "uninstall"}, manager.calls)
-	require.ElementsMatch(t, []string{"proxystack-xray@usa1.service", "proxystack-clash@usa1.service", "proxystack-sub.service"}, manager.stopped)
-	require.Equal(t, "proxystack-sub.service", manager.stopped[len(manager.stopped)-1])
+	require.ElementsMatch(t, []string{"proxystack-xray@usa1.service", "proxystack-clash@usa1.service"}, manager.stopped)
 	require.Contains(t, output, "Stopping service: usa1")
-	require.Contains(t, output, "Stopping service: sub")
-	require.Contains(t, output, "Removing service file: /tmp/proxystack-sub.service")
+	require.NotContains(t, output, "Stopping service: sub")
+	require.Contains(t, output, "Removing service file: /tmp/proxystack-xray@.service")
 	require.Contains(t, output, "Removing base directory entry: "+filepath.Join(baseDir, "bin"))
 	require.Contains(t, output, "Removing base directory entry: "+filepath.Join(baseDir, "runtime"))
 	require.Contains(t, output, "Preserving: "+filepath.Join(baseDir, "config.yaml"))
@@ -123,7 +122,7 @@ func TestAgentUninstallPreservesConfigAndStacks(t *testing.T) {
 // TestAgentUninstallPurgeRemovesBaseDir 验证 purge 卸载会删除整个 base dir。
 func TestAgentUninstallPurgeRemovesBaseDir(t *testing.T) {
 	baseDir := prepareUninstallBaseDir(t)
-	manager := &fakeUninstallManager{serviceFiles: []string{"/tmp/proxystack-sub.service"}}
+	manager := &fakeUninstallManager{serviceFiles: []string{"/tmp/proxystack-xray@.service"}}
 	withAgentServiceManager(t, manager)
 
 	output := runAgentCommandForTest(t, "--base-dir", baseDir, "uninstall", "--purge")
@@ -142,11 +141,10 @@ func TestUninstallServiceDisplayNames(t *testing.T) {
 		"proxystack-xray@usa1.service",
 		"com.proxystack.mihomo.de1",
 		"com.proxystack.xray.de1",
-		"proxystack-sub.service",
 		"custom.service",
 	})
 
-	require.Equal(t, []string{"usa1", "de1", "sub", "custom.service"}, names)
+	require.Equal(t, []string{"usa1", "de1", "custom.service"}, names)
 }
 
 // TestPurgeFlagIsNotGlobal 验证 purge 不再作为 root 级 flag 被接受。

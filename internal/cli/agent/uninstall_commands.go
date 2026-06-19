@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/eagle/proxystack-go/internal/config"
+	"github.com/eagle/proxystack-go/internal/domain"
 	servicemanager "github.com/eagle/proxystack-go/internal/service"
 	"github.com/spf13/cobra"
 )
@@ -56,7 +58,11 @@ func runUninstall(command *cobra.Command, purge bool) error {
 	if err := manager.Stop(context.Background(), services); err != nil {
 		return err
 	}
-	serviceFiles, err := manager.UninstallUnits("")
+	cfg, err := uninstallConfig(filepath.Join(baseDir, uninstallPreservedConfig), baseDir)
+	if err != nil {
+		return err
+	}
+	serviceFiles, err := manager.UninstallUnits(cfg, "")
 	if err != nil {
 		return err
 	}
@@ -120,7 +126,7 @@ func guardUninstallBaseDir(baseDir string) error {
 	return nil
 }
 
-// uninstallServiceNames 返回顶层卸载前需要停止的 stack 服务和 sub 服务。
+// uninstallServiceNames 返回顶层卸载前需要停止的 stack 服务。
 func uninstallServiceNames(configPath string, manager servicemanager.Manager) ([]string, error) {
 	services := make([]string, 0)
 	if _, err := os.Stat(configPath); err == nil {
@@ -132,10 +138,19 @@ func uninstallServiceNames(configPath string, manager servicemanager.Manager) ([
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if subService := manager.SubService(); subService != "" {
-		services = append(services, subService)
-	}
 	return services, nil
+}
+
+// uninstallConfig 加载卸载服务文件所需配置，缺失 config 时回退到 base-dir 默认路径。
+func uninstallConfig(configPath string, baseDir string) (domain.GlobalConfig, error) {
+	cfg, err := config.LoadConfig(configPath)
+	if err == nil {
+		return cfg, nil
+	}
+	if os.IsNotExist(err) {
+		return domain.GlobalConfig{BaseDir: baseDir, Paths: domain.DefaultConfigPaths()}, nil
+	}
+	return domain.GlobalConfig{}, err
 }
 
 // uninstallServiceDisplayNames 把底层服务名合并为适合 CLI 展示的 stack 名。
@@ -158,10 +173,6 @@ func uninstallServiceDisplayNames(services []string) []string {
 
 // uninstallServiceDisplayName 从 systemd unit 或 launchd label 提取用户关心的服务名。
 func uninstallServiceDisplayName(service string) string {
-	switch service {
-	case "proxystack-sub.service", "com.proxystack.sub":
-		return "sub"
-	}
 	for _, prefix := range []string{"proxystack-clash@", "proxystack-xray@"} {
 		if strings.HasPrefix(service, prefix) && strings.HasSuffix(service, ".service") {
 			return strings.TrimSuffix(strings.TrimPrefix(service, prefix), ".service")

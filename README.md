@@ -3,9 +3,9 @@
 `proxystack-go` 是 Go 版 proxystack，提供两个命令行入口：
 
 - `ps-agent`：管理 agent 配置、stack、runtime 生成物、核心下载和服务生命周期。
-- `ps-sub`：独立运行订阅 HTTP 服务，只读取 `<base-dir>/sub/config.yaml` 和 `<base-dir>/sub/inputs/`。
+- `ps-sub`：独立运行订阅 HTTP 服务，只读取 `<base-dir>/config.yaml` 和 `<base-dir>/inputs/`。
 
-默认工作目录为 `/opt/proxystack`。如需使用其他目录，所有命令都可以通过 `--base-dir DIR` 指定。
+`ps-agent` 默认工作目录为 `/opt/proxystack`，`ps-sub` 默认工作目录为 `/opt/proxystack-sub`。如需使用其他目录，所有命令都可以通过 `--base-dir DIR` 指定。
 
 ## 安装
 
@@ -64,9 +64,10 @@ sudo scripts/install-sub-local.sh \
 也可以使用 Docker 运行 `ps-sub`：
 
 ```bash
-sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack/sub
-sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack/sub/inputs
-sudo install -o 10001 -g 10001 -m 0640 /path/to/sub-config.yaml /opt/proxystack/sub/config.yaml
+sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack-sub
+sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack-sub/inputs
+sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack-sub/templates
+sudo install -o 10001 -g 10001 -m 0640 /path/to/sub-config.yaml /opt/proxystack-sub/config.yaml
 docker compose -f docker-compose.sub.yml up -d --build
 ```
 
@@ -88,7 +89,6 @@ sudo ps-agent --base-dir /opt/proxystack init --external-host proxy.example.com
 | `/opt/proxystack/stacks/` | stack 配置目录 |
 | `/opt/proxystack/runtime/` | runtime manifest、锁文件和生成物 |
 | `/opt/proxystack/publish/` | 订阅包和备份包输出目录 |
-| `/opt/proxystack/sub/` | 本地订阅服务配置和 inputs |
 
 `config.yaml` 中常用字段：
 
@@ -138,10 +138,10 @@ sudo ps-agent --base-dir /opt/proxystack check
 初始化订阅目录：
 
 ```bash
-sudo ps-sub --base-dir /opt/proxystack init
+sudo ps-sub --base-dir /opt/proxystack-sub init
 ```
 
-订阅服务配置固定为 `<base-dir>/sub/config.yaml`。不要在该 YAML 中写 `data_dir`，运行数据目录固定由 `--base-dir` 推导为 `<base-dir>/sub`：
+订阅服务配置固定为 `<base-dir>/config.yaml`。不要在该 YAML 中写 `data_dir`，运行数据目录固定由 `--base-dir` 推导为 `<base-dir>`：
 
 ```yaml
 listen: 0.0.0.0:3003
@@ -158,15 +158,15 @@ managed_config:
 查看和校验订阅服务配置：
 
 ```bash
-sudo ps-sub --base-dir /opt/proxystack config show
-sudo ps-sub --base-dir /opt/proxystack config check
+sudo ps-sub --base-dir /opt/proxystack-sub config show
+sudo ps-sub --base-dir /opt/proxystack-sub config check
 ```
 
-如果编辑配置时报 `field data_dir not found`，删除 `sub/config.yaml` 中的 `data_dir` 字段，并在命令中通过 `--base-dir` 指定目录：
+如果编辑配置时报 `field data_dir not found`，删除 `config.yaml` 中的 `data_dir` 字段，并在命令中通过 `--base-dir` 指定目录：
 
 ```bash
-sudo ps-sub --base-dir /opt/proxystack config
-sudo ps-sub --base-dir /opt/proxystack serve
+sudo ps-sub --base-dir /opt/proxystack-sub config
+sudo ps-sub --base-dir /opt/proxystack-sub serve
 ```
 
 ## 使用
@@ -194,21 +194,21 @@ sudo ps-agent --base-dir /opt/proxystack sub export
 
 ```bash
 # 导入 agent 生成的订阅包
-sudo ps-sub --base-dir /opt/proxystack import /opt/proxystack/publish/sub-bundle.zip
+sudo ps-sub --base-dir /opt/proxystack-sub import /opt/proxystack/publish/sub-bundle.zip
 
 # 查询、校验或编辑订阅 input
-sudo ps-sub --base-dir /opt/proxystack input list
-sudo ps-sub --base-dir /opt/proxystack input show manual
-sudo ps-sub --base-dir /opt/proxystack input validate
-sudo ps-sub --base-dir /opt/proxystack input edit manual
+sudo ps-sub --base-dir /opt/proxystack-sub input list
+sudo ps-sub --base-dir /opt/proxystack-sub input show manual
+sudo ps-sub --base-dir /opt/proxystack-sub input validate
+sudo ps-sub --base-dir /opt/proxystack-sub input edit manual
 
 # 前台运行订阅服务
-sudo ps-sub --base-dir /opt/proxystack serve
+sudo ps-sub --base-dir /opt/proxystack-sub serve
 
 # 或安装为系统服务后运行
-sudo ps-sub --base-dir /opt/proxystack service install
-sudo ps-sub --base-dir /opt/proxystack start
-sudo ps-sub --base-dir /opt/proxystack status
+sudo ps-sub --base-dir /opt/proxystack-sub service install
+sudo ps-sub --base-dir /opt/proxystack-sub start
+sudo ps-sub --base-dir /opt/proxystack-sub status
 ```
 
 HTTP 路由：
@@ -229,7 +229,7 @@ sudo ps-agent --base-dir /opt/proxystack doctor
 sudo ps-agent --base-dir /opt/proxystack ipinfo usa1
 sudo ps-agent --base-dir /opt/proxystack export
 
-sudo ps-sub --base-dir /opt/proxystack doctor
+sudo ps-sub --base-dir /opt/proxystack-sub doctor
 ```
 
 ## 更多文档

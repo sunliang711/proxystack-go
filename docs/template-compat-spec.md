@@ -30,6 +30,7 @@ Python 版使用 Jinja2 渲染三类模板：
 - `proxy_groups`
 - `clash_rules`
 - `surge_proxy_lines`
+- `surge_proxy_names`
 - `surge_region_groups`
 - `surge_rules`
 - `test_url`

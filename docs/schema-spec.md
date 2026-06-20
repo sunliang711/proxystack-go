@@ -348,7 +348,8 @@ nodes: []
 | --- | --- | --- | --- |
 | `id` | string | 是 | 全局唯一 |
 | `user` | string | 是 | HTTP 路由过滤用户 |
-| `protocol` | string | 是 | `vmess`、`shadowsocks`、`socks5`、`http` |
+| `direct` | bool | 否 | 默认 `false`；为 `true` 时允许节点携带 Clash/Mihomo 原生字段并在 Clash/Premium Clash 输出中直通 |
+| `protocol` | string | 是 | 默认节点支持 `vmess`、`shadowsocks`、`socks5`、`http`；`direct: true` 可由 `type` 推导为 Clash/Mihomo 原生协议 |
 | `server` | string | 条件必填 | 客户端连接地址；有值时优先于文件级 `external_host`，否则要求文件级 `external_host` 有值 |
 | `port` | int | 是 | 客户端连接端口 |
 | `tag` | string | 是 | 唯一 tag |
@@ -366,6 +367,8 @@ nodes: []
 - `nodes[].id` 全局唯一。
 - 同一个 `user` 下 `proxy name` 不允许重复。
 - 不同 user 可以存在相同 proxy name。
+- 默认节点严格拒绝未知字段；`direct: true` 节点允许节点级自定义字段，Clash/Premium Clash 按原字段输出。
+- Surge 只输出已确认支持的节点；当前对 vmess 仅支持 raw/tcp 和 ws/websocket，并对 `tls`、`skip-cert-verify`、`servername`、`ws-opts.path` 和 `ws-opts.headers` 做兼容映射；不支持或不确认的节点会被跳过并记录 warning。
 
 ## 8. Subscription Index
 

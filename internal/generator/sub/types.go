@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,6 +22,31 @@ const (
 )
 
 var regionPattern = regexp.MustCompile(`^[A-Z]{2}$`)
+
+var nodeKnownFields = map[string]bool{
+	"id":       true,
+	"user":     true,
+	"protocol": true,
+	"server":   true,
+	"port":     true,
+	"tag":      true,
+	"remark":   true,
+	"uuid":     true,
+	"network":  true,
+	"method":   true,
+	"cipher":   true,
+	"password": true,
+	"udp":      true,
+	"auth":     true,
+	"region":   true,
+	"direct":   true,
+}
+
+var authKnownFields = map[string]bool{
+	"type":     true,
+	"username": true,
+	"password": true,
+}
 
 // GeneratorError 表示订阅生成、合并或导入失败。
 type GeneratorError struct {
@@ -66,6 +94,7 @@ func (a Auth) Validate() error {
 type Node struct {
 	ID       string `json:"id" yaml:"id"`
 	User     string `json:"user" yaml:"user"`
+	Direct   bool   `json:"direct,omitempty" yaml:"direct,omitempty"`
 	Protocol string `json:"protocol" yaml:"protocol"`
 	Server   string `json:"server" yaml:"server"`
 	Port     int    `json:"port" yaml:"port"`
@@ -79,6 +108,137 @@ type Node struct {
 	UDP      *bool  `json:"udp,omitempty" yaml:"udp,omitempty"`
 	Auth     *Auth  `json:"auth,omitempty" yaml:"auth,omitempty"`
 	Region   string `json:"region,omitempty" yaml:"region,omitempty"`
+
+	rawFields []yamlNodePair
+}
+
+// UnmarshalYAML 按 direct 开关决定是否允许节点级自定义字段。
+func (n *Node) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("node must be a mapping")
+	}
+	direct := yamlMappingBool(value, "direct")
+	if !direct {
+		if err := rejectUnknownNodeYAMLFields(value); err != nil {
+			return err
+		}
+	}
+	type raw Node
+	var decoded raw
+	if err := value.Decode(&decoded); err != nil {
+		return err
+	}
+	*n = Node(decoded)
+	n.Direct = direct
+	if n.Direct {
+		n.rawFields = cloneYAMLMappingPairs(value)
+		n.applyDirectAliases(yamlMappingString(value, "type"), yamlMappingString(value, "name"))
+	}
+	return nil
+}
+
+// UnmarshalJSON 按 direct 开关兼容 JSON input 中的直通节点。
+func (n *Node) UnmarshalJSON(data []byte) error {
+	type raw Node
+	var decoded raw
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if !decoded.Direct {
+		if err := rejectUnknownNodeJSONFields(fields); err != nil {
+			return err
+		}
+	}
+	*n = Node(decoded)
+	if n.Direct {
+		n.rawFields = jsonFieldsToYAMLPairs(fields)
+		n.applyDirectAliases(jsonFieldString(fields, "type"), jsonFieldString(fields, "name"))
+	}
+	return nil
+}
+
+// MarshalJSON 输出 direct 节点时把保留的原始字段合并回 JSON。
+func (n Node) MarshalJSON() ([]byte, error) {
+	type raw Node
+	if !n.Direct {
+		return json.Marshal(raw(n))
+	}
+	fields := map[string]any{}
+	for _, field := range n.RawFields() {
+		if field.key != nil && field.key.Value != "" {
+			fields[field.key.Value] = yamlNodeToJSONValue(field.value)
+		}
+	}
+	fields["id"] = n.ID
+	fields["user"] = n.User
+	fields["direct"] = true
+	fields["protocol"] = n.Protocol
+	fields["server"] = n.Server
+	fields["port"] = n.Port
+	if n.Tag != "" {
+		fields["tag"] = n.Tag
+	}
+	fields["remark"] = n.Remark
+	if n.Region != "" {
+		fields["region"] = n.Region
+	}
+	if n.UUID != "" {
+		fields["uuid"] = n.UUID
+	}
+	if n.Network != "" {
+		fields["network"] = n.Network
+	}
+	if n.Method != "" {
+		fields["method"] = n.Method
+	}
+	if n.Cipher != "" {
+		fields["cipher"] = n.Cipher
+	}
+	if n.Password != "" {
+		fields["password"] = n.Password
+	}
+	if n.UDP != nil {
+		fields["udp"] = *n.UDP
+	}
+	if n.Auth != nil {
+		fields["auth"] = n.Auth
+	}
+	return json.Marshal(fields)
+}
+
+// RawFields 返回 direct 节点保留的原始字段副本。
+func (n Node) RawFields() []yamlNodePair {
+	fields := make([]yamlNodePair, 0, len(n.rawFields))
+	for _, field := range n.rawFields {
+		fields = append(fields, yamlNodePair{key: cloneYAMLNode(field.key), value: cloneYAMLNode(field.value)})
+	}
+	return fields
+}
+
+// RawField 返回 direct 节点中指定原始字段的副本。
+func (n Node) RawField(name string) *yaml.Node {
+	for _, field := range n.rawFields {
+		if field.key != nil && field.key.Value == name {
+			return cloneYAMLNode(field.value)
+		}
+	}
+	return nil
+}
+
+func (n *Node) applyDirectAliases(proxyType string, proxyName string) {
+	if n.Protocol == "" {
+		n.Protocol = normalizeDirectProtocol(proxyType)
+	}
+	if n.Remark == "" {
+		n.Remark = proxyName
+	}
+	if n.Tag == "" {
+		n.Tag = n.ID
+	}
 }
 
 // Validate 校验节点基础字段和各协议必填项。
@@ -94,6 +254,9 @@ func (n Node) Validate() error {
 	}
 	if n.Port < 1 || n.Port > 65535 {
 		return fmt.Errorf("node.port must be between 1 and 65535")
+	}
+	if n.Direct {
+		return n.validateDirect()
 	}
 	if n.Tag == "" {
 		return fmt.Errorf("node.tag is required")
@@ -127,6 +290,34 @@ func (n Node) Validate() error {
 	case "socks5", "http":
 	default:
 		return fmt.Errorf("unsupported subscription node protocol: %s", n.Protocol)
+	}
+	return nil
+}
+
+// validateDirect 校验直通节点生成订阅所需的最小字段。
+func (n Node) validateDirect() error {
+	if n.Remark == "" {
+		return fmt.Errorf("node.remark is required")
+	}
+	if n.Region != "" && !regionPattern.MatchString(n.Region) {
+		return fmt.Errorf("node.region must use two uppercase letters")
+	}
+	switch n.Protocol {
+	case "vmess":
+		if n.UUID == "" {
+			return fmt.Errorf("uuid is required for vmess node")
+		}
+	case "shadowsocks":
+		if n.Password == "" {
+			return fmt.Errorf("password is required for shadowsocks node")
+		}
+		if n.Method == "" && n.Cipher == "" {
+			return fmt.Errorf("method or cipher is required for shadowsocks node")
+		}
+	case "socks5", "http":
+	default:
+		// direct 节点允许 Clash/Mihomo 原生协议；各客户端不支持时在对应渲染阶段跳过。
+		return nil
 	}
 	return nil
 }
@@ -331,6 +522,10 @@ func yamlBool(value bool) *yaml.Node {
 func nodesToYAML(nodes []Node) *yaml.Node {
 	rendered := make([]*yaml.Node, 0, len(nodes))
 	for _, node := range nodes {
+		if node.Direct {
+			rendered = append(rendered, directNodeToYAML(node))
+			continue
+		}
 		pairs := []yamlNodePair{
 			yamlPair("id", yamlString(node.ID)),
 			yamlPair("user", yamlString(node.User)),
@@ -374,4 +569,295 @@ func nodesToYAML(nodes []Node) *yaml.Node {
 		rendered = append(rendered, yamlMapping(pairs...))
 	}
 	return yamlSequence(rendered...)
+}
+
+func directNodeToYAML(node Node) *yaml.Node {
+	pairs := []yamlNodePair{
+		yamlPair("id", yamlString(node.ID)),
+		yamlPair("user", yamlString(node.User)),
+		yamlPair("direct", yamlBool(true)),
+		yamlPair("protocol", yamlString(node.Protocol)),
+		yamlPair("server", yamlString(node.Server)),
+		yamlPair("port", yamlInt(node.Port)),
+	}
+	if node.Tag != "" {
+		pairs = append(pairs, yamlPair("tag", yamlString(node.Tag)))
+	}
+	pairs = append(pairs, yamlPair("remark", yamlString(node.Remark)))
+	if node.Region != "" {
+		pairs = append(pairs, yamlPair("region", yamlString(node.Region)))
+	}
+	if node.UUID != "" {
+		pairs = append(pairs, yamlPair("uuid", yamlString(node.UUID)))
+	}
+	if node.Network != "" {
+		pairs = append(pairs, yamlPair("network", yamlString(node.Network)))
+	}
+	if node.Method != "" {
+		pairs = append(pairs, yamlPair("method", yamlString(node.Method)))
+	}
+	if node.Cipher != "" {
+		pairs = append(pairs, yamlPair("cipher", yamlString(node.Cipher)))
+	}
+	if node.Password != "" {
+		pairs = append(pairs, yamlPair("password", yamlString(node.Password)))
+	}
+	if node.UDP != nil {
+		pairs = append(pairs, yamlPair("udp", yamlBool(*node.UDP)))
+	}
+	seen := map[string]bool{}
+	for _, pair := range pairs {
+		seen[pair.key.Value] = true
+	}
+	for _, pair := range node.RawFields() {
+		if pair.key == nil || seen[pair.key.Value] || pair.key.Value == "type" || pair.key.Value == "name" {
+			continue
+		}
+		pairs = append(pairs, pair)
+		seen[pair.key.Value] = true
+	}
+	return yamlMapping(pairs...)
+}
+
+func rejectUnknownNodeYAMLFields(value *yaml.Node) error {
+	for index := 0; index+1 < len(value.Content); index += 2 {
+		key := value.Content[index]
+		if !nodeKnownFields[key.Value] {
+			if key.Line > 0 {
+				return fmt.Errorf("line %d: field %s not found in type sub.Node", key.Line, key.Value)
+			}
+			return fmt.Errorf("field %s not found in type sub.Node", key.Value)
+		}
+		if key.Value == "auth" {
+			if err := rejectUnknownAuthYAMLFields(value.Content[index+1]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func rejectUnknownNodeJSONFields(fields map[string]json.RawMessage) error {
+	keys := make([]string, 0, len(fields))
+	for key := range fields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if !nodeKnownFields[key] {
+			return fmt.Errorf("json: unknown field %q", key)
+		}
+	}
+	return rejectUnknownAuthJSONFields(fields)
+}
+
+func rejectUnknownAuthYAMLFields(value *yaml.Node) error {
+	if value.Kind != yaml.MappingNode {
+		return nil
+	}
+	for index := 0; index+1 < len(value.Content); index += 2 {
+		key := value.Content[index]
+		if !authKnownFields[key.Value] {
+			if key.Line > 0 {
+				return fmt.Errorf("line %d: field %s not found in type sub.Auth", key.Line, key.Value)
+			}
+			return fmt.Errorf("field %s not found in type sub.Auth", key.Value)
+		}
+	}
+	return nil
+}
+
+func rejectUnknownAuthJSONFields(fields map[string]json.RawMessage) error {
+	data, ok := fields["auth"]
+	if !ok || string(data) == "null" {
+		return nil
+	}
+	var authFields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &authFields); err != nil {
+		return err
+	}
+	keys := make([]string, 0, len(authFields))
+	for key := range authFields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if !authKnownFields[key] {
+			return fmt.Errorf("json: unknown field %q", key)
+		}
+	}
+	return nil
+}
+
+func yamlMappingString(value *yaml.Node, name string) string {
+	field := yamlMappingField(value, name)
+	if field == nil || field.Kind != yaml.ScalarNode {
+		return ""
+	}
+	return field.Value
+}
+
+func yamlMappingBool(value *yaml.Node, name string) bool {
+	field := yamlMappingField(value, name)
+	if field == nil {
+		return false
+	}
+	var result bool
+	if err := field.Decode(&result); err != nil {
+		return false
+	}
+	return result
+}
+
+func yamlMappingField(value *yaml.Node, name string) *yaml.Node {
+	for index := 0; index+1 < len(value.Content); index += 2 {
+		if value.Content[index].Value == name {
+			return value.Content[index+1]
+		}
+	}
+	return nil
+}
+
+func cloneYAMLMappingPairs(value *yaml.Node) []yamlNodePair {
+	pairs := make([]yamlNodePair, 0, len(value.Content)/2)
+	for index := 0; index+1 < len(value.Content); index += 2 {
+		pairs = append(pairs, yamlNodePair{
+			key:   cloneYAMLNode(value.Content[index]),
+			value: cloneYAMLNode(value.Content[index+1]),
+		})
+	}
+	return pairs
+}
+
+func cloneYAMLNode(node *yaml.Node) *yaml.Node {
+	if node == nil {
+		return nil
+	}
+	cloned := *node
+	cloned.Content = make([]*yaml.Node, 0, len(node.Content))
+	for _, child := range node.Content {
+		cloned.Content = append(cloned.Content, cloneYAMLNode(child))
+	}
+	return &cloned
+}
+
+func jsonFieldString(fields map[string]json.RawMessage, name string) string {
+	data, ok := fields[name]
+	if !ok {
+		return ""
+	}
+	var value string
+	if err := json.Unmarshal(data, &value); err != nil {
+		return ""
+	}
+	return value
+}
+
+func jsonFieldsToYAMLPairs(fields map[string]json.RawMessage) []yamlNodePair {
+	keys := make([]string, 0, len(fields))
+	for key := range fields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	pairs := make([]yamlNodePair, 0, len(keys))
+	for _, key := range keys {
+		pairs = append(pairs, yamlNodePair{key: yamlString(key), value: jsonRawToYAMLNode(fields[key])})
+	}
+	return pairs
+}
+
+func jsonRawToYAMLNode(data json.RawMessage) *yaml.Node {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return yamlString(string(data))
+	}
+	return jsonValueToYAMLNode(value)
+}
+
+func jsonValueToYAMLNode(value any) *yaml.Node {
+	switch typed := value.(type) {
+	case nil:
+		return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!null", Value: "null"}
+	case string:
+		return yamlString(typed)
+	case bool:
+		return yamlBool(typed)
+	case json.Number:
+		tag := "!!int"
+		if strings.ContainsAny(typed.String(), ".eE") {
+			tag = "!!float"
+		}
+		return &yaml.Node{Kind: yaml.ScalarNode, Tag: tag, Value: typed.String()}
+	case []any:
+		values := make([]*yaml.Node, 0, len(typed))
+		for _, item := range typed {
+			values = append(values, jsonValueToYAMLNode(item))
+		}
+		return yamlSequence(values...)
+	case map[string]any:
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		pairs := make([]yamlNodePair, 0, len(keys))
+		for _, key := range keys {
+			pairs = append(pairs, yamlPair(key, jsonValueToYAMLNode(typed[key])))
+		}
+		return yamlMapping(pairs...)
+	default:
+		return yamlString(fmt.Sprintf("%v", typed))
+	}
+}
+
+func yamlNodeToJSONValue(node *yaml.Node) any {
+	if node == nil {
+		return nil
+	}
+	switch node.Kind {
+	case yaml.ScalarNode:
+		switch node.Tag {
+		case "!!bool":
+			var value bool
+			if err := node.Decode(&value); err == nil {
+				return value
+			}
+		case "!!int":
+			if value, err := strconv.ParseInt(node.Value, 10, 64); err == nil {
+				return value
+			}
+		case "!!float":
+			if value, err := strconv.ParseFloat(node.Value, 64); err == nil {
+				return value
+			}
+		case "!!null":
+			return nil
+		}
+		return node.Value
+	case yaml.SequenceNode:
+		values := make([]any, 0, len(node.Content))
+		for _, child := range node.Content {
+			values = append(values, yamlNodeToJSONValue(child))
+		}
+		return values
+	case yaml.MappingNode:
+		values := map[string]any{}
+		for index := 0; index+1 < len(node.Content); index += 2 {
+			values[node.Content[index].Value] = yamlNodeToJSONValue(node.Content[index+1])
+		}
+		return values
+	default:
+		return node.Value
+	}
+}
+
+func normalizeDirectProtocol(value string) string {
+	switch value {
+	case "ss":
+		return "shadowsocks"
+	default:
+		return value
+	}
 }

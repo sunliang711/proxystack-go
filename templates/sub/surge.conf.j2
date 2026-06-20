@@ -93,7 +93,7 @@ Overseas = select, ProxyList, DIRECT{% for region_group in surge_region_groups %
 LAN10_1_1 = select, DIRECT, wgHome,icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/lan.png
 LAN10_2 = select, DIRECT, wgChiefOffice,icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/lan.png
 China = select, DIRECT, ProxyList, AutoGroup{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/china.png
-ADS = select, REJECT, DIRECT, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/ads.png
+ADS = select, REJECT, DIRECT{% for region_group in surge_region_groups %}, {{ region_group.name }}{% endfor %}{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/ads.png
 
 [Rule]
 

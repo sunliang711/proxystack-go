@@ -587,6 +587,7 @@ ps-sub [--base-dir DIR] input list
 ps-sub [--base-dir DIR] input show SOURCE [--raw] [--show-secrets]
 ps-sub [--base-dir DIR] input validate [SOURCE]
 ps-sub [--base-dir DIR] input edit SOURCE [--editor CMD]
+ps-sub [--base-dir DIR] input clone SOURCE TARGET [--editor CMD]
 ps-sub [--base-dir DIR] input set-host HOST [SOURCE] [--all]
 ps-sub [--base-dir DIR] input remove SOURCE
 ```
@@ -597,6 +598,7 @@ ps-sub [--base-dir DIR] input remove SOURCE
 - `show` 打印单个 input，默认输出脱敏后的规范 YAML；`--raw` 输出原始文件内容；`--show-secrets` 仅影响非 raw 输出。
 - `validate` 严格校验单个 input，或对全部 inputs 执行合并校验。
 - `edit` 通过临时文件编辑单个 input，保存前必须 strict decode 并通过 schema 校验。
+- `clone` 复制单个 input 为新目标，默认打开编辑器；`TARGET` 不带扩展名时沿用源文件扩展名；写入前必须 strict decode 并通过包含现有 inputs 的全量合并校验。
 - `set-host` 把目标 input 的所有 `nodes[].server` 写成 trim 后的 `HOST`；指定 `SOURCE` 时只修改单文件，传 `--all` 时扫描全部安全 input 文件；`SOURCE` 与 `--all` 互斥且必须选择其一。
 - `remove` 删除单个 input 文件。
 
@@ -604,14 +606,17 @@ ps-sub [--base-dir DIR] input remove SOURCE
 
 - `list`、`show`、`validate` 只读。
 - `edit` 可写目标 input 文件。
+- `clone` 可写新目标 input 文件，不覆盖既有文件；编辑器退出或校验失败时不得写入目标文件。
 - `set-host` 可写目标 input 文件，或在 `--all` 模式写多个 input 文件；写回前必须 strict decode 并通过合并校验，没有实际变化时只输出 unchanged。
 - `remove` 可删除目标 input 文件。
 
 验收：
 
 - SOURCE 只能解析为 `<base-dir>/inputs` 下的 `.yaml`、`.yml` 或 `.json` 普通文件，不允许路径穿越。
+- `clone` 的 TARGET 只能解析为 `<base-dir>/inputs` 下尚不存在的 `.yaml`、`.yml` 或 `.json` 普通文件，不允许路径穿越。
 - `show` 默认不得输出 password、token、uuid 等敏感值。
 - `edit` 校验失败时不得覆盖原文件。
+- `clone` 编辑后未改掉重复 `node.id` 或同用户重复代理名时必须失败，且不得创建目标文件。
 - `set-host` 校验失败时不得覆盖原文件。
 - `validate` 全量模式必须发现重复 `node.id` 和同用户重复代理名。
 - 不读取 agent `config.yaml`。

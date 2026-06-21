@@ -201,6 +201,7 @@ sudo ps-sub --base-dir /opt/proxystack-sub input list
 sudo ps-sub --base-dir /opt/proxystack-sub input show manual
 sudo ps-sub --base-dir /opt/proxystack-sub input validate
 sudo ps-sub --base-dir /opt/proxystack-sub input edit manual
+sudo ps-sub --base-dir /opt/proxystack-sub input clone manual manual-copy
 
 # 前台运行订阅服务
 sudo ps-sub --base-dir /opt/proxystack-sub serve

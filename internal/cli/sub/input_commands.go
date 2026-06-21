@@ -22,6 +22,7 @@ func newInputCommand() *cobra.Command {
 	command.AddCommand(newInputShowCommand())
 	command.AddCommand(newInputValidateCommand())
 	command.AddCommand(newInputEditCommand())
+	command.AddCommand(newInputCloneCommand())
 	command.AddCommand(newInputSetHostCommand())
 	command.AddCommand(newInputRemoveCommand())
 	return command
@@ -169,6 +170,37 @@ func newInputEditCommand() *cobra.Command {
 	return command
 }
 
+// newInputCloneCommand 创建复制 input 后立即编辑并校验的命令。
+func newInputCloneCommand() *cobra.Command {
+	var editor string
+	command := &cobra.Command{
+		Use:   "clone SOURCE TARGET",
+		Short: "Clone one subscription input file",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(command *cobra.Command, args []string) error {
+			inputDir, err := subInputDir(command)
+			if err != nil {
+				return err
+			}
+			sourcePath, err := resolveSubInputPath(inputDir, args[0])
+			if err != nil {
+				return err
+			}
+			targetPath, err := resolveNewSubInputPath(inputDir, args[1], filepath.Ext(sourcePath))
+			if err != nil {
+				return err
+			}
+			if err := cloneSubInput(inputDir, sourcePath, targetPath, editor); err != nil {
+				return err
+			}
+			fmt.Fprintf(command.OutOrStdout(), "Input cloned: %s -> %s\n", filepath.Base(sourcePath), filepath.Base(targetPath))
+			return nil
+		},
+	}
+	command.Flags().StringVar(&editor, "editor", "", "Editor command")
+	return command
+}
+
 // newInputSetHostCommand 创建批量修改 input 节点 server 的命令。
 func newInputSetHostCommand() *cobra.Command {
 	var all bool
@@ -300,6 +332,65 @@ func editSubInput(path string, editor string) (bool, error) {
 		return false, err
 	}
 	return writeTextFileIfChanged(path, edited)
+}
+
+// cloneSubInput 复制 source 为 target，经过编辑和全量合并校验后才写入新文件。
+func cloneSubInput(inputDir string, sourcePath string, targetPath string, editor string) error {
+	input, err := subgen.LoadInputFile(sourcePath)
+	if err != nil {
+		return fmt.Errorf("subscription input clone failed: %s: %w", filepath.Base(sourcePath), err)
+	}
+	input.Source = strings.TrimSuffix(filepath.Base(targetPath), filepath.Ext(targetPath))
+	data, err := subInputWriteData(targetPath, input)
+	if err != nil {
+		return fmt.Errorf("subscription input clone failed: %s: %w", filepath.Base(targetPath), err)
+	}
+	edited, err := editClonedSubInput(targetPath, data, editor)
+	if err != nil {
+		return err
+	}
+	validatedInput, err := validateSubInputContent(filepath.Base(targetPath), edited)
+	if err != nil {
+		return fmt.Errorf("subscription input clone failed: %s: %w", filepath.Base(targetPath), err)
+	}
+	if err := validateSubInputMergeWithCandidate(inputDir, filepath.Base(targetPath), validatedInput); err != nil {
+		return err
+	}
+	if err := ensureNewSubInputTarget(targetPath); err != nil {
+		return err
+	}
+	mode := os.FileMode(0o640)
+	if info, err := os.Stat(sourcePath); err == nil {
+		mode = info.Mode().Perm()
+	}
+	return writeFileAtomic(targetPath, edited, mode)
+}
+
+// editClonedSubInput 把 clone 初始内容写入临时文件，并强制进入编辑器。
+func editClonedSubInput(targetPath string, data []byte, editor string) ([]byte, error) {
+	temp, err := os.CreateTemp("", "proxystack-sub-input-clone-*"+filepath.Ext(targetPath))
+	if err != nil {
+		return nil, err
+	}
+	tempPath := temp.Name()
+	defer os.Remove(tempPath)
+	writeErr := func() error {
+		if _, err := temp.Write(data); err != nil {
+			return err
+		}
+		return temp.Chmod(0o640)
+	}()
+	closeErr := temp.Close()
+	if writeErr != nil {
+		return nil, writeErr
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	if err := runEditor(editor, tempPath); err != nil {
+		return nil, err
+	}
+	return os.ReadFile(tempPath)
 }
 
 // subInputHostUpdate 保存一次 set-host 预校验后的待写入内容。
@@ -546,6 +637,19 @@ func ensurePathInsideDir(inputDir string, path string) error {
 	return nil
 }
 
+// validateSubInputMergeWithCandidate 校验现有 inputs 加上新 clone 后仍可合并。
+func validateSubInputMergeWithCandidate(inputDir string, name string, input subgen.Input) error {
+	inputs, err := loadSubInputsFromSafeDir(inputDir)
+	if err != nil {
+		return fmt.Errorf("subscription input clone validation failed: %s: %w", inputDir, err)
+	}
+	inputs = append(inputs, subgen.InputFile{Name: name, Input: input})
+	if _, err := subgen.MergeInputs(inputs, subgen.Access{Type: "none"}, nowISO()); err != nil {
+		return fmt.Errorf("subscription input clone validation failed: %w", err)
+	}
+	return nil
+}
+
 // loadSubInputsFromSafeDir 使用 CLI 安全扫描规则读取全部 input。
 func loadSubInputsFromSafeDir(inputDir string) ([]subgen.InputFile, error) {
 	paths, err := scanSubInputFiles(inputDir)
@@ -573,6 +677,46 @@ func validateSubInputContent(name string, data []byte) (subgen.Input, error) {
 		return subgen.Input{}, err
 	}
 	return input, nil
+}
+
+// resolveNewSubInputPath 把 TARGET 解析为 inputs 目录下尚不存在的安全 input 文件路径。
+func resolveNewSubInputPath(inputDir string, target string, defaultExtension string) (string, error) {
+	if err := ensureSubInputDir(inputDir); err != nil {
+		return "", err
+	}
+	if err := validateSubInputSource(target); err != nil {
+		return "", err
+	}
+	name := target
+	if subInputExt(name) == "" {
+		name += defaultExtension
+	}
+	if err := validateSubInputSource(name); err != nil {
+		return "", err
+	}
+	if strings.TrimSuffix(name, filepath.Ext(name)) == "" {
+		return "", fmt.Errorf("subscription input target name must not be empty: %s", target)
+	}
+	path := filepath.Join(inputDir, name)
+	if err := ensurePathInsideDir(inputDir, path); err != nil {
+		return "", err
+	}
+	if err := ensureNewSubInputTarget(path); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// ensureNewSubInputTarget 确认 clone 目标不存在，避免覆盖既有 input 或符号链接。
+func ensureNewSubInputTarget(path string) error {
+	_, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return fmt.Errorf("subscription input target already exists: %s", filepath.Base(path))
 }
 
 // subInputExt 返回受支持的 input 文件扩展名。

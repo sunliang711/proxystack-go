@@ -208,6 +208,78 @@ EOF
 	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }
 
+// TestInputCloneEditsAndWritesValidTarget 验证 clone 会进入编辑器并只在全量校验通过后写入目标文件。
+func TestInputCloneEditsAndWritesValidTarget(t *testing.T) {
+	baseDir := t.TempDir()
+	original := writeSubInputFixture(t, baseDir, "manual.yaml")
+	editorPath := writeEditorScript(t, `cat > "$1" <<'EOF'
+input_schema: proxystack.subscription-input
+input_version: 1
+source: copy
+generated_at: "2026-06-05T12:00:00+08:00"
+nodes:
+  - id: copy:relay
+    user: alice
+    protocol: socks5
+    server: proxy.example.com
+    port: 24001
+    tag: socks5:24001:relay
+    remark: Copy Relay
+    udp: true
+    auth:
+      type: password
+      username: demo-user
+      password: demo-pass
+EOF
+`)
+	command := NewRootCommand()
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"--base-dir", baseDir, "input", "clone", "manual", "copy", "--editor", editorPath})
+
+	err := command.Execute()
+
+	require.NoError(t, err)
+	require.Contains(t, output.String(), "Input cloned: manual.yaml -> copy.yaml")
+	data, err := os.ReadFile(filepath.Join(baseDir, "inputs", "copy.yaml"))
+	require.NoError(t, err)
+	require.Contains(t, string(data), "source: copy")
+	require.Contains(t, string(data), "id: copy:relay")
+	require.Contains(t, string(data), "remark: Copy Relay")
+	current, err := os.ReadFile(filepath.Join(baseDir, "inputs", "manual.yaml"))
+	require.NoError(t, err)
+	require.Equal(t, original, current)
+}
+
+// TestInputCloneRejectsUneditedDuplicateWithoutWrite 验证未修改关键字段的 clone 不会落盘。
+func TestInputCloneRejectsUneditedDuplicateWithoutWrite(t *testing.T) {
+	baseDir := t.TempDir()
+	writeSubInputFixture(t, baseDir, "manual.yaml")
+	editorPath := writeEditorScript(t, `: "$1"`)
+	command := NewRootCommand()
+	command.SetArgs([]string{"--base-dir", baseDir, "input", "clone", "manual", "copy", "--editor", editorPath})
+
+	err := command.Execute()
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate node id")
+	require.NoFileExists(t, filepath.Join(baseDir, "inputs", "copy.yaml"))
+}
+
+// TestInputCloneRejectsExistingTarget 验证 clone 不会覆盖已有 input。
+func TestInputCloneRejectsExistingTarget(t *testing.T) {
+	baseDir := t.TempDir()
+	writeSubInputFixture(t, baseDir, "manual.yaml")
+	writeSubInputVariant(t, baseDir, "copy.yaml")
+	command := NewRootCommand()
+	command.SetArgs([]string{"--base-dir", baseDir, "input", "clone", "manual", "copy"})
+
+	err := command.Execute()
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "subscription input target already exists: copy.yaml")
+}
+
 // TestInputSetHostUpdatesSingleFile 验证 set-host 可修改单个 input 的所有节点 server。
 func TestInputSetHostUpdatesSingleFile(t *testing.T) {
 	baseDir := t.TempDir()

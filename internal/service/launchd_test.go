@@ -44,6 +44,37 @@ func TestRenderLaunchdPlistsUsesStackInstances(t *testing.T) {
 	require.NotContains(t, plists, LaunchdSubLabel+".plist")
 }
 
+// TestRenderLaunchdSubPlistUsesBaseDir 验证 launchd sub plist 使用 ps-sub 自身 base dir。
+func TestRenderLaunchdSubPlistUsesBaseDir(t *testing.T) {
+	baseDir := t.TempDir()
+	cfg := domain.GlobalConfig{BaseDir: baseDir, Paths: domain.DefaultConfigPaths()}
+
+	plists, err := RenderLaunchdPlists(cfg, "sub")
+
+	require.NoError(t, err)
+	requireLaunchdBaseDirArgument(t, plists[LaunchdSubLabel+".plist"], baseDir)
+}
+
+// TestRenderLaunchdSubPlistUsesSubOnlyRoot 验证 ps-sub 独立安装时 launchd plist 使用整个 sub base dir。
+func TestRenderLaunchdSubPlistUsesSubOnlyRoot(t *testing.T) {
+	baseDir := t.TempDir()
+	paths := domain.DefaultConfigPaths()
+	paths.Sub = "."
+	cfg := domain.GlobalConfig{BaseDir: baseDir, Paths: paths}
+
+	plists, err := RenderLaunchdPlists(cfg, "sub")
+
+	require.NoError(t, err)
+	requireLaunchdBaseDirArgument(t, plists[LaunchdSubLabel+".plist"], baseDir)
+	require.NotContains(t, plists[LaunchdSubLabel+".plist"], filepath.Join(baseDir, "sub"))
+}
+
+// requireLaunchdBaseDirArgument 验证 plist 的 --base-dir 后一个参数是期望路径。
+func requireLaunchdBaseDirArgument(t *testing.T, plist string, expected string) {
+	t.Helper()
+	require.Contains(t, plist, "<string>--base-dir</string>\n\t\t<string>"+expected+"</string>\n\t\t<string>serve</string>")
+}
+
 // TestLaunchdManagerInstallReconcilesPlists 验证 launchd install 会写入期望 plist 并清理陈旧 plist。
 func TestLaunchdManagerInstallReconcilesPlists(t *testing.T) {
 	cfg := prepareLaunchdConfig(t)

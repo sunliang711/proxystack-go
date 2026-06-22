@@ -148,6 +148,8 @@ sub：
 ExecStart=/usr/local/bin/ps-sub --base-dir /opt/proxystack-sub serve
 ```
 
+`ps-agent` 和 `ps-sub` 独立部署，订阅服务 unit 由 `ps-sub service install` 生成，默认 base dir 为 `/opt/proxystack-sub`。
+
 `ReadWritePaths`：
 
 - xray/clash 仅包含 runtime 相关目录。
@@ -173,7 +175,7 @@ plist 行为：
 
 - `RunAtLoad=false`，安装 plist 后不会隐式自启。
 - 不固定写入 `UserName` 或 `GroupName`。
-- `sub` 运行命令为 `/usr/local/bin/ps-sub --base-dir <base-dir> serve`。
+- `sub` 运行命令为 `/usr/local/bin/ps-sub --base-dir <base-dir> serve`，默认 `<base-dir>` 为 `/opt/proxystack-sub`。
 - xray/mihomo 使用 `<base-dir>/bin`、`runtime/generated` 和 `runtime/mihomo` 中的实际路径。
 - `install all` 会清理目标范围内不再期望的旧 proxystack plist。
 - `uninstall` 删除 plist 前会先对已加载 job 执行 `bootout`。

@@ -38,6 +38,54 @@ func TestDomainModelsAllowUnknownFields(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestLoadStackRejectsUDPForHTTPInbound 验证不支持 UDP 的 inbound 协议会拒绝显式 udp 字段。
+func TestLoadStackRejectsUDPForHTTPInbound(t *testing.T) {
+	stackPath := filepath.Join(t.TempDir(), "edge.yaml")
+	writeFile(t, stackPath, `name: edge
+enabled: true
+role: edge
+xrelay:
+  enabled: true
+  api:
+    enabled: false
+  stats:
+    enabled: false
+  policy:
+    enabled: false
+  outbound:
+    type: direct
+  inbounds:
+    - name: web
+      protocol: http
+      listen: 127.0.0.1
+      port: 24001
+      udp: false
+      sub: false
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: demo-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17091
+  upstreams: []
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [DIRECT]
+  rules:
+    profile: default
+`)
+
+	_, err := config.LoadStack(stackPath)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "udp is not supported for http inbound")
+}
+
 // TestLoadConfigUsesConfigDirectoryAsBaseDir 验证全局配置不含 base_dir 时按配置文件目录解析路径。
 func TestLoadConfigUsesConfigDirectoryAsBaseDir(t *testing.T) {
 	tempDir := t.TempDir()

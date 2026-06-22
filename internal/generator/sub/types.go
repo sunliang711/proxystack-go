@@ -291,6 +291,9 @@ func (n Node) Validate() error {
 	default:
 		return fmt.Errorf("unsupported subscription node protocol: %s", n.Protocol)
 	}
+	if n.UDP != nil && !supportsSubscriptionUDPProtocol(n.Protocol) {
+		return fmt.Errorf("udp is not supported for %s node", n.Protocol)
+	}
 	return nil
 }
 
@@ -859,5 +862,15 @@ func normalizeDirectProtocol(value string) string {
 		return "shadowsocks"
 	default:
 		return value
+	}
+}
+
+// supportsSubscriptionUDPProtocol 判断默认订阅节点协议是否支持 udp 字段。
+func supportsSubscriptionUDPProtocol(protocol string) bool {
+	switch protocol {
+	case "vmess", "shadowsocks", "socks5":
+		return true
+	default:
+		return false
 	}
 }

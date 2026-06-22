@@ -127,9 +127,7 @@ func renderSingleInboundNode(stackSet domain.StackSet, stack domain.Stack, inbou
 		Remark:   subscriptionRemark(stack.Name, inbound, user, inbound.Remark),
 		Region:   inbound.Region,
 	}
-	if inbound.UDP {
-		node.UDP = boolPtr(true)
-	}
+	applyInboundUDP(&node, inbound)
 	switch inbound.Protocol {
 	case "shadowsocks":
 		method := inbound.MethodOrCipher()
@@ -164,9 +162,7 @@ func renderVmessUserNode(stackSet domain.StackSet, stack domain.Stack, inbound d
 		UUID:     user.UUID,
 		Network:  inbound.Network,
 	}
-	if inbound.UDP {
-		node.UDP = boolPtr(true)
-	}
+	applyInboundUDP(&node, inbound)
 	if err := node.Validate(); err != nil {
 		return Node{}, err
 	}
@@ -192,13 +188,18 @@ func renderShadowsocksUserNode(stackSet domain.StackSet, stack domain.Stack, inb
 		Cipher:   method,
 		Password: shadowsocksNodePassword(inbound, user),
 	}
-	if inbound.UDP {
-		node.UDP = boolPtr(true)
-	}
+	applyInboundUDP(&node, inbound)
 	if err := node.Validate(); err != nil {
 		return Node{}, err
 	}
 	return node, nil
+}
+
+// applyInboundUDP 把显式 udp 配置原样传递给订阅节点。
+func applyInboundUDP(node *Node, inbound domain.Inbound) {
+	if inbound.UDPConfigured() {
+		node.UDP = boolPtr(inbound.UDP)
+	}
 }
 
 func subscriptionServer(stackSet domain.StackSet, inbound domain.Inbound) string {

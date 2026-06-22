@@ -82,6 +82,8 @@ xrelay:
       listen: 0.0.0.0
       # 【按需改】入站监听端口；对外开放时需放行防火墙。
       port: 24100
+      # 是否允许该 vmess 入站订阅节点转发 UDP。
+      udp: true
       # 【按需改】订阅节点 server；不填时使用全局 external_host。
       # server: edge.example.com
       # 【按需改】订阅地区简称，只校验两位大写字母格式，例如 US/HK/JP；该 inbound 下所有 users 共用。

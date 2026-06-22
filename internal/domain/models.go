@@ -553,6 +553,14 @@ func (i Inbound) TagOrDefault() string {
 	return fmt.Sprintf("%s:%d:%s", i.Protocol, i.Port, i.Name)
 }
 
+// UDPConfigured 判断 inbound 是否显式配置了 udp 字段。
+func (i Inbound) UDPConfigured() bool {
+	if i.fields != nil {
+		return i.fields["udp"]
+	}
+	return i.UDP
+}
+
 // Validate 校验 inbound 的协议字段、凭据和订阅暴露约束。
 func (i Inbound) Validate() error {
 	if err := ValidateIdentifier(i.Name, "inbound name"); err != nil {
@@ -569,6 +577,9 @@ func (i Inbound) Validate() error {
 	}
 	if i.Region != "" && !regionPattern.MatchString(i.Region) {
 		return fmt.Errorf("region must use two uppercase letters")
+	}
+	if i.UDPConfigured() && !SupportsInboundUDPProtocol(i.Protocol) {
+		return fmt.Errorf("udp is not supported for %s inbound", i.Protocol)
 	}
 	if i.Auth != nil {
 		if err := i.Auth.Validate(); err != nil {
@@ -1560,6 +1571,16 @@ func userValues(users []InboundUser, pick func(InboundUser) string) []string {
 func validInboundProtocol(protocol string) bool {
 	switch protocol {
 	case "vmess", "shadowsocks", "socks5", "http":
+		return true
+	default:
+		return false
+	}
+}
+
+// SupportsInboundUDPProtocol 判断 inbound 协议是否支持导出 UDP 订阅字段。
+func SupportsInboundUDPProtocol(protocol string) bool {
+	switch protocol {
+	case "vmess", "shadowsocks", "socks5":
 		return true
 	default:
 		return false

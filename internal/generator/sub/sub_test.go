@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/eagle/proxystack-go/internal/config"
 	subgen "github.com/eagle/proxystack-go/internal/generator/sub"
 	"github.com/eagle/proxystack-go/internal/testutil"
 	"github.com/rs/zerolog"
@@ -97,6 +98,82 @@ nodes:
 	require.Equal(t, "proxy.example.com", input.Nodes[0].Server)
 }
 
+// TestRenderStackInputKeepsExplicitUDPFalse 验证 agent 导出的显式 udp false 会传递到 Clash 订阅。
+func TestRenderStackInputKeepsExplicitUDPFalse(t *testing.T) {
+	baseDir := t.TempDir()
+	stacksDir := filepath.Join(baseDir, "stacks")
+	require.NoError(t, os.MkdirAll(stacksDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "config.yaml"), []byte(`version: 1
+external_host: proxy.example.com
+paths:
+  stacks: stacks
+port_ranges:
+  xrelay_inbound: 4300-4399
+  clash_socks: 7001-7101
+  clash_http: 7201-7301
+  xray_api_range: 10001-10999
+  clash_controller: 19000-19999
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(stacksDir, "edge.yaml"), []byte(`name: edge
+enabled: true
+role: edge
+xrelay:
+  enabled: true
+  api:
+    enabled: false
+  stats:
+    enabled: false
+  policy:
+    enabled: false
+  outbound:
+    type: direct
+  inbounds:
+    - name: vmess
+      protocol: vmess
+      listen: 0.0.0.0
+      port: 24001
+      udp: false
+      network: raw
+      sub: true
+      users:
+        - user: alice
+          uuid: 11111111-1111-4111-8111-111111111111
+          remark: edge vmess
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: demo-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17091
+  upstreams: []
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [DIRECT]
+  rules:
+    profile: default
+`), 0o644))
+	globalConfig, err := config.LoadConfig(filepath.Join(baseDir, "config.yaml"))
+	require.NoError(t, err)
+	stackSet, err := config.LoadStacks(globalConfig, false)
+	require.NoError(t, err)
+
+	input, err := subgen.RenderSingleStackInputAt(stackSet, "edge", fixedGeneratedAt)
+	require.NoError(t, err)
+	require.NotNil(t, input.Nodes[0].UDP)
+	require.False(t, *input.Nodes[0].UDP)
+	require.Contains(t, subgen.InputToYAML(input), "    udp: false\n")
+	index, err := subgen.BuildIndex(input.Nodes, []string{input.Source}, subgen.Access{Type: "none"}, fixedGeneratedAt)
+	require.NoError(t, err)
+	clashOutput, err := subgen.RenderClashSubscription(index, "alice", "", "")
+	require.NoError(t, err)
+	require.Contains(t, clashOutput, "    network: raw\n    udp: false\n")
+}
+
 // TestLoadInputContentRejectsMissingServerWithoutExternalHost 验证无局部 server 且无文件级 external_host 时失败。
 func TestLoadInputContentRejectsMissingServerWithoutExternalHost(t *testing.T) {
 	_, err := subgen.LoadInputContent("manual.yaml", []byte(`input_schema: proxystack.subscription-input
@@ -114,6 +191,31 @@ nodes:
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "node.server is required")
+}
+
+// TestLoadInputContentRejectsUDPForHTTPNode 验证 ps-sub input 会拒绝不支持 UDP 的协议。
+func TestLoadInputContentRejectsUDPForHTTPNode(t *testing.T) {
+	_, err := subgen.LoadInputContent("manual.yaml", []byte(`input_schema: proxystack.subscription-input
+input_version: 1
+source: manual
+generated_at: "2026-06-05T12:00:00+08:00"
+nodes:
+  - id: manual:web
+    user: alice
+    protocol: http
+    server: proxy.example.com
+    port: 24001
+    tag: http:24001:web
+    remark: Web Relay
+    udp: false
+    auth:
+      type: password
+      username: demo-user
+      password: demo-pass
+`))
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "udp is not supported for http node")
 }
 
 // TestLoadInputContentRejectsUnknownNodeFieldWithoutDirect 验证默认节点仍严格拒绝未知字段。

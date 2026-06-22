@@ -127,6 +127,7 @@ func StackExampleSnippets() []StackExampleSnippet {
   protocol: vmess
   listen: 0.0.0.0
   port: 24100
+  udp: true
   server: edge.example.com
   region: US
   network: raw

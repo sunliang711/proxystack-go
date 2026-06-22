@@ -285,6 +285,7 @@ MATCH,<rules.final>
 | `tag` | inbound.tag 或生成 tag；多用户可用 users[].tag 覆盖 |
 | `remark` | `{user}@{stack}-{protocol}:{port}-{remark}` |
 | `region` | inbound.region |
+| `udp` | inbound 显式配置；仅 vmess/shadowsocks/socks5 支持，true/false 均会传递 |
 | `auth` | 协议凭据 |
 
 vmess 多用户：

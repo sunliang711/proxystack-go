@@ -64,6 +64,7 @@ func TestAgentExampleSingleSnippetPrintsPlainYAML(t *testing.T) {
 
 	require.True(t, strings.HasPrefix(output, "- name: vmess\n"))
 	require.Contains(t, output, "protocol: vmess")
+	require.Contains(t, output, "udp: true")
 	require.Contains(t, output, "uuid: 11111111-1111-4111-8111-111111111111")
 	require.NotContains(t, output, "# xrelay inbound vmess")
 }

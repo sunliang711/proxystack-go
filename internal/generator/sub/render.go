@@ -194,7 +194,7 @@ func RenderClashProxy(node Node) *yaml.Node {
 			)
 		}
 	}
-	if node.UDP != nil && (node.Protocol == "socks5" || node.Protocol == "shadowsocks") {
+	if node.UDP != nil && supportsSubscriptionUDPProtocol(node.Protocol) {
 		pairs = append(pairs, yamlPair("udp", yamlBool(*node.UDP)))
 	}
 	return yamlMapping(pairs...)

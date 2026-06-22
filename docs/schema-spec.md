@@ -156,7 +156,7 @@ xrelay_inbound:
 | `protocol` | string | 是 | 无 | `vmess`、`shadowsocks`、`socks5`、`http` |
 | `listen` | string | 否 | `0.0.0.0` | host，不含端口 |
 | `port` | int | 是 | 无 | `1-65535` |
-| `udp` | bool | 否 | `false` | 适用于 socks5/shadowsocks |
+| `udp` | bool | 否 | `false` | 适用于 vmess/shadowsocks/socks5；显式配置 true/false 时写入订阅 |
 | `auth` | object | 协议相关 | 无 | socks/http 鉴权 |
 | `user` | string | 单用户订阅需要 | 无 | 订阅用户 |
 | `server` | string | 否 | `external_host` | 订阅 server 覆盖 |
@@ -358,7 +358,7 @@ nodes: []
 | `auth` | object | 协议相关 | 凭据 |
 | `network` | string | vmess 需要 | vmess network |
 | `method` | string | shadowsocks 需要 | shadowsocks method |
-| `udp` | bool | 否 | UDP |
+| `udp` | bool | 否 | 适用于 vmess/shadowsocks/socks5；显式 true/false 会输出到 Clash/Premium Clash |
 
 合并规则：
 

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/eagle/proxystack-go/internal/agentconfig"
 	"github.com/eagle/proxystack-go/internal/domain"
+	"github.com/eagle/proxystack-go/internal/graph"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,6 +84,38 @@ func TestAgentConfigRejectsInvalidStackBeforeReplacing(t *testing.T) {
 	require.Equal(t, before, after)
 }
 
+// TestAgentConfigRepairsServiceMetadataBeforeRestart 验证 config NAME 自动重启前会修复 runtime owner/mode。
+func TestAgentConfigRepairsServiceMetadataBeforeRestart(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "config.yaml")
+	require.NoError(t, agentconfig.InitProject(agentconfig.InitOptions{BaseDir: baseDir, ExternalHost: "proxy.example.com"}))
+	require.NoError(t, agentconfig.AddStack(agentconfig.AddOptions{ConfigPath: configPath, Name: "usa1", Template: "pair", KeepTemplatePorts: true}))
+	require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "bin"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "bin", "xray"), []byte("#!/bin/sh\n"), 0o750))
+	calls := make([]string, 0)
+	manager := &fakeConfigRestartManager{
+		active:     map[string]bool{"proxystack-xray@usa1.service": true},
+		recordCall: func(name string) { calls = append(calls, name) },
+	}
+	withAgentServiceManager(t, manager)
+	oldRepair := repairServiceMetadataFunc
+	repairServiceMetadataFunc = func(cfg domain.GlobalConfig) error {
+		calls = append(calls, "repair")
+		require.Equal(t, baseDir, cfg.BaseDir)
+		return nil
+	}
+	t.Cleanup(func() {
+		repairServiceMetadataFunc = oldRepair
+	})
+	editorPath := writeEditorScript(t, "printf '\\n# edited by test\\n' >> \"$1\"\n")
+
+	output := runAgentCommandForTest(t, "--base-dir", baseDir, "config", "usa1", "--editor", editorPath)
+
+	require.Equal(t, []string{"repair", "restart"}, calls)
+	require.Equal(t, []string{"proxystack-xray@usa1.service"}, manager.restarted)
+	require.Contains(t, output, "Restarted active services: [proxystack-xray@usa1.service]")
+}
+
 // TestAgentAddRepairsServiceMetadata 验证 root 写入 stack 后会触发标准 metadata 修复。
 func TestAgentAddRepairsServiceMetadata(t *testing.T) {
 	baseDir := t.TempDir()
@@ -100,6 +134,32 @@ func TestAgentAddRepairsServiceMetadata(t *testing.T) {
 
 	require.Contains(t, output, "Created stack: usa1")
 	require.Equal(t, []string{baseDir}, repairedBaseDirs)
+}
+
+type fakeConfigRestartManager struct {
+	fakeUninstallManager
+	active     map[string]bool
+	restarted  []string
+	recordCall func(string)
+}
+
+// Restart 记录 config NAME 自动重启请求。
+func (f *fakeConfigRestartManager) Restart(ctx context.Context, services []string) error {
+	if f.recordCall != nil {
+		f.recordCall("restart")
+	}
+	f.restarted = append([]string(nil), services...)
+	return nil
+}
+
+// IsActive 按测试预设返回服务是否 active。
+func (f *fakeConfigRestartManager) IsActive(ctx context.Context, service string) (bool, error) {
+	return f.active[service], nil
+}
+
+// ServiceForNode 返回服务节点对应的 unit 名称。
+func (f *fakeConfigRestartManager) ServiceForNode(node graph.ServiceNode) string {
+	return node.ServiceName()
 }
 
 func runAgentCommandForTestError(args ...string) (string, error) {

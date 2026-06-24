@@ -344,6 +344,9 @@ func restartActiveStack(command *cobra.Command, configPath string, stackName str
 	if err := agentruntime.ApplyPlan(plan); err != nil {
 		return err
 	}
+	if err := repairServiceMetadataFunc(plan.Config); err != nil {
+		return err
+	}
 	if err := manager.Restart(ctx, activeServices); err != nil {
 		return err
 	}

@@ -59,6 +59,7 @@ func NewRootCommand() *cobra.Command {
 	command.AddCommand(groupedCommand(agentValidateGroup, newValidateCommand()))
 	command.AddCommand(groupedCommand(agentValidateGroup, newCheckCommand()))
 	command.AddCommand(groupedCommand(agentValidateGroup, newRenderCommand()))
+	command.AddCommand(groupedCommand(agentValidateGroup, newExportConfigCommand()))
 	command.AddCommand(groupedCommand(agentSubscriptionGroup, newSubCommand()))
 	command.AddCommand(groupedCommand(agentServiceGroup, newLifecycleCommand("start")))
 	command.AddCommand(groupedCommand(agentServiceGroup, newLifecycleCommand("stop")))

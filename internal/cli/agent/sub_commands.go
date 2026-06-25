@@ -16,9 +16,12 @@ func newSubCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "sub",
 		Short: "Export and validate subscription data",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, args []string) error {
+			return command.Help()
+		},
 	}
 	command.AddCommand(newSubExportCommand())
-	command.AddCommand(newSubExportConfigCommand())
 	command.AddCommand(newSubValidateInputsCommand())
 	return command
 }
@@ -63,8 +66,8 @@ func newSubExportCommand() *cobra.Command {
 	return command
 }
 
-// newSubExportConfigCommand 创建订阅文本渲染命令。
-func newSubExportConfigCommand() *cobra.Command {
+// newExportConfigCommand 创建 agent 顶层订阅文本渲染命令。
+func newExportConfigCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "export-config sub|premium_sub|surge_sub USER",
 		Short: "Render one user's subscription text",

@@ -300,6 +300,7 @@ ps-agent [--base-dir DIR] render model [--skip-system-ports]
 ps-agent [--base-dir DIR] render xrelay STACK [--skip-system-ports]
 ps-agent [--base-dir DIR] render clash STACK [--skip-system-ports]
 ps-agent [--base-dir DIR] render sub [--input-dir DIR] [--skip-system-ports]
+ps-agent [--base-dir DIR] export-config sub|premium_sub|surge_sub USER
 ```
 
 职责：
@@ -308,6 +309,7 @@ ps-agent [--base-dir DIR] render sub [--input-dir DIR] [--skip-system-ports]
 - `xrelay` 输出指定 stack 的 Xray JSON。
 - `clash` 输出指定 stack 的 mihomo YAML。
 - `sub` 输出订阅 index；传 `--input-dir` 时读取外部 inputs 合并。
+- `export-config` 输出指定用户的订阅文本。
 
 副作用：只读。
 
@@ -315,6 +317,7 @@ ps-agent [--base-dir DIR] render sub [--input-dir DIR] [--skip-system-ports]
 
 - 输出必须稳定。
 - `render sub --input-dir` 不读取 stack。
+- `export-config` 不写 publish 目录或 ps-sub inputs。
 
 ### 3.12 生命周期命令
 
@@ -403,14 +406,12 @@ ps-agent
 
 ```bash
 ps-agent [--base-dir DIR] sub export [STACK] [-o OUTPUT] [--summary|--dry-run]
-ps-agent [--base-dir DIR] sub export-config sub|premium_sub|surge_sub USER
 ps-agent sub validate-inputs --input-dir DIR
 ```
 
 职责：
 
 - `export` 生成订阅发布包。
-- `export-config` 输出指定用户的订阅文本。
 - `validate-inputs` 只校验并汇总 inputs。
 
 副作用：

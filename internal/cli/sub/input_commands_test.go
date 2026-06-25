@@ -104,7 +104,7 @@ func TestInputValidateSupportsSingleAndAll(t *testing.T) {
 	require.Contains(t, err.Error(), "manual.yaml")
 }
 
-// TestInputEditRejectsInvalidContent 验证编辑后的 input 非法时不会覆盖原文件。
+// TestInputEditRejectsInvalidContent 验证编辑后的 input 非法时不会覆盖原文件并保留草稿。
 func TestInputEditRejectsInvalidContent(t *testing.T) {
 	baseDir := t.TempDir()
 	original := writeSubInputFixture(t, baseDir, "manual.yaml")
@@ -121,9 +121,13 @@ EOF
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "input.generated_at is required")
+	require.Contains(t, err.Error(), "draft preserved: "+filepath.Join(baseDir, "inputs", "manual.yaml.draft"))
 	data, err := os.ReadFile(filepath.Join(baseDir, "inputs", "manual.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, original, data)
+	draft, err := os.ReadFile(filepath.Join(baseDir, "inputs", "manual.yaml.draft"))
+	require.NoError(t, err)
+	require.Contains(t, string(draft), "nodes: []")
 }
 
 // TestInputEditRejectsDuplicateProxyName 验证 edit 保存前会执行单文件合并校验。
@@ -251,7 +255,7 @@ EOF
 	require.Equal(t, original, current)
 }
 
-// TestInputCloneRejectsUneditedDuplicateWithoutWrite 验证未修改关键字段的 clone 不会落盘。
+// TestInputCloneRejectsUneditedDuplicateWithoutWrite 验证未修改关键字段的 clone 不会落盘并保留草稿。
 func TestInputCloneRejectsUneditedDuplicateWithoutWrite(t *testing.T) {
 	baseDir := t.TempDir()
 	writeSubInputFixture(t, baseDir, "manual.yaml")
@@ -263,7 +267,9 @@ func TestInputCloneRejectsUneditedDuplicateWithoutWrite(t *testing.T) {
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "duplicate node id")
+	require.Contains(t, err.Error(), "draft preserved: "+filepath.Join(baseDir, "inputs", "copy.yaml.draft"))
 	require.NoFileExists(t, filepath.Join(baseDir, "inputs", "copy.yaml"))
+	require.FileExists(t, filepath.Join(baseDir, "inputs", "copy.yaml.draft"))
 }
 
 // TestInputCloneRejectsExistingTarget 验证 clone 不会覆盖已有 input。

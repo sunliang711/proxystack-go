@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/eagle/proxystack-go/internal/cli/draftedit"
 	subgen "github.com/eagle/proxystack-go/internal/generator/sub"
 	"github.com/spf13/cobra"
 )
@@ -154,7 +155,7 @@ func newInputEditCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			changed, err := editSubInput(path, editor)
+			changed, err := editSubInput(inputDir, path, editor)
 			if err != nil {
 				return err
 			}
@@ -291,47 +292,31 @@ func subInputDir(command *cobra.Command) (string, error) {
 	return filepath.Join(subDataDir(baseDir), "inputs"), nil
 }
 
-// editSubInput 把原 input 复制到临时文件编辑，严格校验通过后再原子替换。
-func editSubInput(path string, editor string) (bool, error) {
+// editSubInput 把原 input 复制到草稿编辑，严格校验通过后再原子替换。
+func editSubInput(inputDir string, path string, editor string) (bool, error) {
 	original, err := os.ReadFile(path)
 	if err != nil {
 		return false, err
 	}
-	temp, err := os.CreateTemp("", "proxystack-sub-input-edit-*"+filepath.Ext(path))
-	if err != nil {
-		return false, err
+	mode := os.FileMode(0o640)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
 	}
-	tempPath := temp.Name()
-	defer os.Remove(tempPath)
-	writeErr := func() error {
-		if _, err := temp.Write(original); err != nil {
+	result, err := draftedit.EditAndCommit(draftedit.Options{
+		TargetPath: path,
+		Initial:    original,
+		Mode:       mode,
+		Editor:     editor,
+	}, func(_ string, data []byte) error {
+		input, err := validateSubInputContent(filepath.Base(path), data)
+		if err != nil {
 			return err
 		}
-		if info, err := os.Stat(path); err == nil {
-			if err := temp.Chmod(info.Mode().Perm()); err != nil {
-				return err
-			}
-		}
-		return nil
-	}()
-	closeErr := temp.Close()
-	if writeErr != nil {
-		return false, writeErr
-	}
-	if closeErr != nil {
-		return false, closeErr
-	}
-	if err := runEditor(editor, tempPath); err != nil {
-		return false, err
-	}
-	edited, err := os.ReadFile(tempPath)
-	if err != nil {
-		return false, err
-	}
-	if _, err := validateSubInputContent(filepath.Base(path), edited); err != nil {
-		return false, err
-	}
-	return writeTextFileIfChanged(path, edited)
+		return validateSubInputMergeReplacingCandidate(inputDir, filepath.Base(path), input)
+	}, func(data []byte) (bool, error) {
+		return writeTextFileIfChanged(path, data)
+	})
+	return result.Changed, err
 }
 
 // cloneSubInput 复制 source 为 target，经过编辑和全量合并校验后才写入新文件。
@@ -345,52 +330,28 @@ func cloneSubInput(inputDir string, sourcePath string, targetPath string, editor
 	if err != nil {
 		return fmt.Errorf("subscription input clone failed: %s: %w", filepath.Base(targetPath), err)
 	}
-	edited, err := editClonedSubInput(targetPath, data, editor)
-	if err != nil {
-		return err
-	}
-	validatedInput, err := validateSubInputContent(filepath.Base(targetPath), edited)
-	if err != nil {
-		return fmt.Errorf("subscription input clone failed: %s: %w", filepath.Base(targetPath), err)
-	}
-	if err := validateSubInputMergeWithCandidate(inputDir, filepath.Base(targetPath), validatedInput); err != nil {
-		return err
-	}
-	if err := ensureNewSubInputTarget(targetPath); err != nil {
-		return err
-	}
 	mode := os.FileMode(0o640)
 	if info, err := os.Stat(sourcePath); err == nil {
 		mode = info.Mode().Perm()
 	}
-	return writeFileAtomic(targetPath, edited, mode)
-}
-
-// editClonedSubInput 把 clone 初始内容写入临时文件，并强制进入编辑器。
-func editClonedSubInput(targetPath string, data []byte, editor string) ([]byte, error) {
-	temp, err := os.CreateTemp("", "proxystack-sub-input-clone-*"+filepath.Ext(targetPath))
-	if err != nil {
-		return nil, err
-	}
-	tempPath := temp.Name()
-	defer os.Remove(tempPath)
-	writeErr := func() error {
-		if _, err := temp.Write(data); err != nil {
-			return err
+	_, err = draftedit.EditAndCommit(draftedit.Options{
+		TargetPath: targetPath,
+		Initial:    data,
+		Mode:       mode,
+		Editor:     editor,
+	}, func(_ string, data []byte) error {
+		validatedInput, err := validateSubInputContent(filepath.Base(targetPath), data)
+		if err != nil {
+			return fmt.Errorf("subscription input clone failed: %s: %w", filepath.Base(targetPath), err)
 		}
-		return temp.Chmod(0o640)
-	}()
-	closeErr := temp.Close()
-	if writeErr != nil {
-		return nil, writeErr
-	}
-	if closeErr != nil {
-		return nil, closeErr
-	}
-	if err := runEditor(editor, tempPath); err != nil {
-		return nil, err
-	}
-	return os.ReadFile(tempPath)
+		return validateSubInputMergeWithCandidate(inputDir, filepath.Base(targetPath), validatedInput)
+	}, func(data []byte) (bool, error) {
+		if err := ensureNewSubInputTarget(targetPath); err != nil {
+			return false, err
+		}
+		return true, writeFileAtomic(targetPath, data, mode)
+	})
+	return err
 }
 
 // subInputHostUpdate 保存一次 set-host 预校验后的待写入内容。
@@ -646,6 +607,35 @@ func validateSubInputMergeWithCandidate(inputDir string, name string, input subg
 	inputs = append(inputs, subgen.InputFile{Name: name, Input: input})
 	if _, err := subgen.MergeInputs(inputs, subgen.Access{Type: "none"}, nowISO()); err != nil {
 		return fmt.Errorf("subscription input clone validation failed: %w", err)
+	}
+	return nil
+}
+
+// validateSubInputMergeReplacingCandidate 校验用候选内容替换现有 input 后仍可合并。
+func validateSubInputMergeReplacingCandidate(inputDir string, name string, input subgen.Input) error {
+	paths, err := scanSubInputFiles(inputDir)
+	if err != nil {
+		return fmt.Errorf("subscription input edit validation failed: %s: %w", inputDir, err)
+	}
+	inputs := make([]subgen.InputFile, 0, len(paths))
+	replaced := false
+	for _, path := range paths {
+		if filepath.Base(path) == name {
+			inputs = append(inputs, subgen.InputFile{Name: name, Input: input})
+			replaced = true
+			continue
+		}
+		current, err := subgen.LoadInputFile(path)
+		if err != nil {
+			return fmt.Errorf("subscription input edit validation failed: %s: %w", filepath.Base(path), err)
+		}
+		inputs = append(inputs, subgen.InputFile{Name: filepath.Base(path), Input: current})
+	}
+	if !replaced {
+		inputs = append(inputs, subgen.InputFile{Name: name, Input: input})
+	}
+	if _, err := subgen.MergeInputs(inputs, subgen.Access{Type: "none"}, nowISO()); err != nil {
+		return fmt.Errorf("subscription input edit validation failed: %w", err)
 	}
 	return nil
 }

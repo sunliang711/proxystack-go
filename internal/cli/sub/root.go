@@ -6,17 +6,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
 	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
-	"unicode"
 
+	"github.com/eagle/proxystack-go/internal/cli/draftedit"
 	"github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/domain"
 	subgen "github.com/eagle/proxystack-go/internal/generator/sub"
@@ -284,7 +282,7 @@ func newClearCommand() *cobra.Command {
 	}
 }
 
-// editSubConfig 通过临时文件编辑 config.yaml，校验通过后再替换真实文件。
+// editSubConfig 通过草稿编辑 config.yaml，校验通过后再替换真实文件。
 func editSubConfig(command *cobra.Command, editor string) (string, bool, error) {
 	configPath, err := subConfigPath(command)
 	if err != nil {
@@ -300,42 +298,22 @@ func editSubConfig(command *cobra.Command, editor string) (string, bool, error) 
 	if err != nil {
 		return "", false, err
 	}
-	temp, err := os.CreateTemp("", "proxystack-sub-edit-*.yaml")
-	if err != nil {
-		return "", false, err
+	mode := os.FileMode(0o640)
+	if info, err := os.Stat(configPath); err == nil {
+		mode = info.Mode().Perm()
 	}
-	tempPath := temp.Name()
-	defer os.Remove(tempPath)
-	writeErr := func() error {
-		if _, err := temp.Write(original); err != nil {
-			return err
-		}
-		if info, err := os.Stat(configPath); err == nil {
-			if err := temp.Chmod(info.Mode().Perm()); err != nil {
-				return err
-			}
-		}
-		return nil
-	}()
-	closeErr := temp.Close()
-	if writeErr != nil {
-		return "", false, writeErr
-	}
-	if closeErr != nil {
-		return "", false, closeErr
-	}
-	if err := runEditor(editor, tempPath); err != nil {
-		return "", false, err
-	}
-	if _, err := config.LoadSubServerConfig(tempPath); err != nil {
-		return "", false, err
-	}
-	edited, err := os.ReadFile(tempPath)
-	if err != nil {
-		return "", false, err
-	}
-	changed, err := writeTextFileIfChanged(configPath, edited)
-	return configPath, changed, err
+	result, err := draftedit.EditAndCommit(draftedit.Options{
+		TargetPath: configPath,
+		Initial:    original,
+		Mode:       mode,
+		Editor:     editor,
+	}, func(path string, data []byte) error {
+		_, err := config.LoadSubServerConfig(path)
+		return err
+	}, func(data []byte) (bool, error) {
+		return writeTextFileIfChanged(configPath, data)
+	})
+	return configPath, result.Changed, err
 }
 
 type initSubResult struct {
@@ -751,80 +729,7 @@ func chownFileIfNeeded(file *os.File, uid int, gid int) error {
 
 // runEditor 执行用户指定或环境默认编辑器。
 func runEditor(editor string, targetPath string) error {
-	if editor == "" {
-		editor = os.Getenv("EDITOR")
-	}
-	if editor == "" {
-		editor = "vi"
-	}
-	parts, err := splitCommandLine(editor)
-	if err != nil {
-		return err
-	}
-	if len(parts) == 0 {
-		return fmt.Errorf("editor command is empty")
-	}
-	command := exec.Command(parts[0], append(parts[1:], targetPath)...)
-	command.Stdin = os.Stdin
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-	return command.Run()
-}
-
-// splitCommandLine 解析简单 shell 风格命令行，支持空白分隔、引号和反斜杠转义。
-func splitCommandLine(value string) ([]string, error) {
-	parts := make([]string, 0)
-	var builder strings.Builder
-	var quote rune
-	escaped := false
-	inToken := false
-	for _, r := range value {
-		if escaped {
-			builder.WriteRune(r)
-			escaped = false
-			inToken = true
-			continue
-		}
-		if r == '\\' {
-			escaped = true
-			inToken = true
-			continue
-		}
-		if quote != 0 {
-			if r == quote {
-				quote = 0
-				continue
-			}
-			builder.WriteRune(r)
-			inToken = true
-			continue
-		}
-		if r == '\'' || r == '"' {
-			quote = r
-			inToken = true
-			continue
-		}
-		if unicode.IsSpace(r) {
-			if inToken {
-				parts = append(parts, builder.String())
-				builder.Reset()
-				inToken = false
-			}
-			continue
-		}
-		builder.WriteRune(r)
-		inToken = true
-	}
-	if escaped {
-		builder.WriteRune('\\')
-	}
-	if quote != 0 {
-		return nil, fmt.Errorf("editor command contains unterminated quote")
-	}
-	if inToken {
-		parts = append(parts, builder.String())
-	}
-	return parts, nil
+	return draftedit.RunEditor(editor, targetPath)
 }
 
 func nowISO() string {

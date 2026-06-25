@@ -131,18 +131,22 @@ func stackFromDocument(document *stackDocument, expectedName string, sourcePath 
 	return stack, nil
 }
 
-// writeNewStackDocument 校验候选 stack 后写入新文件。
-func writeNewStackDocument(cfg domain.GlobalConfig, stackSet domain.StackSet, name string, document *stackDocument) error {
+// stackCandidateFromDocument 校验候选 stack，并编码成可落盘的 YAML 内容。
+func stackCandidateFromDocument(cfg domain.GlobalConfig, stackSet domain.StackSet, name string, document *stackDocument, mode os.FileMode) (StackCandidate, error) {
 	stackPath := filepath.Join(cfg.StacksDir(), name+".yaml")
 	stack, err := stackFromDocument(document, name, stackPath)
 	if err != nil {
-		return err
+		return StackCandidate{}, err
 	}
 	nextStacks := append(append([]domain.Stack(nil), stackSet.Stacks...), stack)
 	if err := validation.ValidateStackSet(domain.StackSet{Config: cfg, Stacks: nextStacks}, validation.WithPortChecker(validation.NoopPortChecker{})); err != nil {
-		return err
+		return StackCandidate{}, err
 	}
-	return writeStackDocument(stackPath, document)
+	data, err := stackDocumentData(document)
+	if err != nil {
+		return StackCandidate{}, err
+	}
+	return StackCandidate{Name: name, Path: stackPath, Data: data, Mode: mode}, nil
 }
 
 // writeExistingStackDocument 校验候选 stack 后覆盖原 stack 文件。
@@ -160,17 +164,26 @@ func writeExistingStackDocument(cfg domain.GlobalConfig, stackSet domain.StackSe
 
 // writeStackDocument 以稳定缩进写回 YAML 文档，并保留已有注释。
 func writeStackDocument(path string, document *stackDocument) error {
+	data, err := stackDocumentData(document)
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(path, data, 0o640)
+}
+
+// stackDocumentData 把 YAML 文档编码为稳定缩进的字节内容。
+func stackDocumentData(document *stackDocument) ([]byte, error) {
 	var buffer bytes.Buffer
 	encoder := yaml.NewEncoder(&buffer)
 	encoder.SetIndent(2)
 	if err := encoder.Encode(document.node); err != nil {
 		_ = encoder.Close()
-		return err
+		return nil, err
 	}
 	if err := encoder.Close(); err != nil {
-		return err
+		return nil, err
 	}
-	return writeFileAtomic(path, buffer.Bytes(), 0o640)
+	return buffer.Bytes(), nil
 }
 
 // applyAutoMembersToDocument 按 auto 模板规则替换成员 upstream 和代理组引用。
@@ -443,37 +456,96 @@ func replaceTemplateVmessUUIDs(root *yaml.Node) error {
 	return nil
 }
 
-// rewriteSelfRefsInNode 递归改写 ref 形态字符串中的第一段 stack 名。
+// rewriteSelfRefsInNode 只改写指向当前 stack 自身资源的 ref 字段。
 func rewriteSelfRefsInNode(node *yaml.Node, source string, target string) {
 	if source == "" || source == target {
 		return
 	}
-	switch node.Kind {
-	case yaml.MappingNode, yaml.SequenceNode:
-		for _, child := range node.Content {
-			rewriteSelfRefsInNode(child, source, target)
+	rewrites := selfRefRewrites(node, source, target)
+	if len(rewrites) == 0 {
+		return
+	}
+	rewriteXrelayOutboundRef(node, rewrites)
+	rewriteClashUpstreamRefs(node, rewrites)
+}
+
+// selfRefRewrites 收集当前文档内可被自身 ref 指向的资源名称。
+func selfRefRewrites(root *yaml.Node, source string, target string) map[string]string {
+	rewrites := map[string]string{}
+	xrelay := mappingValue(root, "xrelay")
+	if xrelay != nil && xrelay.Kind == yaml.MappingNode {
+		inbounds := mappingValue(xrelay, "inbounds")
+		if inbounds != nil && inbounds.Kind == yaml.SequenceNode {
+			for _, inbound := range inbounds.Content {
+				if inbound.Kind != yaml.MappingNode {
+					continue
+				}
+				name := scalarValue(mappingValue(inbound, "name"))
+				if name != "" {
+					rewrites[source+"."+name] = target + "." + name
+				}
+			}
 		}
-	case yaml.ScalarNode:
-		node.Value = rewriteRefString(node.Value, source, target)
+	}
+	clash := mappingValue(root, "clash")
+	if clash != nil && clash.Kind == yaml.MappingNode {
+		listeners := mappingValue(clash, "listeners")
+		if listeners != nil && listeners.Kind == yaml.MappingNode {
+			if socks := mappingValue(listeners, "socks"); socks != nil && socks.Kind == yaml.SequenceNode && len(socks.Content) > 0 {
+				rewrites[source+".clash.socks"] = target + ".clash.socks"
+			}
+			if http := mappingValue(listeners, "http"); http != nil && http.Kind == yaml.SequenceNode && len(http.Content) > 0 {
+				rewrites[source+".clash.http"] = target + ".clash.http"
+			}
+		}
+	}
+	return rewrites
+}
+
+// rewriteXrelayOutboundRef 只改写 xrelay.outbound.ref 中指向本 stack 的 clash 监听引用。
+func rewriteXrelayOutboundRef(root *yaml.Node, rewrites map[string]string) {
+	xrelay := mappingValue(root, "xrelay")
+	if xrelay == nil || xrelay.Kind != yaml.MappingNode {
+		return
+	}
+	outbound := mappingValue(xrelay, "outbound")
+	if outbound == nil || outbound.Kind != yaml.MappingNode {
+		return
+	}
+	if scalarValue(mappingValue(outbound, "type")) != "clash" {
+		return
+	}
+	ref := mappingValue(outbound, "ref")
+	if ref == nil || ref.Kind != yaml.ScalarNode {
+		return
+	}
+	if replacement, ok := rewrites[ref.Value]; ok {
+		ref.Value = replacement
 	}
 }
 
-// rewriteRefString 在两段或三段 ref 中把第一段 source 改为 target。
-func rewriteRefString(value string, source string, target string) string {
-	parts := strings.Split(value, ".")
-	if len(parts) != 2 && len(parts) != 3 {
-		return value
+// rewriteClashUpstreamRefs 只改写 xrelay-socks5 upstream 的 schema ref 字段。
+func rewriteClashUpstreamRefs(root *yaml.Node, rewrites map[string]string) {
+	clash := mappingValue(root, "clash")
+	if clash == nil || clash.Kind != yaml.MappingNode {
+		return
 	}
-	if parts[0] != source {
-		return value
+	upstreams := mappingValue(clash, "upstreams")
+	if upstreams == nil || upstreams.Kind != yaml.SequenceNode {
+		return
 	}
-	for _, part := range parts {
-		if part == "" {
-			return value
+	for _, upstream := range upstreams.Content {
+		if upstream.Kind != yaml.MappingNode || scalarValue(mappingValue(upstream, "type")) != "xrelay-socks5" {
+			continue
+		}
+		ref := mappingValue(upstream, "ref")
+		if ref == nil || ref.Kind != yaml.ScalarNode {
+			continue
+		}
+		if replacement, ok := rewrites[ref.Value]; ok {
+			ref.Value = replacement
 		}
 	}
-	parts[0] = target
-	return strings.Join(parts, ".")
 }
 
 // autoProxyGroupNames 返回 url-test/load-balance 组名称。

@@ -49,6 +49,14 @@ type CloneOptions struct {
 	AllocatePorts bool
 }
 
+// StackCandidate 保存 add/clone 生成但尚未落盘的 stack 内容。
+type StackCandidate struct {
+	Name string
+	Path string
+	Data []byte
+	Mode os.FileMode
+}
+
 // MemberOptions 保存 member add/remove/list 命令的输入。
 type MemberOptions struct {
 	ConfigPath string
@@ -134,42 +142,64 @@ func normalizeBaseDir(baseDir string) (string, error) {
 
 // AddStack 基于内置模板或外部文件创建新的 stack 文件。
 func AddStack(options AddOptions) error {
-	cfg, stackSet, err := loadConfigAndStacks(options.ConfigPath)
+	candidate, err := BuildAddStackCandidate(options)
 	if err != nil {
 		return err
 	}
+	return writeFileAtomic(candidate.Path, candidate.Data, candidate.Mode)
+}
+
+// BuildAddStackCandidate 基于模板生成 add 的候选 stack 内容，供交互编辑前预览和校验。
+func BuildAddStackCandidate(options AddOptions) (StackCandidate, error) {
+	cfg, stackSet, err := loadConfigAndStacks(options.ConfigPath)
+	if err != nil {
+		return StackCandidate{}, err
+	}
 	if _, ok := stackSet.ByName()[options.Name]; ok {
-		return fmt.Errorf("stack already exists: %s", options.Name)
+		return StackCandidate{}, fmt.Errorf("stack already exists: %s", options.Name)
 	}
 	document, err := buildStackDocument(options)
 	if err != nil {
-		return err
+		return StackCandidate{}, err
 	}
 	if options.AllocatePorts && !options.KeepTemplatePorts {
 		if err := allocateStackDocumentPorts(document, stackSet); err != nil {
-			return err
+			return StackCandidate{}, err
 		}
 	}
-	return writeNewStackDocument(cfg, stackSet, options.Name, document)
+	return stackCandidateFromDocument(cfg, stackSet, options.Name, document, 0o640)
 }
 
 // CloneStack 复制 source stack 为 target，并可只改目标 stack 端口。
 func CloneStack(options CloneOptions) error {
-	cfg, stackSet, document, _, err := loadConfigAndStackDocument(options.ConfigPath, options.Source)
+	candidate, err := BuildCloneStackCandidate(options)
 	if err != nil {
 		return err
 	}
+	return writeFileAtomic(candidate.Path, candidate.Data, candidate.Mode)
+}
+
+// BuildCloneStackCandidate 生成 clone 的候选 stack 内容，供交互编辑前预览和校验。
+func BuildCloneStackCandidate(options CloneOptions) (StackCandidate, error) {
+	cfg, stackSet, document, _, err := loadConfigAndStackDocument(options.ConfigPath, options.Source)
+	if err != nil {
+		return StackCandidate{}, err
+	}
 	if _, ok := stackSet.ByName()[options.Target]; ok {
-		return fmt.Errorf("target stack already exists: %s", options.Target)
+		return StackCandidate{}, fmt.Errorf("target stack already exists: %s", options.Target)
 	}
 	setMappingScalar(document.root, "name", options.Target)
 	rewriteSelfRefsInNode(document.root, options.Source, options.Target)
 	if options.AllocatePorts {
 		if err := allocateStackDocumentPorts(document, stackSet); err != nil {
-			return err
+			return StackCandidate{}, err
 		}
 	}
-	return writeNewStackDocument(cfg, stackSet, options.Target, document)
+	mode := os.FileMode(0o640)
+	if info, err := os.Stat(filepath.Join(cfg.StacksDir(), options.Source+".yaml")); err == nil {
+		mode = info.Mode().Perm()
+	}
+	return stackCandidateFromDocument(cfg, stackSet, options.Target, document, mode)
 }
 
 // ListStacks 返回稳定排序后的 stack 摘要。

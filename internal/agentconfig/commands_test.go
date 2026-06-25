@@ -1,6 +1,7 @@
 package agentconfig
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,6 +99,34 @@ func TestAddCloneAndMemberCommands(t *testing.T) {
 	members, err = ListMembers(MemberOptions{ConfigPath: configPath, Stack: "auto"})
 	require.NoError(t, err)
 	require.Equal(t, []string{"usa2"}, members)
+}
+
+// TestCloneStackOnlyRewritesSelfRefFields 验证 clone 只改自身 ref，不误改普通域名和 Host。
+func TestCloneStackOnlyRewritesSelfRefFields(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "config.yaml")
+	require.NoError(t, InitProject(InitOptions{BaseDir: baseDir, ExternalHost: "proxy.example.com"}))
+	require.NoError(t, AddStack(AddOptions{ConfigPath: configPath, Name: "usa1", Template: "pair", KeepTemplatePorts: true}))
+	sourcePath := filepath.Join(baseDir, "stacks", "usa1.yaml")
+	data, err := os.ReadFile(sourcePath)
+	require.NoError(t, err)
+	data = bytes.Replace(data, []byte("server: server.example.com"), []byte("server: usa1.example.com"), 1)
+	data = bytes.Replace(data, []byte("Host: server.example.com"), []byte("Host: usa1.example.com"), 1)
+	data = bytes.Replace(data, []byte("network: ws"), []byte("network: ws\n        ref: usa1.relay\n        headers:\n          ref: usa1.relay"), 1)
+	require.NoError(t, os.WriteFile(sourcePath, data, 0o640))
+
+	require.NoError(t, CloneStack(CloneOptions{ConfigPath: configPath, Source: "usa1", Target: "usa2", AllocatePorts: true}))
+
+	cloned, err := os.ReadFile(filepath.Join(baseDir, "stacks", "usa2.yaml"))
+	require.NoError(t, err)
+	content := string(cloned)
+	require.Contains(t, content, "ref: usa2.clash.socks")
+	require.Contains(t, content, "server: usa1.example.com")
+	require.Contains(t, content, "Host: usa1.example.com")
+	require.Contains(t, content, "ref: usa1.relay")
+	require.NotContains(t, content, "server: usa2.example.com")
+	require.NotContains(t, content, "Host: usa2.example.com")
+	require.NotContains(t, content, "ref: usa2.relay")
 }
 
 // TestAddStackUsesReferenceTemplateFormat 验证 add 写出的 stack 文件沿用 Python 版内置模板格式。

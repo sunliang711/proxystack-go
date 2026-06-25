@@ -279,7 +279,7 @@ EOF
 	require.Equal(t, "127.0.0.1:39004", subConfig.Listen)
 }
 
-// TestConfigCommandRejectsInvalidEdit 验证编辑结果非法时不覆盖原配置。
+// TestConfigCommandRejectsInvalidEdit 验证编辑结果非法时不覆盖原配置并保留草稿。
 func TestConfigCommandRejectsInvalidEdit(t *testing.T) {
 	baseDir := t.TempDir()
 	configPath := filepath.Join(baseDir, "config.yaml")
@@ -294,9 +294,13 @@ func TestConfigCommandRejectsInvalidEdit(t *testing.T) {
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "listen must use host:port format")
+	require.Contains(t, err.Error(), "draft preserved: "+configPath+".draft")
 	data, err := os.ReadFile(configPath)
 	require.NoError(t, err)
 	require.Equal(t, original, data)
+	draft, err := os.ReadFile(configPath + ".draft")
+	require.NoError(t, err)
+	require.Equal(t, "listen: bad-listen\n", string(draft))
 }
 
 // TestWriteTextFileIfChangedPreservesMetadata 验证原子替换会保留原文件 mode 和 owner。

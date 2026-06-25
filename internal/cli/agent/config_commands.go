@@ -5,12 +5,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/eagle/proxystack-go/internal/agentconfig"
+	"github.com/eagle/proxystack-go/internal/cli/draftedit"
 	"github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/domain"
 	"github.com/eagle/proxystack-go/internal/domain/validation"
@@ -66,6 +66,9 @@ func newAddCommand() *cobra.Command {
 	var members string
 	var allocatePorts bool
 	var keepTemplatePorts bool
+	var edit bool
+	var noEdit bool
+	var editor string
 	command := &cobra.Command{
 		Use:   "add NAME",
 		Short: "Create a new stack from a template",
@@ -78,7 +81,10 @@ func newAddCommand() *cobra.Command {
 			if keepTemplatePorts {
 				allocatePorts = false
 			}
-			if err := agentconfig.AddStack(agentconfig.AddOptions{
+			if noEdit && command.Flags().Changed("edit") {
+				return fmt.Errorf("--edit and --no-edit cannot be used together")
+			}
+			options := agentconfig.AddOptions{
 				ConfigPath:        configPath,
 				Name:              args[0],
 				Template:          template,
@@ -86,8 +92,15 @@ func newAddCommand() *cobra.Command {
 				Members:           splitCSV(members),
 				AllocatePorts:     allocatePorts,
 				KeepTemplatePorts: keepTemplatePorts,
-			}); err != nil {
-				return err
+			}
+			if noEdit {
+				if err := agentconfig.AddStack(options); err != nil {
+					return err
+				}
+			} else {
+				if err := editNewStackCandidate(configPath, agentconfig.BuildAddStackCandidate, options, editor); err != nil {
+					return err
+				}
 			}
 			if err := repairServiceMetadataForConfigPath(configPath); err != nil {
 				return err
@@ -101,9 +114,9 @@ func newAddCommand() *cobra.Command {
 	command.Flags().StringVar(&members, "members", "", "Comma separated member stacks for auto templates")
 	command.Flags().BoolVar(&allocatePorts, "allocate-ports", true, "Allocate fresh ports")
 	command.Flags().BoolVar(&keepTemplatePorts, "keep-template-ports", false, "Keep ports from template")
-	command.Flags().Bool("edit", false, "Reserved for editor compatibility")
-	command.Flags().Bool("no-edit", true, "Reserved for editor compatibility")
-	command.Flags().String("editor", "", "Reserved editor command")
+	command.Flags().BoolVar(&edit, "edit", false, "Open editor before writing stack")
+	command.Flags().BoolVar(&noEdit, "no-edit", false, "Write stack without opening editor")
+	command.Flags().StringVar(&editor, "editor", "", "Editor command")
 	return command
 }
 
@@ -138,7 +151,7 @@ func newConfigCommand() *cobra.Command {
 	return command
 }
 
-// editConfigOrStack 通过临时文件编辑配置，校验通过后再替换真实文件。
+// editConfigOrStack 通过草稿编辑配置，校验通过后再替换真实文件。
 func editConfigOrStack(configPath string, name string, hasName bool, editor string, checkOnly bool) (string, bool, error) {
 	targetPath, err := configEditTarget(configPath, name, hasName)
 	if err != nil {
@@ -157,42 +170,69 @@ func editConfigOrStack(configPath string, name string, hasName bool, editor stri
 	if err != nil {
 		return "", false, err
 	}
-	temp, err := os.CreateTemp("", "proxystack-edit-*.yaml")
+	mode := os.FileMode(0o640)
+	if info, err := os.Stat(targetPath); err == nil {
+		mode = info.Mode().Perm()
+	}
+	result, err := draftedit.EditAndCommit(draftedit.Options{
+		TargetPath: targetPath,
+		Initial:    original,
+		Mode:       mode,
+		Editor:     editor,
+	}, func(path string, data []byte) error {
+		return validateEditTarget(path, configPath, name, hasName)
+	}, func(data []byte) (bool, error) {
+		return writeTextFileIfChanged(targetPath, data)
+	})
+	return targetPath, result.Changed, err
+}
+
+// editNewStackCandidate 打开新增 stack 草稿，校验通过后再写入真实 stack 文件。
+func editNewStackCandidate(configPath string, build func(agentconfig.AddOptions) (agentconfig.StackCandidate, error), options agentconfig.AddOptions, editor string) error {
+	candidate, err := build(options)
 	if err != nil {
-		return "", false, err
+		return err
 	}
-	tempPath := temp.Name()
-	defer os.Remove(tempPath)
-	writeErr := func() error {
-		if _, err := temp.Write(original); err != nil {
-			return err
+	_, err = draftedit.EditAndCommit(draftedit.Options{
+		TargetPath: candidate.Path,
+		Initial:    candidate.Data,
+		Mode:       candidate.Mode,
+		Editor:     editor,
+	}, func(path string, data []byte) error {
+		return validateEditTarget(path, configPath, candidate.Name, true)
+	}, func(data []byte) (bool, error) {
+		if _, err := os.Lstat(candidate.Path); err == nil {
+			return false, fmt.Errorf("stack already exists: %s", candidate.Name)
+		} else if !os.IsNotExist(err) {
+			return false, err
 		}
-		if info, err := os.Stat(targetPath); err == nil {
-			if err := temp.Chmod(info.Mode().Perm()); err != nil {
-				return err
-			}
-		}
-		return nil
-	}()
-	closeErr := temp.Close()
-	if writeErr != nil {
-		return "", false, writeErr
-	}
-	if closeErr != nil {
-		return "", false, closeErr
-	}
-	if err := runEditor(editor, tempPath); err != nil {
-		return "", false, err
-	}
-	if err := validateEditTarget(tempPath, configPath, name, hasName); err != nil {
-		return "", false, err
-	}
-	edited, err := os.ReadFile(tempPath)
+		return true, writeFileAtomic(candidate.Path, data, candidate.Mode)
+	})
+	return err
+}
+
+// editClonedStackCandidate 打开 clone 草稿，校验通过后再写入目标 stack 文件。
+func editClonedStackCandidate(configPath string, options agentconfig.CloneOptions, editor string) error {
+	candidate, err := agentconfig.BuildCloneStackCandidate(options)
 	if err != nil {
-		return "", false, err
+		return err
 	}
-	changed, err := writeTextFileIfChanged(targetPath, edited)
-	return targetPath, changed, err
+	_, err = draftedit.EditAndCommit(draftedit.Options{
+		TargetPath: candidate.Path,
+		Initial:    candidate.Data,
+		Mode:       candidate.Mode,
+		Editor:     editor,
+	}, func(path string, data []byte) error {
+		return validateEditTarget(path, configPath, candidate.Name, true)
+	}, func(data []byte) (bool, error) {
+		if _, err := os.Lstat(candidate.Path); err == nil {
+			return false, fmt.Errorf("target stack already exists: %s", candidate.Name)
+		} else if !os.IsNotExist(err) {
+			return false, err
+		}
+		return true, writeFileAtomic(candidate.Path, data, candidate.Mode)
+	})
+	return err
 }
 
 func configEditTarget(configPath string, name string, hasName bool) (string, error) {
@@ -724,6 +764,9 @@ func fileExists(path string) bool {
 // newCloneCommand 创建 stack 克隆命令。
 func newCloneCommand() *cobra.Command {
 	var allocatePorts bool
+	var edit bool
+	var noEdit bool
+	var editor string
 	command := &cobra.Command{
 		Use:   "clone SOURCE TARGET",
 		Short: "Clone one stack into another",
@@ -733,14 +776,27 @@ func newCloneCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := agentconfig.CloneStack(agentconfig.CloneOptions{ConfigPath: configPath, Source: args[0], Target: args[1], AllocatePorts: allocatePorts}); err != nil {
-				return err
+			if noEdit && command.Flags().Changed("edit") {
+				return fmt.Errorf("--edit and --no-edit cannot be used together")
+			}
+			options := agentconfig.CloneOptions{ConfigPath: configPath, Source: args[0], Target: args[1], AllocatePorts: allocatePorts}
+			if noEdit {
+				if err := agentconfig.CloneStack(options); err != nil {
+					return err
+				}
+			} else {
+				if err := editClonedStackCandidate(configPath, options, editor); err != nil {
+					return err
+				}
 			}
 			fmt.Fprintf(command.OutOrStdout(), "Cloned stack: %s -> %s\n", args[0], args[1])
 			return nil
 		},
 	}
-	command.Flags().BoolVar(&allocatePorts, "allocate-ports", false, "Allocate fresh ports for target stack")
+	command.Flags().BoolVar(&allocatePorts, "allocate-ports", true, "Allocate fresh ports for target stack")
+	command.Flags().BoolVar(&edit, "edit", false, "Open editor before writing stack")
+	command.Flags().BoolVar(&noEdit, "no-edit", false, "Write stack without opening editor")
+	command.Flags().StringVar(&editor, "editor", "", "Editor command")
 	return command
 }
 
@@ -840,25 +896,6 @@ func newRemoveCommand() *cobra.Command {
 	}
 	command.Flags().BoolVar(&purge, "purge", false, "Remove generated files recorded in manifest")
 	return command
-}
-
-// runEditor 执行用户指定或环境默认编辑器。
-func runEditor(editor string, targetPath string) error {
-	if editor == "" {
-		editor = os.Getenv("EDITOR")
-	}
-	if editor == "" {
-		editor = "vi"
-	}
-	parts := strings.Fields(editor)
-	if len(parts) == 0 {
-		return fmt.Errorf("editor command is empty")
-	}
-	command := exec.Command(parts[0], append(parts[1:], targetPath)...)
-	command.Stdin = os.Stdin
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-	return command.Run()
 }
 
 // splitCSV 解析逗号分隔参数并丢弃空白项。

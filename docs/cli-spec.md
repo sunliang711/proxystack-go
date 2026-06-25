@@ -102,10 +102,12 @@ ps-agent [--base-dir DIR] add NAME [--template pair|auto-url-test|load-balance] 
 - 默认自动分配 xrelay inbound、Xray API、clash socks、clash HTTP、clash controller 端口。
 - 内置模板中的 vmess 占位 UUID 必须替换成随机 UUID。
 - `--from-file` 保留输入文件中的凭据和 UUID。
+- 默认打开编辑器，初始内容为已完成改名、UUID 替换和端口分配的候选 YAML；`--no-edit` 用于脚本化场景，直接校验并写入。
+- 交互编辑使用 `stacks/<name>.yaml.draft` 草稿；校验通过后原子写入真实文件并删除草稿，校验失败时真实文件不变且草稿保留，错误信息会提示草稿路径。
 
 副作用：
 
-- 只写新 stack 文件。
+- 只写新 stack 文件；交互编辑失败时可留下相邻草稿文件。
 - 不写 runtime。
 - 不调用服务管理器。
 
@@ -148,10 +150,12 @@ ps-agent [--base-dir DIR] config [NAME] [--editor CMD] [--check-only]
 - 不带 `NAME` 时编辑全局 `config.yaml`。
 - 带 `NAME` 时编辑对应 `stacks/<name>.yaml`。
 - 保存后必须重新校验。
+- 编辑真实配置前先写相邻草稿：`config.yaml.draft` 或 `stacks/<name>.yaml.draft`；若草稿已存在，下一次编辑继续使用该草稿。
+- 校验通过后原子替换真实文件并删除草稿；校验失败时真实文件不变且草稿保留，错误信息会提示草稿路径。
 
 副作用：
 
-- 可写被编辑配置文件。
+- 可写被编辑配置文件；校验失败时可留下相邻草稿文件。
 - 如果 stack 配置变化且相关服务处于 active，采用现有行为：检测 active 服务，检查所需二进制，apply runtime plan，重启 active services。
 
 验收：
@@ -185,24 +189,28 @@ ps-agent [--base-dir DIR] list [--verbose] [--check-system-ports]
 ### 3.6 `clone`
 
 ```bash
-ps-agent [--base-dir DIR] clone SOURCE TARGET [--allocate-ports]
+ps-agent [--base-dir DIR] clone SOURCE TARGET [--allocate-ports] [--edit|--no-edit] [--editor CMD]
 ```
 
 职责：
 
 - 复制 source stack 为 target stack。
 - 改写顶层 `name`。
-- 第一段等于 source 且指向自身资源的 ref 改为 target。
+- 默认自动分配 target 的新端口；可用 `--allocate-ports=false` 保留候选内容中的端口，但端口冲突会拒绝写入。
+- 默认打开编辑器；`--no-edit` 用于脚本化场景，直接校验并写入。
+- 只改写真正 `ref` 字段中指向 source 自身资源的 ref，例如 `source.clash.socks` 或 `source.relay`。
 - 指向其他 stack 的 ref 保持不变。
+- 普通字符串字段如 `server`、`Host` 即使包含 source 名称也不得改写。
+- 交互编辑使用 `stacks/<target>.yaml.draft` 草稿；校验通过后原子写入真实文件并删除草稿，校验失败时真实文件不变且草稿保留，错误信息会提示草稿路径。
 
 副作用：
 
-- 只写 target stack 文件。
+- 只写 target stack 文件；交互编辑失败时可留下相邻草稿文件。
 
 验收：
 
 - target 已存在时失败。
-- 不传 `--allocate-ports` 且端口冲突时拒绝写入。
+- 端口冲突时拒绝写入。
 - 明文凭据默认保持不变。
 
 ### 3.7 `member`
@@ -527,10 +535,11 @@ ps-sub [--base-dir DIR] config check
 - `config` 编辑 `<base-dir>/config.yaml`，保存后立即 strict 校验。
 - `config show` 打印有效 sub config，默认脱敏 token。
 - `config check` 只校验 sub config。
+- `config` 使用 `<base-dir>/config.yaml.draft` 草稿；校验通过后原子替换真实文件并删除草稿，校验失败时真实文件不变且草稿保留，错误信息会提示草稿路径。
 
 副作用：
 
-- `config` 可写 `<base-dir>/config.yaml`。
+- `config` 可写 `<base-dir>/config.yaml`；校验失败时可留下相邻草稿文件。
 - `config show` 和 `config check` 只读。
 
 验收：
@@ -597,16 +606,17 @@ ps-sub [--base-dir DIR] input remove SOURCE
 - `list` 列出 `<base-dir>/inputs` 中的 input 文件、source、nodes、users 和 generated_at。
 - `show` 打印单个 input，默认输出脱敏后的规范 YAML；`--raw` 输出原始文件内容；`--show-secrets` 仅影响非 raw 输出。
 - `validate` 严格校验单个 input，或对全部 inputs 执行合并校验。
-- `edit` 通过临时文件编辑单个 input，保存前必须 strict decode 并通过 schema 校验。
+- `edit` 使用 `<source-file>.draft` 草稿编辑单个 input，保存前必须 strict decode，并通过单文件校验和包含现有 inputs 的全量合并校验。
 - `clone` 复制单个 input 为新目标，默认打开编辑器；`TARGET` 不带扩展名时沿用源文件扩展名；写入前必须 strict decode 并通过包含现有 inputs 的全量合并校验。
+- `edit`/`clone` 校验通过后原子替换或创建真实文件并删除草稿；校验失败时真实文件不变且草稿保留，错误信息会提示草稿路径，下一次编辑继续使用草稿。
 - `set-host` 把目标 input 的所有 `nodes[].server` 写成 trim 后的 `HOST`；指定 `SOURCE` 时只修改单文件，传 `--all` 时扫描全部安全 input 文件；`SOURCE` 与 `--all` 互斥且必须选择其一。
 - `remove` 删除单个 input 文件。
 
 副作用：
 
 - `list`、`show`、`validate` 只读。
-- `edit` 可写目标 input 文件。
-- `clone` 可写新目标 input 文件，不覆盖既有文件；编辑器退出或校验失败时不得写入目标文件。
+- `edit` 可写目标 input 文件；校验失败时可留下相邻草稿文件。
+- `clone` 可写新目标 input 文件，不覆盖既有文件；编辑器退出或校验失败时不得写入目标文件，但可留下新目标的相邻草稿文件。
 - `set-host` 可写目标 input 文件，或在 `--all` 模式写多个 input 文件；写回前必须 strict decode 并通过合并校验，没有实际变化时只输出 unchanged。
 - `remove` 可删除目标 input 文件。
 
@@ -615,8 +625,8 @@ ps-sub [--base-dir DIR] input remove SOURCE
 - SOURCE 只能解析为 `<base-dir>/inputs` 下的 `.yaml`、`.yml` 或 `.json` 普通文件，不允许路径穿越。
 - `clone` 的 TARGET 只能解析为 `<base-dir>/inputs` 下尚不存在的 `.yaml`、`.yml` 或 `.json` 普通文件，不允许路径穿越。
 - `show` 默认不得输出 password、token、uuid 等敏感值。
-- `edit` 校验失败时不得覆盖原文件。
-- `clone` 编辑后未改掉重复 `node.id` 或同用户重复代理名时必须失败，且不得创建目标文件。
+- `edit` 校验失败时不得覆盖原文件，且必须保留草稿。
+- `clone` 编辑后未改掉重复 `node.id` 或同用户重复代理名时必须失败，不得创建目标文件，且必须保留草稿。
 - `set-host` 校验失败时不得覆盖原文件。
 - `validate` 全量模式必须发现重复 `node.id` 和同用户重复代理名。
 - 不读取 agent `config.yaml`。

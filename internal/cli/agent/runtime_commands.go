@@ -83,7 +83,7 @@ func newRenderCommand() *cobra.Command {
 
 // newRenderModelCommand 创建 render model 子命令。
 func newRenderModelCommand() *cobra.Command {
-	var skipSystemPorts bool
+	skipSystemPorts := true
 	command := &cobra.Command{
 		Use:   "model",
 		Short: "Render effective stack model",
@@ -100,13 +100,13 @@ func newRenderModelCommand() *cobra.Command {
 			return err
 		},
 	}
-	command.Flags().BoolVar(&skipSystemPorts, "skip-system-ports", false, "Skip probing live system ports")
+	command.Flags().BoolVar(&skipSystemPorts, "skip-system-ports", true, "Skip probing live system ports")
 	return command
 }
 
 // newRenderXrelayCommand 创建 render xrelay 子命令。
 func newRenderXrelayCommand() *cobra.Command {
-	var skipSystemPorts bool
+	skipSystemPorts := true
 	command := &cobra.Command{
 		Use:   "xrelay STACK",
 		Short: "Render Xray config for a stack",
@@ -124,13 +124,13 @@ func newRenderXrelayCommand() *cobra.Command {
 			return err
 		},
 	}
-	command.Flags().BoolVar(&skipSystemPorts, "skip-system-ports", false, "Skip probing live system ports")
+	command.Flags().BoolVar(&skipSystemPorts, "skip-system-ports", true, "Skip probing live system ports")
 	return command
 }
 
 // newRenderClashCommand 创建 render clash 子命令。
 func newRenderClashCommand() *cobra.Command {
-	var skipSystemPorts bool
+	skipSystemPorts := true
 	command := &cobra.Command{
 		Use:   "clash STACK",
 		Short: "Render mihomo config for a stack",
@@ -148,14 +148,14 @@ func newRenderClashCommand() *cobra.Command {
 			return err
 		},
 	}
-	command.Flags().BoolVar(&skipSystemPorts, "skip-system-ports", false, "Skip probing live system ports")
+	command.Flags().BoolVar(&skipSystemPorts, "skip-system-ports", true, "Skip probing live system ports")
 	return command
 }
 
 // newRenderSubCommand 创建 render sub 子命令。
 func newRenderSubCommand() *cobra.Command {
 	var inputDir string
-	var skipSystemPorts bool
+	skipSystemPorts := true
 	command := &cobra.Command{
 		Use:   "sub",
 		Short: "Render subscription index",
@@ -188,7 +188,7 @@ func newRenderSubCommand() *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&inputDir, "input-dir", "", "Read subscription inputs from a directory")
-	command.Flags().BoolVar(&skipSystemPorts, "skip-system-ports", false, "Skip probing live system ports")
+	command.Flags().BoolVar(&skipSystemPorts, "skip-system-ports", true, "Skip probing live system ports")
 	return command
 }
 

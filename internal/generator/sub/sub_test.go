@@ -174,6 +174,98 @@ clash:
 	require.Contains(t, clashOutput, "    network: raw\n    udp: false\n")
 }
 
+// TestRenderStackInputKeepsVmessTransportOptions 验证 agent 导出的 websocket/grpc 参数会传递到 Clash 订阅。
+func TestRenderStackInputKeepsVmessTransportOptions(t *testing.T) {
+	baseDir := t.TempDir()
+	stacksDir := filepath.Join(baseDir, "stacks")
+	require.NoError(t, os.MkdirAll(stacksDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "config.yaml"), []byte(`version: 1
+external_host: proxy.example.com
+paths:
+  stacks: stacks
+port_ranges:
+  xrelay_inbound: 4300-4399
+  clash_socks: 7001-7101
+  clash_http: 7201-7301
+  xray_api_range: 10001-10999
+  clash_controller: 19000-19999
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(stacksDir, "edge.yaml"), []byte(`name: edge
+enabled: true
+role: edge
+xrelay:
+  enabled: true
+  api:
+    enabled: false
+  stats:
+    enabled: false
+  policy:
+    enabled: false
+  outbound:
+    type: direct
+  inbounds:
+    - name: vmess-ws
+      protocol: vmess
+      listen: 0.0.0.0
+      port: 24001
+      network: ws
+      ws_opts:
+        path: /vmess
+        headers:
+          Host: edge.example.com
+      sub: true
+      users:
+        - user: alice
+          uuid: 11111111-1111-4111-8111-111111111111
+          remark: edge vmess ws
+    - name: vmess-grpc
+      protocol: vmess
+      listen: 0.0.0.0
+      port: 24002
+      network: grpc
+      grpc_opts:
+        grpc_service_name: vmess
+      sub: true
+      users:
+        - user: alice
+          uuid: 22222222-2222-4222-8222-222222222222
+          remark: edge vmess grpc
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: demo-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17091
+  upstreams: []
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [DIRECT]
+  rules:
+    profile: default
+`), 0o644))
+	globalConfig, err := config.LoadConfig(filepath.Join(baseDir, "config.yaml"))
+	require.NoError(t, err)
+	stackSet, err := config.LoadStacks(globalConfig, false)
+	require.NoError(t, err)
+
+	input, err := subgen.RenderSingleStackInputAt(stackSet, "edge", fixedGeneratedAt)
+	require.NoError(t, err)
+	inputYAML := subgen.InputToYAML(input)
+	require.Contains(t, inputYAML, "ws_opts:\n      path: /vmess\n")
+	require.Contains(t, inputYAML, "grpc_opts:\n      grpc_service_name: vmess\n")
+	index, err := subgen.BuildIndex(input.Nodes, []string{input.Source}, subgen.Access{Type: "none"}, fixedGeneratedAt)
+	require.NoError(t, err)
+	clashOutput, err := subgen.RenderClashSubscription(index, "alice", "", "")
+	require.NoError(t, err)
+	require.Contains(t, clashOutput, "ws-opts:\n      path: /vmess\n")
+	require.Contains(t, clashOutput, "grpc-opts:\n      grpc-service-name: vmess\n")
+}
+
 // TestLoadInputContentRejectsMissingServerWithoutExternalHost 验证无局部 server 且无文件级 external_host 时失败。
 func TestLoadInputContentRejectsMissingServerWithoutExternalHost(t *testing.T) {
 	_, err := subgen.LoadInputContent("manual.yaml", []byte(`input_schema: proxystack.subscription-input

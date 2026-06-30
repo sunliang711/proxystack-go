@@ -1,5 +1,5 @@
 # vmess WebSocket inbound：使用 ws 传输的 VMess 节点。
-# 当前 stack 模型只声明 network；如需路径和 Host，请与生成器能力保持一致。
+# ws_opts 会生成到 Xray wsSettings，并同步进入订阅的 ws-opts。
 - name: vmess-ws
   protocol: vmess
   listen: 0.0.0.0
@@ -8,6 +8,10 @@
   # server: edge.example.com
   # region: US
   network: ws
+  ws_opts:
+    path: /vmess
+    headers:
+      Host: edge.example.com
   sub: true
   users:
     - user: user1

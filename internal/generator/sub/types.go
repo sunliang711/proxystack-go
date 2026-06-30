@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/eagle/proxystack-go/internal/domain"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,6 +34,8 @@ var nodeKnownFields = map[string]bool{
 	"remark":   true,
 	"uuid":     true,
 	"network":  true,
+	"ws_opts":  true,
+	"grpc_opts": true,
 	"method":   true,
 	"cipher":   true,
 	"password": true,
@@ -102,6 +105,8 @@ type Node struct {
 	Remark   string `json:"remark" yaml:"remark"`
 	UUID     string `json:"uuid,omitempty" yaml:"uuid,omitempty"`
 	Network  string `json:"network,omitempty" yaml:"network,omitempty"`
+	WSOpts   *domain.WebSocketOptions `json:"ws_opts,omitempty" yaml:"ws_opts,omitempty"`
+	GRPCOpts *domain.GRPCOptions      `json:"grpc_opts,omitempty" yaml:"grpc_opts,omitempty"`
 	Method   string `json:"method,omitempty" yaml:"method,omitempty"`
 	Cipher   string `json:"cipher,omitempty" yaml:"cipher,omitempty"`
 	Password string `json:"password,omitempty" yaml:"password,omitempty"`
@@ -522,6 +527,45 @@ func yamlBool(value bool) *yaml.Node {
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "false"}
 }
 
+// websocketOptionsToYAML 把共享 websocket 选项编码为订阅 input 使用的 YAML。
+func websocketOptionsToYAML(options *domain.WebSocketOptions) *yaml.Node {
+	pairs := make([]yamlNodePair, 0)
+	if options.Path != "" {
+		pairs = append(pairs, yamlPair("path", yamlString(options.Path)))
+	}
+	if len(options.Headers) > 0 {
+		headers := make([]yamlNodePair, 0, len(options.Headers))
+		keys := make([]string, 0, len(options.Headers))
+		for key := range options.Headers {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			headers = append(headers, yamlPair(key, yamlString(options.Headers[key])))
+		}
+		pairs = append(pairs, yamlPair("headers", yamlMapping(headers...)))
+	}
+	return yamlMapping(pairs...)
+}
+
+// grpcOptionsToYAML 把共享 grpc 选项编码为订阅 input 使用的 YAML。
+func grpcOptionsToYAML(options *domain.GRPCOptions) *yaml.Node {
+	pairs := make([]yamlNodePair, 0)
+	if options.ServiceName != "" {
+		pairs = append(pairs, yamlPair("grpc_service_name", yamlString(options.ServiceName)))
+	}
+	return yamlMapping(pairs...)
+}
+
+// grpcOptionsToClashYAML 把共享 grpc 选项编码为 Clash/mihomo proxy 字段。
+func grpcOptionsToClashYAML(options *domain.GRPCOptions) *yaml.Node {
+	pairs := make([]yamlNodePair, 0)
+	if options.ServiceName != "" {
+		pairs = append(pairs, yamlPair("grpc-service-name", yamlString(options.ServiceName)))
+	}
+	return yamlMapping(pairs...)
+}
+
 func nodesToYAML(nodes []Node) *yaml.Node {
 	rendered := make([]*yaml.Node, 0, len(nodes))
 	for _, node := range nodes {
@@ -546,6 +590,12 @@ func nodesToYAML(nodes []Node) *yaml.Node {
 		}
 		if node.Network != "" {
 			pairs = append(pairs, yamlPair("network", yamlString(node.Network)))
+		}
+		if node.WSOpts != nil {
+			pairs = append(pairs, yamlPair("ws_opts", websocketOptionsToYAML(node.WSOpts)))
+		}
+		if node.GRPCOpts != nil {
+			pairs = append(pairs, yamlPair("grpc_opts", grpcOptionsToYAML(node.GRPCOpts)))
 		}
 		if node.Method != "" {
 			pairs = append(pairs, yamlPair("method", yamlString(node.Method)))

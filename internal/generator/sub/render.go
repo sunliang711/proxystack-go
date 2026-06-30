@@ -181,6 +181,12 @@ func RenderClashProxy(node Node) *yaml.Node {
 			yamlPair("cipher", yamlString("auto")),
 			yamlPair("network", yamlString(node.Network)),
 		)
+		if node.WSOpts != nil {
+			pairs = append(pairs, yamlPair("ws-opts", websocketOptionsToYAML(node.WSOpts)))
+		}
+		if node.GRPCOpts != nil {
+			pairs = append(pairs, yamlPair("grpc-opts", grpcOptionsToClashYAML(node.GRPCOpts)))
+		}
 	case "shadowsocks":
 		pairs = append(pairs,
 			yamlPair("cipher", yamlString(firstNonEmpty(node.Cipher, node.Method))),
@@ -276,7 +282,24 @@ func RenderSurgeProxy(node Node) string {
 	}
 	switch node.Protocol {
 	case "vmess":
-		return fmt.Sprintf("%s = vmess, %s, %d, username=%s, network=%s, vmess-aead=true", node.Remark, node.Server, node.Port, node.UUID, node.Network)
+		parts := []string{
+			fmt.Sprintf("%s = vmess", node.Remark),
+			node.Server,
+			fmt.Sprintf("%d", node.Port),
+			"username=" + node.UUID,
+			"network=" + node.Network,
+			"vmess-aead=true",
+		}
+		if nodeUsesWebSocket(node) {
+			parts = append(parts, "ws=true")
+		}
+		if wsPath := nodeWSPath(node); wsPath != "" {
+			parts = append(parts, "ws-path="+wsPath)
+		}
+		if wsHeaders := nodeWSHeaders(node); wsHeaders != "" {
+			parts = append(parts, "ws-headers="+wsHeaders)
+		}
+		return strings.Join(parts, ", ")
 	case "shadowsocks":
 		return fmt.Sprintf("%s = ss, %s, %d, encrypt-method=%s, password=%s", node.Remark, node.Server, node.Port, firstNonEmpty(node.Cipher, node.Method), node.Password)
 	case "socks5":
@@ -290,6 +313,37 @@ func RenderSurgeProxy(node Node) string {
 	default:
 		return ""
 	}
+}
+
+// nodeUsesWebSocket 判断普通订阅节点是否使用 websocket 传输。
+func nodeUsesWebSocket(node Node) bool {
+	network := strings.ToLower(node.Network)
+	return network == "ws" || network == "websocket" || node.WSOpts != nil
+}
+
+// nodeWSPath 返回普通订阅节点的 websocket path。
+func nodeWSPath(node Node) string {
+	if node.WSOpts == nil {
+		return ""
+	}
+	return node.WSOpts.Path
+}
+
+// nodeWSHeaders 返回普通订阅节点的 websocket headers。
+func nodeWSHeaders(node Node) string {
+	if node.WSOpts == nil || len(node.WSOpts.Headers) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(node.WSOpts.Headers))
+	for key := range node.WSOpts.Headers {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	values := make([]string, 0, len(keys))
+	for _, key := range keys {
+		values = append(values, key+":"+node.WSOpts.Headers[key])
+	}
+	return strings.Join(values, "|")
 }
 
 // RenderDirectSurgeProxy 把 direct 节点中常见 Clash vmess 扩展映射为 Surge 参数。

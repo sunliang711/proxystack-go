@@ -514,6 +514,32 @@ func (u InboundUser) EmailOrUser() string {
 	return u.User
 }
 
+// WebSocketOptions 保存 vmess websocket 传输参数。
+type WebSocketOptions struct {
+	Path    string            `json:"path,omitempty" yaml:"path" mapstructure:"path"`
+	Headers map[string]string `json:"headers,omitempty" yaml:"headers" mapstructure:"headers"`
+}
+
+// GRPCOptions 保存 vmess grpc 传输参数。
+type GRPCOptions struct {
+	ServiceName string `json:"service_name,omitempty" yaml:"service_name" mapstructure:"service_name"`
+}
+
+// UnmarshalYAML 兼容常见 gRPC service name 字段写法。
+func (o *GRPCOptions) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("grpc_opts must be a mapping")
+	}
+	for index := 0; index+1 < len(value.Content); index += 2 {
+		key := value.Content[index].Value
+		if key != "service_name" && key != "grpc_service_name" && key != "serviceName" {
+			continue
+		}
+		o.ServiceName = value.Content[index+1].Value
+	}
+	return nil
+}
+
 // Inbound 保存 xrelay inbound 配置。
 type Inbound struct {
 	Name     string        `json:"name" yaml:"name" mapstructure:"name"`
@@ -534,6 +560,8 @@ type Inbound struct {
 	Password string        `json:"password" yaml:"password" mapstructure:"password"`
 	Method   string        `json:"method" yaml:"method" mapstructure:"method"`
 	Cipher   string        `json:"cipher" yaml:"cipher" mapstructure:"cipher"`
+	WSOpts   *WebSocketOptions `json:"ws_opts" yaml:"ws_opts" mapstructure:"ws_opts"`
+	GRPCOpts *GRPCOptions      `json:"grpc_opts" yaml:"grpc_opts" mapstructure:"grpc_opts"`
 
 	fields map[string]bool `json:"-" yaml:"-"`
 }

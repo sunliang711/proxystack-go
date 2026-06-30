@@ -161,6 +161,8 @@ func renderVmessUserNode(stackSet domain.StackSet, stack domain.Stack, inbound d
 		Region:   inbound.Region,
 		UUID:     user.UUID,
 		Network:  inbound.Network,
+		WSOpts:   inbound.WSOpts,
+		GRPCOpts: inbound.GRPCOpts,
 	}
 	applyInboundUDP(&node, inbound)
 	if err := node.Validate(); err != nil {

@@ -1,5 +1,5 @@
 # vmess gRPC inbound：使用 grpc 传输的 VMess 节点。
-# 当前 stack 模型只声明 network；如需 serviceName，请与生成器能力保持一致。
+# grpc_opts 会生成到 Xray grpcSettings，并同步进入订阅的 grpc-opts。
 - name: vmess-grpc
   protocol: vmess
   listen: 0.0.0.0
@@ -8,6 +8,8 @@
   # server: edge.example.com
   # region: US
   network: grpc
+  grpc_opts:
+    grpc_service_name: vmess
   sub: true
   users:
     - user: user1

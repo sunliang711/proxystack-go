@@ -84,7 +84,18 @@ type vmessClient struct {
 }
 
 type streamSettings struct {
-	Network string `json:"network"`
+	Network      string              `json:"network"`
+	WSSettings   *websocketSettings  `json:"wsSettings,omitempty"`
+	GRPCSettings *grpcStreamSettings `json:"grpcSettings,omitempty"`
+}
+
+type websocketSettings struct {
+	Path    string            `json:"path,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+type grpcStreamSettings struct {
+	ServiceName string `json:"serviceName,omitempty"`
 }
 
 type shadowsocksInbound struct {
@@ -324,6 +335,16 @@ func renderVmessInbound(inbound domain.Inbound) vmessInbound {
 	for _, user := range inbound.Users {
 		clients = append(clients, vmessClient{ID: user.UUID, AlterID: 0, Email: user.EmailOrUser()})
 	}
+	stream := streamSettings{Network: inbound.Network}
+	if inbound.WSOpts != nil {
+		stream.WSSettings = &websocketSettings{
+			Path:    inbound.WSOpts.Path,
+			Headers: inbound.WSOpts.Headers,
+		}
+	}
+	if inbound.GRPCOpts != nil {
+		stream.GRPCSettings = &grpcStreamSettings{ServiceName: inbound.GRPCOpts.ServiceName}
+	}
 	return vmessInbound{
 		Tag:      inbound.TagOrDefault(),
 		Listen:   inbound.Listen,
@@ -332,9 +353,7 @@ func renderVmessInbound(inbound domain.Inbound) vmessInbound {
 		Settings: vmessSettings{
 			Clients: clients,
 		},
-		StreamSettings: streamSettings{
-			Network: inbound.Network,
-		},
+		StreamSettings: stream,
 	}
 }
 

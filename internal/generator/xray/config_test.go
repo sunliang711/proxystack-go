@@ -53,6 +53,49 @@ func TestRenderXrayInboundMatrixMatchesGolden(t *testing.T) {
 	require.Equal(t, readGolden(t, "matrix.json"), output)
 }
 
+// TestRenderXrayVmessTransportOptions 验证 vmess websocket/grpc 参数会生成到 streamSettings。
+func TestRenderXrayVmessTransportOptions(t *testing.T) {
+	stackSet := makeStackSet(t, makeStack(t, "transport", "type: direct", `- name: vmess-ws
+  protocol: vmess
+  listen: 127.0.0.1
+  port: 26011
+  network: ws
+  ws_opts:
+    path: /vmess
+    headers:
+      Host: edge.example.com
+  sub: true
+  users:
+    - user: alice
+      uuid: 22222222-2222-4222-8222-222222222222
+- name: vmess-grpc
+  protocol: vmess
+  listen: 127.0.0.1
+  port: 26012
+  network: grpc
+  grpc_opts:
+    grpc_service_name: vmess
+  sub: true
+  users:
+    - user: alice
+      uuid: 33333333-3333-4333-8333-333333333333`, ""))
+
+	output, err := xray.DumpsConfig(stackSet, "transport")
+	require.NoError(t, err)
+
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal([]byte(output), &parsed))
+	inbounds := parsed["inbounds"].([]any)
+	wsStream := inbounds[0].(map[string]any)["streamSettings"].(map[string]any)
+	require.Equal(t, "ws", wsStream["network"])
+	wsSettings := wsStream["wsSettings"].(map[string]any)
+	require.Equal(t, "/vmess", wsSettings["path"])
+	require.Equal(t, "edge.example.com", wsSettings["headers"].(map[string]any)["Host"])
+	grpcStream := inbounds[1].(map[string]any)["streamSettings"].(map[string]any)
+	require.Equal(t, "grpc", grpcStream["network"])
+	require.Equal(t, "vmess", grpcStream["grpcSettings"].(map[string]any)["serviceName"])
+}
+
 // TestRenderXrayProxyOutboundsMatchGolden 验证外部 socks/http outbound 生成结果。
 func TestRenderXrayProxyOutboundsMatchGolden(t *testing.T) {
 	tests := []struct {

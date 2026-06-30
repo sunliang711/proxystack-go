@@ -1,0 +1,6 @@
+# Xray API：只监听本机，供 stats 查询和运行期管理使用。
+api:
+  enabled: true
+  tag: api
+  listen: 127.0.0.1:{{ .XrayAPIPort }}
+  services: [StatsService]

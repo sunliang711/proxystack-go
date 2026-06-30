@@ -1,0 +1,6 @@
+# Clash HTTP listener：供本机 HTTP 代理客户端连接。
+- name: local-http
+  listen: 127.0.0.1
+  port: {{ .HTTPListenerPort }}
+  # users 不写表示跟随全局 authentication；users: [] 表示该 listener 不认证。
+  # users: []

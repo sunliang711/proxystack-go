@@ -58,11 +58,12 @@ func TestAgentExampleNoArgsPrintsUsage(t *testing.T) {
 	require.Contains(t, output, "ps-agent example clash upstream raw")
 }
 
-// TestAgentExampleSingleSnippetPrintsPlainYAML 验证精确片段输出不带说明注释。
+// TestAgentExampleSingleSnippetPrintsPlainYAML 验证精确片段输出带片段内注释的纯 YAML。
 func TestAgentExampleSingleSnippetPrintsPlainYAML(t *testing.T) {
 	output := runAgentCommandForTest(t, "example", "xrelay", "inbound", "vmess")
 
-	require.True(t, strings.HasPrefix(output, "- name: vmess\n"))
+	require.True(t, strings.HasPrefix(output, "# vmess raw inbound"))
+	require.Contains(t, output, "- name: vmess")
 	require.Contains(t, output, "protocol: vmess")
 	require.Contains(t, output, "udp: true")
 	require.Contains(t, output, "uuid: 11111111-1111-4111-8111-111111111111")

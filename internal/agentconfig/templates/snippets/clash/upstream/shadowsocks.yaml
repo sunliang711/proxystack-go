@@ -1,0 +1,10 @@
+# raw shadowsocks upstream：mihomo 原生 Shadowsocks 节点。
+# cipher 和 password 需要与服务端保持一致。
+- name: server-shadowsocks
+  type: raw
+  config:
+    type: shadowsocks
+    server: ss.example.com
+    port: 8388
+    cipher: aes-256-gcm
+    password: change-me-ss-password

@@ -1,0 +1,7 @@
+# fallback 代理组：主节点不可用时切换到后续节点。
+# proxies 顺序即故障切换优先级。
+- name: FallbackProxy
+  type: fallback
+  proxies: [{{ .GroupProxies }}]
+  url: http://www.gstatic.com/generate_204
+  interval: 120

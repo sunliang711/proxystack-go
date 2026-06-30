@@ -1,0 +1,16 @@
+# vmess gRPC inbound：使用 grpc 传输的 VMess 节点。
+# 当前 stack 模型只声明 network；如需 serviceName，请与生成器能力保持一致。
+- name: vmess-grpc
+  protocol: vmess
+  listen: 0.0.0.0
+  port: 24103
+  udp: true
+  # server: edge.example.com
+  # region: US
+  network: grpc
+  sub: true
+  users:
+    - user: user1
+      uuid: 11111111-1111-4111-8111-111111111111
+      email:
+      remark: example vmess grpc

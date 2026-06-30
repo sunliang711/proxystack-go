@@ -1,0 +1,2 @@
+# stack 角色：普通边缘代理实例，通常同时生成 xrelay 入站和 Clash 出站。
+role: edge

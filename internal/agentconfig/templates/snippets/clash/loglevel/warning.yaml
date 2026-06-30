@@ -1,0 +1,2 @@
+# mihomo 日志级别：warning，只输出警告和错误。
+loglevel: warning

@@ -1,0 +1,10 @@
+# raw socks5 upstream：mihomo 原生 SOCKS5 节点。
+# 不需要认证时可以删除 username/password。
+- name: server-socks5
+  type: raw
+  config:
+    type: socks5
+    server: socks.example.com
+    port: 1080
+    username: up-user
+    password: up-pass

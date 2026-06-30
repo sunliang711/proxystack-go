@@ -1,0 +1,3 @@
+# Xray stats：开启后可采集 inbound/outbound 流量统计。
+stats:
+  enabled: true

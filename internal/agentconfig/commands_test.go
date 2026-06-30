@@ -148,6 +148,27 @@ func TestAddStackUsesReferenceTemplateFormat(t *testing.T) {
 	require.NotEqual(t, "11111111-1111-4111-8111-111111111111", stack.Xrelay.Inbounds[1].Users[0].UUID)
 }
 
+// TestAddStackUsesSharedSnippetComments 验证 add 模板会展开 example 共用的注释片段。
+func TestAddStackUsesSharedSnippetComments(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "config.yaml")
+	require.NoError(t, InitProject(InitOptions{BaseDir: baseDir, ExternalHost: "proxy.example.com"}))
+
+	require.NoError(t, AddStack(AddOptions{ConfigPath: configPath, Name: "example", Template: "pair", KeepTemplatePorts: true}))
+
+	stackPath := filepath.Join(baseDir, "stacks", "example.yaml")
+	data, err := os.ReadFile(stackPath)
+	require.NoError(t, err)
+	content := string(data)
+	upstreamSnippet, err := renderStackSnippet("clash.upstream.vmess-websocket", stackTemplateSnippetContext("pair"))
+	require.NoError(t, err)
+	listenerSnippet, err := renderStackSnippet("clash.listener.socks", stackTemplateSnippetContext("pair"))
+	require.NoError(t, err)
+	require.Contains(t, content, strings.SplitN(upstreamSnippet, "\n", 2)[0])
+	require.Contains(t, content, strings.SplitN(listenerSnippet, "\n", 2)[0])
+	require.Contains(t, content, "port: 17090")
+}
+
 // TestAddAutoTemplateWithoutMembersCreatesDisabledDraft 验证 auto 模板无成员时按 Python 版写成禁用草稿。
 func TestAddAutoTemplateWithoutMembersCreatesDisabledDraft(t *testing.T) {
 	baseDir := t.TempDir()

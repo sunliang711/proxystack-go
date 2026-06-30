@@ -1,0 +1,15 @@
+# socks5 inbound：公开发布时必须使用 password 认证。
+# listen 为 0.0.0.0 时请同步确认防火墙和密码强度。
+- name: relay
+  protocol: socks5
+  listen: 0.0.0.0
+  port: {{ .RelayPort }}
+  udp: true
+  auth:
+    type: password
+    username: {{ .RelayUsername }}
+    password: change-me-relay-password
+  user: user1
+  remark: {{ .RelayRemark }}
+  # region: US
+  sub: true

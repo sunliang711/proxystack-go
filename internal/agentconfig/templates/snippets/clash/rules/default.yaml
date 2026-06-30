@@ -1,0 +1,6 @@
+# Clash 规则：使用内置 default profile，并把最终策略指向 AllProxy。
+rules:
+  profile: default
+  final: AllProxy
+  extra:
+    - DOMAIN-SUFFIX,example.com,DIRECT

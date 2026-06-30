@@ -1,0 +1,13 @@
+# raw vmess gRPC upstream：mihomo 原生 VMess gRPC 节点。
+# serviceName 需要与服务端保持一致。
+- name: server-vmess-grpc
+  type: raw
+  config:
+    type: vmess
+    server: grpc.example.com
+    port: 443
+    uuid: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+    network: grpc
+    tls: true
+    grpc_opts:
+      grpc_service_name: vmess

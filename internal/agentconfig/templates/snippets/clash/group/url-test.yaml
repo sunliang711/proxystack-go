@@ -1,0 +1,7 @@
+# url-test 代理组：按测速结果自动选择延迟最低节点。
+# url 和 interval 可按实际网络环境调整。
+- name: AutoProxy
+  type: url-test
+  proxies: [{{ .GroupProxies }}]
+  url: http://www.gstatic.com/generate_204
+  interval: 120

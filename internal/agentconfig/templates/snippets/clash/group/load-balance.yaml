@@ -1,0 +1,8 @@
+# load-balance 代理组：在多个可用节点之间分摊请求。
+# consistent-hashing 可尽量保持同目标走同节点。
+- name: BalanceProxy
+  type: load-balance
+  proxies: [{{ .GroupProxies }}]
+  url: http://www.gstatic.com/generate_204
+  interval: 120
+  strategy: consistent-hashing

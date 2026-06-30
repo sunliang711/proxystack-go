@@ -1,0 +1,15 @@
+# raw vmess WebSocket upstream：mihomo 原生 VMess WS 节点。
+# server、uuid、Host 和 path 需要与服务端保持一致。
+- name: server-a
+  type: raw
+  config:
+    type: vmess
+    server: server.example.com
+    port: 443
+    uuid: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+    network: ws
+    tls: true
+    ws_opts:
+      headers:
+        Host: server.example.com
+      path: /vmess

@@ -1,0 +1,11 @@
+# raw vmess upstream：mihomo 原生 VMess TCP 节点。
+# 部署前必须替换 server 和 uuid。
+- name: server-vmess-raw
+  type: raw
+  config:
+    type: vmess
+    server: server.example.com
+    port: 443
+    uuid: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+    network: raw
+    tls: true

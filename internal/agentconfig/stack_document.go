@@ -16,7 +16,7 @@ import (
 
 const templateVmessUUIDPlaceholder = "11111111-1111-4111-8111-111111111111"
 
-// stackTemplateFiles 保存与 Python 版 proxystack 相同的内置 stack 模板。
+// stackTemplateFiles 保存带片段 include 指令的内置 stack 模板。
 //
 //go:embed templates/stack.*.yaml
 var stackTemplateFiles embed.FS
@@ -80,6 +80,10 @@ func loadStackTemplateDocument(templateName string) (*stackDocument, error) {
 	data, err := stackTemplateFiles.ReadFile("templates/stack." + templateName + ".yaml")
 	if err != nil {
 		return nil, fmt.Errorf("stack template could not be read: %s (%w)", templateName, err)
+	}
+	data, err = renderStackTemplate(templateName, data, stackTemplateSnippetContext(templateName))
+	if err != nil {
+		return nil, err
 	}
 	return decodeStackDocument(data, "Stack template", "stack."+templateName+".yaml")
 }

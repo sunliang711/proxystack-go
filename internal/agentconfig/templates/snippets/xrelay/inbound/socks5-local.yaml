@@ -1,0 +1,13 @@
+# 默认 inter-stack socks5 inbound：只监听本机，供本机 Clash 或其他 stack 引用。
+# 若改名或删除，需要同步修改引用方 clash.upstreams[].ref。
+- name: relay
+  protocol: socks5
+  listen: 127.0.0.1
+  port: {{ .RelayPort }}
+  udp: true
+  auth:
+    type: noauth
+  user: user1
+  remark: example local socks
+  # region: US
+  sub: false

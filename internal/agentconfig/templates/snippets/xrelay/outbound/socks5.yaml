@@ -1,0 +1,8 @@
+# xrelay outbound：转发到外部 SOCKS5 上游。
+# username/password 需要成对配置，不需要认证时可以删除两行。
+outbound:
+  type: socks5
+  server: 127.0.0.1
+  port: 1080
+  username: up-user
+  password: up-pass

@@ -1,0 +1,2 @@
+# Clash 运行模式：Global，所有流量走全局代理组。
+mode: Global

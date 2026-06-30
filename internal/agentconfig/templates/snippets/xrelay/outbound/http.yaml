@@ -1,0 +1,8 @@
+# xrelay outbound：转发到外部 HTTP 上游。
+# username/password 需要成对配置，不需要认证时可以删除两行。
+outbound:
+  type: http
+  server: 127.0.0.1
+  port: 8080
+  username: up-user
+  password: up-pass

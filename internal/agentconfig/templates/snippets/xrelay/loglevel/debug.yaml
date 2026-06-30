@@ -1,0 +1,2 @@
+# Xray 日志级别：debug，适合排查问题，生产环境谨慎使用。
+loglevel: debug

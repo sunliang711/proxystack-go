@@ -1,0 +1,2 @@
+# stack 角色：聚合或自动选择节点实例，通常引用其他 edge stack。
+role: auto

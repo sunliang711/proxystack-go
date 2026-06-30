@@ -1,0 +1,3 @@
+# Xray policy：配合 stats 生成统计相关策略。
+policy:
+  enabled: true

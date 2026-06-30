@@ -1,0 +1,14 @@
+# HTTP inbound：公开发布时必须使用 password 认证。
+# HTTP inbound 不支持 udp 字段。
+- name: http
+  protocol: http
+  listen: 0.0.0.0
+  port: 24001
+  auth:
+    type: password
+    username: http-user
+    password: change-me-http-password
+  user: user1
+  remark: example http
+  region: US
+  sub: true

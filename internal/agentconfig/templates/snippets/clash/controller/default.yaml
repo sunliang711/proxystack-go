@@ -1,0 +1,4 @@
+# Clash external-controller：建议只监听本机，并替换 secret。
+controller:
+  listen: 127.0.0.1:{{ .ClashControllerPort }}
+  secret: change-me-clash-api-secret

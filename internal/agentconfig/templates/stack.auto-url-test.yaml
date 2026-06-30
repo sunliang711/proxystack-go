@@ -22,106 +22,21 @@ xrelay:
   # 【按需改】stack 级 Xray 日志级别；不填继承 defaults.xrelay.loglevel。支持全集：debug、info、warning、error、none。
   # loglevel: warning
 
-  # 【一般不改】Xray API 配置；默认开启并只监听本机，供 stats 查询使用。
-  api:
-    # 是否启用 Xray API。
-    enabled: true
-    # API 出站标识。
-    tag: api
-    # 【按需改】API 监听地址；add 默认会自动分配端口。
-    listen: 127.0.0.1:10150
-    # 启用的 API 服务列表。
-    services: [StatsService]
+{{ stackSnippet "xrelay.api.default" 2 }}
 
-  # 【一般不改】Xray stats 配置；默认开启以采集流量统计。
-  stats:
-    # 是否启用 stats。
-    enabled: true
+{{ stackSnippet "xrelay.stats.enabled" 2 }}
 
-  # 【一般不改】Xray policy 配置；默认开启并继承全局统计开关。
-  policy:
-    # 是否生成 policy 配置。
-    enabled: true
+{{ stackSnippet "xrelay.policy.enabled" 2 }}
 
   # xrelay 入站列表，会生成对应 Xray inbound。
   inbounds:
-    # 【被引用】聚合后的 socks5 入口名称；客户端或其他 stack 可通过 <stack>.relay 引用这里。
-    # 若改名，需要同步修改引用方 ref。
-    - name: relay
-      # 入站协议；支持全集：vmess、shadowsocks、socks5、http；这里提供 socks5 入口。
-      protocol: socks5
-      # 【按需改】入站监听地址；0.0.0.0 表示监听所有网卡。
-      listen: 0.0.0.0
-      # 【按需改】入站监听端口；需要避免与其他服务冲突。
-      port: 25000
-      # 【按需改】订阅节点 server；不填时使用全局 external_host。
-      # server: edge.example.com
-      # 是否允许该 socks5 入站转发 UDP。
-      udp: true
-      # 入站认证配置。
-      auth:
-        # 认证类型；支持全集：noauth、password；password 表示使用用户名密码。
-        type: password
-        # 【按需改】socks5 用户名；部署前按需替换。
-        username: auto
-        # 【必改】socks5 密码；部署前必须替换。
-        password: change-me-relay-password
-      # 【按需改】订阅或统计中的用户标识。
-      user: user1
-      # 【按需改】入站备注，会显示在订阅节点名称中。
-      remark: auto relay socks
-      # 【按需改】订阅地区简称，只校验两位大写字母格式，例如 US/HK/JP；该 inbound 下所有 users 共用。
-      # region: US
-      # 【按需改】是否导出到订阅；true 表示生成订阅节点。
-      sub: true
+{{ stackSnippet "xrelay.inbound.socks5" 4 }}
 
-    # 【按需改】入站名称；这里示例一个对外 vmess 入口。
-    - name: vmess
-      # 入站协议；支持全集：vmess、shadowsocks、socks5、http；vmess 用于兼容 Xray/V2Ray 客户端。
-      protocol: vmess
-      # 【按需改】入站监听地址；0.0.0.0 表示监听所有网卡。
-      listen: 0.0.0.0
-      # 【按需改】入站监听端口；对外开放时需放行防火墙。
-      port: 24100
-      # 是否允许该 vmess 入站订阅节点转发 UDP。
-      udp: true
-      # 【按需改】订阅节点 server；不填时使用全局 external_host。
-      # server: edge.example.com
-      # 传输网络类型；raw 表示普通 TCP，其他值按 Xray 支持的 network 填写。
-      network: raw
-      # 【按需改】是否导出到订阅；true 表示生成订阅节点。
-      sub: true
-      # vmess 客户端用户列表；单用户也写一条 users 记录。
-      users:
-        # 【按需改】订阅或统计中的用户标识。
-        - user: user1
-          # 【必改】vmess 用户 UUID；部署前必须替换。
-          uuid: 11111111-1111-4111-8111-111111111111
-          # 【按需改】Xray 统计 email；不填时使用 user。
-          email:
-          # 【按需改】订阅节点名称。
-          remark: example vmess
+{{ stackSnippet "xrelay.inbound.vmess-raw" 4 }}
 
   # 【一般不改】xrelay 出站配置，决定入站流量转发到哪里。
   # 下方方案只保留一种：默认方案 A 走本 stack 的 Clash；改用其他方案时同步删除或注释不适用字段。
-  outbound:
-    # 出站目标类型；支持全集：clash、socks5、http、direct。
-    # 方案 A：走本 stack 的 Clash socks 监听；type=clash 只使用 ref，不使用 server/port/username/password。
-    type: clash
-    # 【一般不改】出站引用；指向 stack.clash.socks 形式的唯一本地 socks 监听。
-    ref: auto.clash.socks
-    # 方案 B：走外部 SOCKS5 上游；type=socks5 使用 server/port，可选 username/password，不使用 ref。
-    # type: socks5
-    # server: 127.0.0.1
-    # port: 1080
-    # username: up-user
-    # password: up-pass
-    # 方案 C：走外部 HTTP 上游；type=http 使用 server/port，可选 username/password，不使用 ref。
-    # type: http
-    # server: 127.0.0.1
-    # port: 8080
-    # 方案 D：直连；type=direct 不使用 ref/server/port/username/password。
-    # type: direct
+{{ stackSnippet "xrelay.outbound.clash" 2 }}
 
 # Clash/mihomo 侧配置，用于自动探测并选择可用上游。
 clash:
@@ -133,73 +48,28 @@ clash:
   # 【按需改】stack 级 mihomo/clash 日志级别；不填继承 defaults.clash.loglevel。支持全集：debug、info、warning、error、silent。
   # loglevel: info
 
-  # Clash external-controller API 配置。
-  controller:
-    # 【按需改】控制器监听地址；建议只监听本机。
-    listen: 127.0.0.1:19150
-    # 【必改】控制器访问密钥；部署前必须替换。
-    secret: change-me-clash-api-secret
+{{ stackSnippet "clash.controller.default" 2 }}
 
   # Clash 本地监听器配置。
   listeners:
     # socks 监听器列表，供 xrelay 或本机连接。
     socks:
-      # 【一般不改】socks 监听器名称；会被 ref 引用。
-      - name: local
-        # socks 监听地址；127.0.0.1 表示仅本机可访问。
-        listen: 127.0.0.1
-        # 【按需改】socks 监听端口；需要避免与其他服务冲突。
-        port: 17150
-        # 【按需改】mihomo 高级 listener 认证用户；不写表示跟随全局 authentication，[] 表示跳过认证。
-        # users:
-        #   - username: local-user
-        #     password: local-pass
+{{ stackSnippet "clash.listener.socks" 6 }}
     # HTTP 监听器列表，供本机 HTTP 代理客户端连接。
     http:
-      # 【一般不改】HTTP 监听器名称。
-      - name: local-http
-        # HTTP 监听地址；可与 socks 监听地址独立配置。
-        listen: 127.0.0.1
-        # 【按需改】HTTP 监听端口；需要避免与其他服务冲突。
-        port: 18150
-        # 【按需改】不写 users 表示跟随全局 authentication，users: [] 表示该 listener 不认证。
-        # users: []
+{{ stackSnippet "clash.listener.http" 6 }}
 
   # Clash 上游代理列表。
   upstreams:
-    # 【被引用】上游代理名称；groups[].proxies 会引用它，改名需同步更新代理组。
-    - name: usa1-local
-      # 上游类型；支持全集：raw、xrelay-socks5；xrelay-socks5 表示引用其他 stack 的 xrelay socks5 入站。
-      type: xrelay-socks5
-      # 【必改】上游引用；指向 usa1 stack 中名为 relay 的入站。
-      ref: usa1.relay
+{{ stackMemberSnippet "clash.upstream.xrelay-socks5" "usa1" 4 }}
 
-    # 【被引用】上游代理名称；groups[].proxies 会引用它，改名需同步更新代理组。
-    - name: usa2-local
-      # 上游类型；支持全集：raw、xrelay-socks5；xrelay-socks5 表示引用其他 stack 的 xrelay socks5 入站。
-      type: xrelay-socks5
-      # 【必改】上游引用；指向 usa2 stack 中名为 relay 的入站。
-      ref: usa2.relay
+{{ stackMemberSnippet "clash.upstream.xrelay-socks5" "usa2" 4 }}
 
   # Clash 代理组列表。
   groups:
-    # 自动测速代理组名称；供规则或其他组引用。
-    - name: AutoProxy
-      # 代理组类型；支持全集：select、url-test、load-balance、fallback；url-test 会按测速结果自动选择延迟最低节点。
-      type: url-test
-      # 【被引用】参与自动测速的上游节点列表，必须与 upstreams[].name 保持一致。
-      proxies: [usa1-local, usa2-local]
-      # 【按需改】测速 URL；用于判断节点延迟和可用性。
-      url: http://www.gstatic.com/generate_204
-      # 【按需改】测速间隔，单位秒。
-      interval: 120
+{{ stackSnippet "clash.group.url-test" 4 }}
 
-    # 总代理组名称；提供自动组、单节点和直连选择。
-    - name: AllProxy
-      # 代理组类型；支持全集：select、url-test、load-balance、fallback；select 表示手动选择节点。
-      type: select
-      # 【被引用】代理组成员；包含自动组、单节点和直连，必须与组名和 upstreams[].name 保持一致。
-      proxies: [AutoProxy, usa1-local, usa2-local, DIRECT]
+{{ stackSnippet "clash.group.select" 4 }}
 
   # Clash 规则集选择。
   rules:

@@ -154,6 +154,8 @@ func normalizeExampleTerm(value string) string {
 		return "group"
 	case "rule":
 		return "rules"
+	case "vmess":
+		return "vmess-raw"
 	default:
 		return strings.ToLower(strings.TrimSpace(value))
 	}

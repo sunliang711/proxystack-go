@@ -1,0 +1,2 @@
+# Xray 日志级别：info，输出常规运行信息。
+loglevel: info

@@ -1,0 +1,15 @@
+# raw vless WebSocket upstream：mihomo 原生 VLESS WS 节点。
+# 当前作为 Clash raw upstream 使用，不是 xrelay inbound。
+- name: server-vless-ws
+  type: raw
+  config:
+    type: vless
+    server: vless.example.com
+    port: 443
+    uuid: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+    network: ws
+    tls: true
+    ws_opts:
+      headers:
+        Host: vless.example.com
+      path: /vless

@@ -1,0 +1,2 @@
+# Xray 日志级别：none，关闭常规日志输出。
+loglevel: none

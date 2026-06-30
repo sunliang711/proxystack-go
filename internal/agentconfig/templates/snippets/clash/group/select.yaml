@@ -1,0 +1,5 @@
+# select 代理组：手动选择上游节点或 DIRECT。
+# proxies 必须引用 upstreams[].name 或内置策略名。
+- name: AllProxy
+  type: select
+  proxies: [{{ .SelectProxies }}]

@@ -1,8 +1,10 @@
 # xrelay outbound：转发到外部 HTTP 上游。
 # username/password 需要成对配置，不需要认证时可以删除两行。
+# private_direct 为 true 时，本机、私网和 CGNAT 目标地址会由 Xray 直连。
 outbound:
   type: http
   server: 127.0.0.1
   port: 8080
   username: up-user
   password: up-pass
+  # private_direct: true

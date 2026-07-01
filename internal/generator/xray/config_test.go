@@ -135,6 +135,19 @@ password: http-up-pass`,
 	}
 }
 
+// TestRenderXrayPrivateDirectProxyOutboundMatchesGolden 验证 Xray-only 代理出口可为私网地址生成直连路由。
+func TestRenderXrayPrivateDirectProxyOutboundMatchesGolden(t *testing.T) {
+	stackSet := makeStackSet(t, makeStack(t, "socksprivate", `type: socks5
+server: socks.example.com
+port: 1080
+private_direct: true`, asListItem(socksNoAuthInboundYAML()), ""))
+
+	output, err := xray.DumpsConfig(stackSet, "socksprivate")
+
+	require.NoError(t, err)
+	require.Equal(t, readGolden(t, "socks-private-direct.json"), output)
+}
+
 // TestRenderXrayWildcardClashMatchesGolden 验证 wildcard clash listener 会生成 loopback socks outbound。
 func TestRenderXrayWildcardClashMatchesGolden(t *testing.T) {
 	stackSet := makeStackSet(t, makeStack(t, "wildcard", "type: clash\nref: wildcard.clash.socks", asListItem(socksNoAuthInboundYAML()), `
@@ -214,6 +227,49 @@ clash:
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "xray api listen must use loopback host")
+}
+
+// TestXrayPrivateDirectRejectsClashOutbound 验证 private_direct 只允许用于 Xray-only 代理出口。
+func TestXrayPrivateDirectRejectsClashOutbound(t *testing.T) {
+	_, err := parseStack(`name: clash-private
+enabled: true
+role: edge
+xrelay:
+  enabled: true
+  api:
+    enabled: false
+  stats:
+    enabled: false
+  policy:
+    enabled: false
+  outbound:
+    type: clash
+    ref: clash-private.clash.socks
+    private_direct: true
+  inbounds:
+` + indentLines(asListItem(socksNoAuthInboundYAML()), 4) + `
+clash:
+  enabled: true
+  mode: Rule
+  controller:
+    listen: 127.0.0.1:19001
+    secret: demo-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17001
+  upstreams: []
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [DIRECT]
+  rules:
+    profile: default
+`)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "private_direct is only supported for socks5/http outbound")
 }
 
 func loadExampleStackSet(t *testing.T) domain.StackSet {

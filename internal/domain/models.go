@@ -754,16 +754,20 @@ func (i Inbound) validateShadowsocks2022Passwords(method string) error {
 
 // XrelayOutbound 保存 xrelay egress 配置。
 type XrelayOutbound struct {
-	Type     string `json:"type" yaml:"type" mapstructure:"type"`
-	Ref      string `json:"ref" yaml:"ref" mapstructure:"ref"`
-	Server   string `json:"server" yaml:"server" mapstructure:"server"`
-	Port     int    `json:"port" yaml:"port" mapstructure:"port"`
-	Username string `json:"username" yaml:"username" mapstructure:"username"`
-	Password string `json:"password" yaml:"password" mapstructure:"password"`
+	Type          string `json:"type" yaml:"type" mapstructure:"type"`
+	Ref           string `json:"ref" yaml:"ref" mapstructure:"ref"`
+	Server        string `json:"server" yaml:"server" mapstructure:"server"`
+	Port          int    `json:"port" yaml:"port" mapstructure:"port"`
+	Username      string `json:"username" yaml:"username" mapstructure:"username"`
+	Password      string `json:"password" yaml:"password" mapstructure:"password"`
+	PrivateDirect bool   `json:"private_direct" yaml:"private_direct" mapstructure:"private_direct"`
 }
 
 // Validate 校验 outbound 类型和对应目标字段。
 func (x XrelayOutbound) Validate() error {
+	if x.PrivateDirect && x.Type != "socks5" && x.Type != "http" {
+		return fmt.Errorf("private_direct is only supported for socks5/http outbound")
+	}
 	switch x.Type {
 	case "clash":
 		return ValidateRef(x.Ref, 3, "clash outbound ref is required")

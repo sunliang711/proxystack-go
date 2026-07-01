@@ -9,6 +9,23 @@ import (
 )
 
 const outboundTagPrefix = "egress"
+const privateDirectOutboundTagPrefix = "private-direct"
+
+var privateDirectDomains = []string{
+	"localhost",
+	"domain:local",
+}
+
+var privateDirectIPs = []string{
+	"127.0.0.0/8",
+	"10.0.0.0/8",
+	"172.16.0.0/12",
+	"192.168.0.0/16",
+	"100.64.0.0/10",
+	"::1/128",
+	"fc00::/7",
+	"fe80::/10",
+}
 
 // GeneratorError 表示 Xray 配置生成失败。
 type GeneratorError struct {
@@ -22,12 +39,13 @@ func (e GeneratorError) Error() string {
 
 // Config 是稳定 JSON 输出的顶层结构。
 type Config struct {
-	Log       LogConfig     `json:"log"`
-	API       *APIConfig    `json:"api,omitempty"`
-	Stats     *emptyObject  `json:"stats,omitempty"`
-	Policy    *PolicyConfig `json:"policy,omitempty"`
-	Inbounds  []any         `json:"inbounds"`
-	Outbounds []any         `json:"outbounds"`
+	Log       LogConfig      `json:"log"`
+	API       *APIConfig     `json:"api,omitempty"`
+	Stats     *emptyObject   `json:"stats,omitempty"`
+	Policy    *PolicyConfig  `json:"policy,omitempty"`
+	Routing   *RoutingConfig `json:"routing,omitempty"`
+	Inbounds  []any          `json:"inbounds"`
+	Outbounds []any          `json:"outbounds"`
 }
 
 // LogConfig 保存 Xray 日志级别。
@@ -172,6 +190,19 @@ type directOutbound struct {
 	Settings emptyObject `json:"settings"`
 }
 
+// RoutingConfig 保存 Xray 路由规则，仅在需要本地分流时生成。
+type RoutingConfig struct {
+	Rules []RoutingRule `json:"rules"`
+}
+
+// RoutingRule 保存单条 Xray field 路由规则。
+type RoutingRule struct {
+	Type        string   `json:"type"`
+	Domain      []string `json:"domain,omitempty"`
+	IP          []string `json:"ip,omitempty"`
+	OutboundTag string   `json:"outboundTag"`
+}
+
 // RenderConfig 生成指定启用 stack 的 Xray 配置结构。
 func RenderConfig(stackSet domain.StackSet, stackName string) (Config, error) {
 	stack, err := enabledXrelayStack(stackSet, stackName)
@@ -206,11 +237,12 @@ func RenderConfig(stackSet domain.StackSet, stackName string) (Config, error) {
 		}
 		config.Inbounds = append(config.Inbounds, rendered)
 	}
-	outbound, err := RenderOutbound(stack.Xrelay.Outbound, referenceGraph, stack.Name)
+	outbounds, routing, err := RenderOutbounds(stack.Xrelay.Outbound, referenceGraph, stack.Name)
 	if err != nil {
 		return Config{}, err
 	}
-	config.Outbounds = []any{outbound}
+	config.Routing = routing
+	config.Outbounds = outbounds
 	return config, nil
 }
 
@@ -306,9 +338,48 @@ func RenderOutbound(outbound domain.XrelayOutbound, referenceGraph graph.Referen
 	}
 }
 
+// RenderOutbounds 生成 Xray outbound 列表，并在 Xray-only 代理出口启用私网直连时追加 routing。
+func RenderOutbounds(outbound domain.XrelayOutbound, referenceGraph graph.ReferenceGraph, stackName string) ([]any, *RoutingConfig, error) {
+	rendered, err := RenderOutbound(outbound, referenceGraph, stackName)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !outbound.PrivateDirect || (outbound.Type != "socks5" && outbound.Type != "http") {
+		return []any{rendered}, nil, nil
+	}
+	privateDirectTag := PrivateDirectOutboundTag(stackName)
+	return []any{
+		rendered,
+		directOutbound{Tag: privateDirectTag, Protocol: "freedom", Settings: emptyObject{}},
+	}, RenderPrivateDirectRouting(privateDirectTag), nil
+}
+
 // OutboundTag 生成包含 stack 名的 Xray 出口 tag。
 func OutboundTag(stackName string) string {
 	return outboundTagPrefix + "-" + stackName
+}
+
+// PrivateDirectOutboundTag 生成私网直连 outbound tag。
+func PrivateDirectOutboundTag(stackName string) string {
+	return privateDirectOutboundTagPrefix + "-" + stackName
+}
+
+// RenderPrivateDirectRouting 生成本机、私网和 CGNAT 网段直连的 Xray 路由。
+func RenderPrivateDirectRouting(outboundTag string) *RoutingConfig {
+	return &RoutingConfig{
+		Rules: []RoutingRule{
+			{
+				Type:        "field",
+				Domain:      append([]string(nil), privateDirectDomains...),
+				OutboundTag: outboundTag,
+			},
+			{
+				Type:        "field",
+				IP:          append([]string(nil), privateDirectIPs...),
+				OutboundTag: outboundTag,
+			},
+		},
+	}
 }
 
 // NormalizeInternalEndpointAddress 把本机 wildcard listener 地址归一为 loopback。

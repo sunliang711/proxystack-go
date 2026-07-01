@@ -181,6 +181,7 @@ egress-<stack>
 
 - 输出外部代理 server/port。
 - username/password 可选。
+- `private_direct=true` 时追加 freedom outbound，并生成 routing 让本机、私网、CGNAT 和 IPv6 本地地址直连。
 
 `type=direct`：
 

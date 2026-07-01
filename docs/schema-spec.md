@@ -206,6 +206,7 @@ xrelay_inbound:
 | `port` | int | socks5/http 必填 | 外部代理端口 |
 | `username` | string | 否 | 外部代理用户名 |
 | `password` | string | 否 | 外部代理密码 |
+| `private_direct` | bool | 否 | 仅支持 socks5/http；为 true 时 Xray 私网目标直连 |
 
 `direct` 不需要额外字段。
 

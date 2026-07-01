@@ -1,0 +1,62 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "domain": [
+          "localhost",
+          "domain:local"
+        ],
+        "outboundTag": "private-direct-socksprivate"
+      },
+      {
+        "type": "field",
+        "ip": [
+          "127.0.0.0/8",
+          "10.0.0.0/8",
+          "172.16.0.0/12",
+          "192.168.0.0/16",
+          "100.64.0.0/10",
+          "::1/128",
+          "fc00::/7",
+          "fe80::/10"
+        ],
+        "outboundTag": "private-direct-socksprivate"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "tag": "socks5:26003:socks-noauth",
+      "listen": "127.0.0.1",
+      "port": 26003,
+      "protocol": "socks",
+      "settings": {
+        "auth": "noauth",
+        "udp": false
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "egress-socksprivate",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "socks.example.com",
+            "port": 1080
+          }
+        ]
+      }
+    },
+    {
+      "tag": "private-direct-socksprivate",
+      "protocol": "freedom",
+      "settings": {}
+    }
+  ]
+}

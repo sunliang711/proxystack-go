@@ -481,14 +481,15 @@ func (a InboundAuth) Validate() error {
 
 // InboundUser 保存 vmess/shadowsocks 多用户凭据。
 type InboundUser struct {
-	User     string `json:"user" yaml:"user" mapstructure:"user"`
-	UUID     string `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
-	Password string `json:"password" yaml:"password" mapstructure:"password"`
-	Method   string `json:"method" yaml:"method" mapstructure:"method"`
-	Cipher   string `json:"cipher" yaml:"cipher" mapstructure:"cipher"`
-	Email    string `json:"email" yaml:"email" mapstructure:"email"`
-	Remark   string `json:"remark" yaml:"remark" mapstructure:"remark"`
-	Tag      string `json:"tag" yaml:"tag" mapstructure:"tag"`
+	User            string `json:"user" yaml:"user" mapstructure:"user"`
+	UUID            string `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
+	Password        string `json:"password" yaml:"password" mapstructure:"password"`
+	Method          string `json:"method" yaml:"method" mapstructure:"method"`
+	Cipher          string `json:"cipher" yaml:"cipher" mapstructure:"cipher"`
+	Email           string `json:"email" yaml:"email" mapstructure:"email"`
+	Remark          string `json:"remark" yaml:"remark" mapstructure:"remark"`
+	DisplayTemplate string `json:"display_template" yaml:"display_template" mapstructure:"display_template"`
+	Tag             string `json:"tag" yaml:"tag" mapstructure:"tag"`
 
 	fields map[string]bool `json:"-" yaml:"-"`
 }
@@ -542,26 +543,27 @@ func (o *GRPCOptions) UnmarshalYAML(value *yaml.Node) error {
 
 // Inbound 保存 xrelay inbound 配置。
 type Inbound struct {
-	Name     string        `json:"name" yaml:"name" mapstructure:"name"`
-	Protocol string        `json:"protocol" yaml:"protocol" mapstructure:"protocol"`
-	Listen   string        `json:"listen" yaml:"listen" mapstructure:"listen"`
-	Port     int           `json:"port" yaml:"port" mapstructure:"port"`
-	UDP      bool          `json:"udp" yaml:"udp" mapstructure:"udp"`
-	Auth     *InboundAuth  `json:"auth" yaml:"auth" mapstructure:"auth"`
-	User     string        `json:"user" yaml:"user" mapstructure:"user"`
-	Server   string        `json:"server" yaml:"server" mapstructure:"server"`
-	Remark   string        `json:"remark" yaml:"remark" mapstructure:"remark"`
-	Region   string        `json:"region" yaml:"region" mapstructure:"region"`
-	Tag      string        `json:"tag" yaml:"tag" mapstructure:"tag"`
-	Sub      bool          `json:"sub" yaml:"sub" mapstructure:"sub"`
-	UUID     string        `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
-	Users    []InboundUser `json:"users" yaml:"users" mapstructure:"users"`
-	Network  string        `json:"network" yaml:"network" mapstructure:"network"`
-	Password string        `json:"password" yaml:"password" mapstructure:"password"`
-	Method   string        `json:"method" yaml:"method" mapstructure:"method"`
-	Cipher   string        `json:"cipher" yaml:"cipher" mapstructure:"cipher"`
-	WSOpts   *WebSocketOptions `json:"ws_opts" yaml:"ws_opts" mapstructure:"ws_opts"`
-	GRPCOpts *GRPCOptions      `json:"grpc_opts" yaml:"grpc_opts" mapstructure:"grpc_opts"`
+	Name            string            `json:"name" yaml:"name" mapstructure:"name"`
+	Protocol        string            `json:"protocol" yaml:"protocol" mapstructure:"protocol"`
+	Listen          string            `json:"listen" yaml:"listen" mapstructure:"listen"`
+	Port            int               `json:"port" yaml:"port" mapstructure:"port"`
+	UDP             bool              `json:"udp" yaml:"udp" mapstructure:"udp"`
+	Auth            *InboundAuth      `json:"auth" yaml:"auth" mapstructure:"auth"`
+	User            string            `json:"user" yaml:"user" mapstructure:"user"`
+	Server          string            `json:"server" yaml:"server" mapstructure:"server"`
+	Remark          string            `json:"remark" yaml:"remark" mapstructure:"remark"`
+	DisplayTemplate string            `json:"display_template" yaml:"display_template" mapstructure:"display_template"`
+	Region          string            `json:"region" yaml:"region" mapstructure:"region"`
+	Tag             string            `json:"tag" yaml:"tag" mapstructure:"tag"`
+	Sub             bool              `json:"sub" yaml:"sub" mapstructure:"sub"`
+	UUID            string            `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
+	Users           []InboundUser     `json:"users" yaml:"users" mapstructure:"users"`
+	Network         string            `json:"network" yaml:"network" mapstructure:"network"`
+	Password        string            `json:"password" yaml:"password" mapstructure:"password"`
+	Method          string            `json:"method" yaml:"method" mapstructure:"method"`
+	Cipher          string            `json:"cipher" yaml:"cipher" mapstructure:"cipher"`
+	WSOpts          *WebSocketOptions `json:"ws_opts" yaml:"ws_opts" mapstructure:"ws_opts"`
+	GRPCOpts        *GRPCOptions      `json:"grpc_opts" yaml:"grpc_opts" mapstructure:"grpc_opts"`
 
 	fields map[string]bool `json:"-" yaml:"-"`
 }

@@ -160,7 +160,8 @@ xrelay_inbound:
 | `auth` | object | 协议相关 | 无 | socks/http 鉴权 |
 | `user` | string | 单用户订阅需要 | 无 | 订阅用户 |
 | `server` | string | 否 | `external_host` | 订阅 server 覆盖 |
-| `remark` | string | 否 | `name` | 订阅备注 |
+| `remark` | string | 否 | 无 | 订阅基础备注；最终展示名见生成器规格 |
+| `display_template` | string | 否 | 无 | 订阅节点展示名模板；见生成器规格模板语法 |
 | `region` | string | 否 | 无 | 两位大写字母 |
 | `tag` | string | 否 | `<protocol>:<port>:<name>` | Xray tag 和订阅 tag 基础 |
 | `sub` | bool | 是 | 无 | 是否进入订阅；必须显式声明，避免订阅暴露语义被默认值悄悄改变 |
@@ -192,7 +193,8 @@ xrelay_inbound:
 | `password` | string | shadowsocks 多用户必填 | shadowsocks |
 | `method` | string | 否 | 传统 shadowsocks |
 | `cipher` | string | 否 | 传统 shadowsocks |
-| `remark` | string | 是 | 订阅展示 |
+| `remark` | string | 否 | 订阅基础备注 |
+| `display_template` | string | 否 | 订阅节点展示名模板；覆盖 inbound 级模板 |
 | `tag` | string | 否 | 订阅 tag 覆盖 |
 | `email` | string | 否 | Xray 用户统计 |
 

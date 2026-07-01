@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/eagle/proxystack-go/internal/config"
+	"github.com/eagle/proxystack-go/internal/domain"
 	subgen "github.com/eagle/proxystack-go/internal/generator/sub"
 	"github.com/eagle/proxystack-go/internal/testutil"
 	"github.com/rs/zerolog"
@@ -172,6 +173,138 @@ clash:
 	clashOutput, err := subgen.RenderClashSubscription(index, "alice", "", "")
 	require.NoError(t, err)
 	require.Contains(t, clashOutput, "    network: raw\n    udp: false\n")
+}
+
+// TestRenderStackInputUsesNewRemarkStrategy 验证订阅节点名优先使用显式 remark，未配置时退回 stack + protocol。
+func TestRenderStackInputUsesNewRemarkStrategy(t *testing.T) {
+	baseDir := t.TempDir()
+	stacksDir := filepath.Join(baseDir, "stacks")
+	require.NoError(t, os.MkdirAll(stacksDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "config.yaml"), []byte(`version: 1
+external_host: proxy.example.com
+paths:
+  stacks: stacks
+port_ranges:
+  xrelay_inbound: 4300-4399
+  clash_socks: 7001-7101
+  clash_http: 7201-7301
+  xray_api_range: 10001-10999
+  clash_controller: 19000-19999
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(stacksDir, "edge.yaml"), []byte(`name: edge
+enabled: true
+role: edge
+xrelay:
+  enabled: true
+  api:
+    enabled: false
+  stats:
+    enabled: false
+  policy:
+    enabled: false
+  outbound:
+    type: direct
+  inbounds:
+    - name: relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24001
+      auth:
+        type: password
+        username: demo-user
+        password: demo-pass
+      user: alice
+      remark: Friendly Relay
+      sub: true
+    - name: web
+      protocol: http
+      listen: 127.0.0.1
+      port: 24003
+      auth:
+        type: password
+        username: demo-user
+        password: demo-pass
+      user: alice
+      remark: Web Relay
+      display_template: '{{ .stack | toUpper }} {{ .protocol | toLower }} {{ .port }} {{ .user }} {{ .remark | replace " " "-" }}'
+      sub: true
+    - name: vmess
+      protocol: vmess
+      listen: 127.0.0.1
+      port: 24002
+      network: raw
+      display_template: '{{ .stack }} {{ .protocol }} {{ .user }} {{ .remark | trim }}'
+      sub: true
+      users:
+        - user: alice
+          uuid: 11111111-1111-4111-8111-111111111111
+        - user: bob
+          uuid: 22222222-2222-4222-8222-222222222222
+          remark: Bob Relay
+          display_template: '{{ .user | toUpper }} {{ .remark | toLower }}'
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: demo-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17091
+  upstreams: []
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [DIRECT]
+  rules:
+    profile: default
+`), 0o644))
+	globalConfig, err := config.LoadConfig(filepath.Join(baseDir, "config.yaml"))
+	require.NoError(t, err)
+	stackSet, err := config.LoadStacks(globalConfig, false)
+	require.NoError(t, err)
+
+	input, err := subgen.RenderSingleStackInputAt(stackSet, "edge", fixedGeneratedAt)
+	require.NoError(t, err)
+	require.Len(t, input.Nodes, 4)
+	require.Equal(t, "Friendly Relay", input.Nodes[0].Remark)
+	require.Equal(t, "EDGE http 24003 alice Web-Relay", input.Nodes[1].Remark)
+	require.Equal(t, "edge vmess alice vmess", input.Nodes[2].Remark)
+	require.Equal(t, "BOB bob relay", input.Nodes[3].Remark)
+}
+
+// TestRenderStackInputRejectsBadDisplayTemplate 验证 display_template 中未知变量会直接生成失败。
+func TestRenderStackInputRejectsBadDisplayTemplate(t *testing.T) {
+	stackSet := domain.StackSet{
+		Config: domain.GlobalConfig{ExternalHost: "proxy.example.com"},
+		Stacks: []domain.Stack{
+			{
+				Name:    "edge",
+				Enabled: true,
+				Xrelay: domain.XrelayConfig{
+					Enabled: true,
+					Inbounds: []domain.Inbound{
+						{
+							Name:            "relay",
+							Protocol:        "socks5",
+							Listen:          "127.0.0.1",
+							Port:            24001,
+							Auth:            &domain.InboundAuth{Type: "password", Username: "demo-user", Password: "demo-pass"},
+							User:            "alice",
+							DisplayTemplate: "{{ .missing }}",
+							Sub:             true,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := subgen.RenderSingleStackInputAt(stackSet, "edge", fixedGeneratedAt)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid display_template")
 }
 
 // TestRenderStackInputKeepsVmessTransportOptions 验证 agent 导出的 websocket/grpc 参数会传递到 Clash 订阅。

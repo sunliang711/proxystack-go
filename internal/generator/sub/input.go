@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
+	"text/template"
 
 	"github.com/eagle/proxystack-go/internal/domain"
 )
@@ -15,6 +17,15 @@ var supportedInputExtensions = map[string]bool{
 	".yaml": true,
 	".yml":  true,
 	".json": true,
+}
+
+var displayTemplateFuncs = template.FuncMap{
+	"toUpper": strings.ToUpper,
+	"toLower": strings.ToLower,
+	"trim":    strings.TrimSpace,
+	"replace": func(old string, new string, value string) string {
+		return strings.ReplaceAll(value, old, new)
+	},
 }
 
 // RenderStackInputAt 从所有启用 stack 的 sub inbound 生成订阅 input。
@@ -117,6 +128,10 @@ func renderSingleInboundNode(stackSet domain.StackSet, stack domain.Stack, inbou
 	if user == "" {
 		user = "default"
 	}
+	remark, err := subscriptionRemark(stack.Name, inbound, user, inbound.Remark, inbound.DisplayTemplate)
+	if err != nil {
+		return Node{}, err
+	}
 	node := Node{
 		ID:       stack.Name + ":" + inbound.Name,
 		User:     user,
@@ -124,7 +139,7 @@ func renderSingleInboundNode(stackSet domain.StackSet, stack domain.Stack, inbou
 		Server:   subscriptionServer(stackSet, inbound),
 		Port:     inbound.Port,
 		Tag:      inbound.TagOrDefault(),
-		Remark:   subscriptionRemark(stack.Name, inbound, user, inbound.Remark),
+		Remark:   remark,
 		Region:   inbound.Region,
 	}
 	applyInboundUDP(&node, inbound)
@@ -150,6 +165,10 @@ func renderVmessUserNode(stackSet domain.StackSet, stack domain.Stack, inbound d
 	if tag == "" {
 		tag = inbound.TagOrDefault() + ":" + user.User
 	}
+	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.Remark, firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
+	if err != nil {
+		return Node{}, err
+	}
 	node := Node{
 		ID:       stack.Name + ":" + inbound.Name + ":" + user.User,
 		User:     user.User,
@@ -157,7 +176,7 @@ func renderVmessUserNode(stackSet domain.StackSet, stack domain.Stack, inbound d
 		Server:   subscriptionServer(stackSet, inbound),
 		Port:     inbound.Port,
 		Tag:      tag,
-		Remark:   subscriptionRemark(stack.Name, inbound, user.User, user.Remark),
+		Remark:   remark,
 		Region:   inbound.Region,
 		UUID:     user.UUID,
 		Network:  inbound.Network,
@@ -177,6 +196,10 @@ func renderShadowsocksUserNode(stackSet domain.StackSet, stack domain.Stack, inb
 		tag = inbound.TagOrDefault() + ":" + user.User
 	}
 	method := firstNonEmpty(user.Method, user.Cipher, inbound.MethodOrCipher())
+	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.Remark, firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
+	if err != nil {
+		return Node{}, err
+	}
 	node := Node{
 		ID:       stack.Name + ":" + inbound.Name + ":" + user.User,
 		User:     user.User,
@@ -184,7 +207,7 @@ func renderShadowsocksUserNode(stackSet domain.StackSet, stack domain.Stack, inb
 		Server:   subscriptionServer(stackSet, inbound),
 		Port:     inbound.Port,
 		Tag:      tag,
-		Remark:   subscriptionRemark(stack.Name, inbound, user.User, user.Remark),
+		Remark:   remark,
 		Region:   inbound.Region,
 		Method:   method,
 		Cipher:   method,
@@ -211,12 +234,42 @@ func subscriptionServer(stackSet domain.StackSet, inbound domain.Inbound) string
 	return stackSet.Config.ExternalHost
 }
 
-func subscriptionRemark(stackName string, inbound domain.Inbound, user string, configuredRemark string) string {
-	remark := configuredRemark
-	if remark == "" {
-		remark = inbound.Name
+// subscriptionRemark 生成订阅节点展示名；display_template 优先，其次使用显式 remark，未配置时使用稳定的 stack/protocol 名称。
+func subscriptionRemark(stackName string, inbound domain.Inbound, user string, configuredRemark string, displayTemplate string) (string, error) {
+	baseRemark := configuredRemark
+	if baseRemark == "" {
+		baseRemark = inbound.Name
 	}
-	return fmt.Sprintf("%s@%s-%s:%d-%s", user, stackName, inbound.Protocol, inbound.Port, remark)
+	if displayTemplate != "" {
+		return renderDisplayTemplate(displayTemplate, map[string]any{
+			"stack":    stackName,
+			"protocol": inbound.Protocol,
+			"port":     inbound.Port,
+			"user":     user,
+			"remark":   baseRemark,
+		})
+	}
+	if configuredRemark != "" {
+		return configuredRemark, nil
+	}
+	return fmt.Sprintf("%s %s", stackName, inbound.Protocol), nil
+}
+
+// renderDisplayTemplate 使用受限函数集渲染订阅节点显示名模板。
+func renderDisplayTemplate(templateText string, data map[string]any) (string, error) {
+	parsedTemplate, err := template.New("display_template").Funcs(displayTemplateFuncs).Option("missingkey=error").Parse(templateText)
+	if err != nil {
+		return "", GeneratorError{Message: "invalid display_template: " + err.Error()}
+	}
+	var buffer bytes.Buffer
+	if err := parsedTemplate.Execute(&buffer, data); err != nil {
+		return "", GeneratorError{Message: "invalid display_template: " + err.Error()}
+	}
+	displayName := strings.TrimSpace(buffer.String())
+	if displayName == "" {
+		return "", GeneratorError{Message: "display_template rendered empty"}
+	}
+	return displayName, nil
 }
 
 func shadowsocksNodePassword(inbound domain.Inbound, user domain.InboundUser) string {

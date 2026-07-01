@@ -284,10 +284,34 @@ MATCH,<rules.final>
 | `port` | inbound.port |
 | `user` | inbound.user 或 users[].user |
 | `tag` | inbound.tag 或生成 tag；多用户可用 users[].tag 覆盖 |
-| `remark` | `{user}@{stack}-{protocol}:{port}-{remark}` |
+| `remark` | `display_template` 非空时使用模板结果；否则显式 remark 非空时使用原值；都为空时使用 `{stack} {protocol}` |
 | `region` | inbound.region |
 | `udp` | inbound 显式配置；仅 vmess/shadowsocks/socks5 支持，true/false 均会传递 |
 | `auth` | 协议凭据 |
+
+`display_template` 使用 Go `text/template` 语法，支持变量：
+
+- `{{.stack}}`：stack 名。
+- `{{.protocol}}`：inbound 协议。
+- `{{.port}}`：inbound 端口。
+- `{{.user}}`：订阅用户。
+- `{{.remark}}`：基础备注；显式 remark 非空时使用 remark，否则使用 inbound name。
+
+支持函数：
+
+- `toUpper`
+- `toLower`
+- `trim`
+- `replace`
+
+示例：
+
+```yaml
+remark: Tokyo 01
+display_template: '{{ .stack | toUpper }} {{ .protocol }} {{ .port }} {{ .remark | replace " " "-" }}'
+```
+
+模板结果会 trim；语法错误、未知变量或渲染后为空时生成失败。多用户节点优先使用 `users[].display_template`，未配置时继承 inbound 级 `display_template`。
 
 vmess 多用户：
 

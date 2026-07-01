@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -69,6 +70,65 @@ func TestNativeBackupImportRequiresForce(t *testing.T) {
 	require.Contains(t, err.Error(), "use --force")
 }
 
+// TestNativeBackupImportStopsRunningOldServices 验证 import 覆盖前会停止旧配置中正在运行的服务。
+func TestNativeBackupImportStopsRunningOldServices(t *testing.T) {
+	backupPath := createNativeBackupFixture(t, "new1")
+	targetDir := t.TempDir()
+	require.NoError(t, prepareNativeImportTarget(t, targetDir, "usa1"))
+	manager := &fakeUninstallManager{active: map[string]bool{
+		"proxystack-xray@usa1.service": true,
+	}}
+	withAgentServiceManager(t, manager)
+
+	output := runAgentCommandForTest(t, "--base-dir", targetDir, "import", backupPath, "--force")
+
+	require.Contains(t, output, "Stopping running services before import:")
+	require.Contains(t, output, "- usa1.xrelay -> proxystack-xray@usa1.service")
+	require.NotContains(t, output, "- usa1.clash -> proxystack-clash@usa1.service")
+	require.ElementsMatch(t, []string{"proxystack-xray@usa1.service", "proxystack-clash@usa1.service"}, manager.activeChecks)
+	require.Equal(t, []string{"proxystack-xray@usa1.service"}, manager.stopped)
+	require.Equal(t, []string{"stop"}, manager.calls)
+	require.FileExists(t, filepath.Join(targetDir, "stacks", "new1.yaml"))
+	require.NoFileExists(t, filepath.Join(targetDir, "stacks", "usa1.yaml"))
+}
+
+// TestNativeBackupImportReportsNoRunningOldServices 验证旧配置存在但没有运行服务时只打印提示。
+func TestNativeBackupImportReportsNoRunningOldServices(t *testing.T) {
+	backupPath := createNativeBackupFixture(t, "new1")
+	targetDir := t.TempDir()
+	require.NoError(t, prepareNativeImportTarget(t, targetDir, "usa1"))
+	manager := &fakeUninstallManager{active: map[string]bool{}}
+	withAgentServiceManager(t, manager)
+
+	output := runAgentCommandForTest(t, "--base-dir", targetDir, "import", backupPath, "--force")
+
+	require.Contains(t, output, "No running services to stop before import.")
+	require.Empty(t, manager.stopped)
+	require.Empty(t, manager.calls)
+	require.FileExists(t, filepath.Join(targetDir, "stacks", "new1.yaml"))
+}
+
+// TestNativeBackupImportStopFailurePreventsRestore 验证停止运行服务失败时不会覆盖旧配置。
+func TestNativeBackupImportStopFailurePreventsRestore(t *testing.T) {
+	backupPath := createNativeBackupFixture(t, "new1")
+	targetDir := t.TempDir()
+	require.NoError(t, prepareNativeImportTarget(t, targetDir, "usa1"))
+	manager := &fakeUninstallManager{
+		active: map[string]bool{
+			"proxystack-xray@usa1.service": true,
+		},
+		stopErr: errors.New("stop failed"),
+	}
+	withAgentServiceManager(t, manager)
+
+	_, err := runAgentCommandForTestError("--base-dir", targetDir, "import", backupPath, "--force")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "stop running services before import failed")
+	require.FileExists(t, filepath.Join(targetDir, "stacks", "usa1.yaml"))
+	require.NoFileExists(t, filepath.Join(targetDir, "stacks", "new1.yaml"))
+}
+
 // TestAgentInitUsesGlobalBaseDir 验证全局 --base-dir 决定 config.yaml 和标准安装目录。
 func TestAgentInitUsesGlobalBaseDir(t *testing.T) {
 	baseDir := t.TempDir()
@@ -127,6 +187,25 @@ func TestSetupCommandIsRegistered(t *testing.T) {
 	require.Contains(t, output, "--base-dir")
 	require.Contains(t, output, "--external-host")
 	require.Contains(t, output, "--start")
+}
+
+// createNativeBackupFixture 创建只包含一个 stack 的原生备份包。
+func createNativeBackupFixture(t *testing.T, stackName string) string {
+	t.Helper()
+	sourceDir := t.TempDir()
+	require.NoError(t, prepareNativeImportTarget(t, sourceDir, stackName))
+	backupPath := filepath.Join(t.TempDir(), "proxystack-backup.zip")
+	runAgentCommandForTest(t, "--base-dir", sourceDir, "export", "--output", backupPath)
+	return backupPath
+}
+
+// prepareNativeImportTarget 初始化一个带单个 stack 的 agent 配置目录。
+func prepareNativeImportTarget(t *testing.T, baseDir string, stackName string) error {
+	t.Helper()
+	if err := agentconfig.InitProject(agentconfig.InitOptions{BaseDir: baseDir, ExternalHost: "proxy.example.com"}); err != nil {
+		return err
+	}
+	return agentconfig.AddStack(agentconfig.AddOptions{ConfigPath: filepath.Join(baseDir, "config.yaml"), Name: stackName, Template: "pair", AllocatePorts: true})
 }
 
 // requireBackupConfigWithoutBaseDir 验证原生备份里的 config 不包含旧版 base_dir。

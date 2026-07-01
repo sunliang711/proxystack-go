@@ -18,6 +18,9 @@ type fakeUninstallManager struct {
 	target       string
 	stopped      []string
 	calls        []string
+	active       map[string]bool
+	activeChecks []string
+	stopErr      error
 }
 
 // InstallUnits 满足 service.Manager 接口，uninstall 测试不会调用。
@@ -41,7 +44,7 @@ func (f *fakeUninstallManager) Start(ctx context.Context, services []string) err
 func (f *fakeUninstallManager) Stop(ctx context.Context, services []string) error {
 	f.calls = append(f.calls, "stop")
 	f.stopped = append([]string(nil), services...)
-	return nil
+	return f.stopErr
 }
 
 // Restart 满足 service.Manager 接口，uninstall 测试不会调用。
@@ -61,7 +64,8 @@ func (f *fakeUninstallManager) Disable(ctx context.Context, services []string) e
 
 // IsActive 满足 service.Manager 接口，uninstall 测试不会调用。
 func (f *fakeUninstallManager) IsActive(ctx context.Context, service string) (bool, error) {
-	return false, nil
+	f.activeChecks = append(f.activeChecks, service)
+	return f.active[service], nil
 }
 
 // Status 满足 service.Manager 接口，uninstall 测试不会调用。

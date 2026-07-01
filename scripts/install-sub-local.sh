@@ -238,6 +238,16 @@ install_file() {
 	fi
 }
 
+# install_cli_alias 在 CLI 安装目录创建无横线命令软链接。
+install_cli_alias() {
+	local target_name="${1:-}"
+	local link_path="${2:-}"
+	if [[ -z "${target_name}" || -z "${link_path}" ]]; then
+		die "CLI alias target and link path are required"
+	fi
+	run ln -sfn "${target_name}" "${link_path}"
+}
+
 # validate_release_repo 校验 GitHub Release 仓库名。
 validate_release_repo() {
 	local repo_name="${1:-}"
@@ -690,9 +700,10 @@ build_go_binaries() {
 install_binaries() {
 	if [[ "${INSTALL_SOURCE}" == "source" ]]; then
 		build_go_binaries
-		return 0
+	else
+		install_release_binaries "${RELEASE_REPO}" "${RELEASE_VERSION}" "${BIN_DIR}"
 	fi
-	install_release_binaries "${RELEASE_REPO}" "${RELEASE_VERSION}" "${BIN_DIR}"
+	install_cli_alias "ps-sub" "${BIN_DIR}/pssub"
 }
 
 # ensure_config 创建默认 sub 配置，已存在时保持不动。

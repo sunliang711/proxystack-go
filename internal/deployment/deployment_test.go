@@ -125,11 +125,14 @@ func TestInstallScriptsDryRunDownloadRelease(t *testing.T) {
 			require.Contains(t, output, "tar -xzf")
 			require.Contains(t, output, "proxystack-release-dry-run")
 			require.Contains(t, output, filepath.Join(binDir, "ps-sub"))
+			require.Contains(t, output, filepath.Join(binDir, "pssub"))
 			if scriptName == "install-agent.sh" {
 				require.Contains(t, output, filepath.Join(binDir, "ps-agent"))
+				require.Contains(t, output, filepath.Join(binDir, "psagent"))
 				require.NotContains(t, output, filepath.Join(baseDir, "sub"))
 			} else {
 				require.NotContains(t, output, filepath.Join(binDir, "ps-agent"))
+				require.NotContains(t, output, filepath.Join(binDir, "psagent"))
 			}
 			require.NotContains(t, output, filepath.Join(baseDir, "bin", "ps-agent"))
 		})

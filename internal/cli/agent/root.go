@@ -24,10 +24,10 @@ const (
 	agentHelpGroup         = "help"
 )
 
-// NewRootCommand 创建 ps-agent 的根命令和 T01 要求的最小命令树。
+// NewRootCommand 创建 psctl 的根命令和 T01 要求的最小命令树。
 func NewRootCommand() *cobra.Command {
 	command := &cobra.Command{
-		Use:           "ps-agent",
+		Use:           "psctl",
 		Short:         "Manage proxystack agent configuration and runtime plans",
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -45,7 +45,7 @@ func NewRootCommand() *cobra.Command {
 	command.SetCompletionCommandGroupID(agentHelpGroup)
 	command.PersistentFlags().String("base-dir", defaultBaseDir, "Agent base directory")
 	command.PersistentFlags().String("service-manager", defaultServiceManager, "Service manager: auto, systemd, launchd")
-	command.AddCommand(groupedCommand(agentInstallGroup, newVersionCommand("ps-agent")))
+	command.AddCommand(groupedCommand(agentInstallGroup, newVersionCommand("psctl")))
 	command.AddCommand(groupedCommand(agentConfigGroup, newInitCommand()))
 	command.AddCommand(groupedCommand(agentInstallGroup, newSetupCommand()))
 	command.AddCommand(groupedCommand(agentInstallGroup, newUninstallCommand()))
@@ -109,7 +109,7 @@ func agentServiceManager(command *cobra.Command) (servicemanager.Manager, error)
 	return agentServiceManagerFactory(flag.Value.String())
 }
 
-// groupedCommand 给根命令子命令设置 usage 分组，保持 ps-agent help 与 Python 版面板一致。
+// groupedCommand 给根命令子命令设置 usage 分组，保持 psctl help 与 Python 版面板一致。
 func groupedCommand(groupID string, command *cobra.Command) *cobra.Command {
 	command.GroupID = groupID
 	return command

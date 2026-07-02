@@ -2,10 +2,10 @@
 
 `proxystack-go` 是 Go 版 proxystack，提供两个命令行入口：
 
-- `ps-agent`：管理 agent 配置、stack、runtime 生成物、核心下载和服务生命周期。
-- `ps-sub`：独立运行订阅 HTTP 服务，只读取 `<base-dir>/config.yaml` 和 `<base-dir>/inputs/`。
+- `psctl`：管理 agent 配置、stack、runtime 生成物、核心下载和服务生命周期。
+- `pssub`：独立运行订阅 HTTP 服务，只读取 `<base-dir>/config.yaml` 和 `<base-dir>/inputs/`。
 
-`ps-agent` 默认工作目录为 `/opt/proxystack`，`ps-sub` 默认工作目录为 `/opt/proxystack-sub`。如需使用其他目录，所有命令都可以通过 `--base-dir DIR` 指定。
+`psctl` 默认工作目录为 `/opt/proxystack`，`pssub` 默认工作目录为 `/opt/proxystack-sub`。如需使用其他目录，所有命令都可以通过 `--base-dir DIR` 指定。
 
 ## 安装
 
@@ -15,7 +15,7 @@ Linux/systemd 环境推荐使用安装脚本：
 
 ```bash
 sudo scripts/install-agent.sh
-sudo /usr/local/bin/ps-agent --base-dir /opt/proxystack setup
+sudo /usr/local/bin/psctl --base-dir /opt/proxystack setup
 ```
 
 固定版本、指定 Release 仓库或从本地源码构建：
@@ -29,10 +29,10 @@ sudo scripts/install-agent.sh --source /path/to/proxystack-go
 如果希望初始化、安装依赖和服务文件后直接启动已启用服务：
 
 ```bash
-sudo /usr/local/bin/ps-agent --base-dir /opt/proxystack setup --start
+sudo /usr/local/bin/psctl --base-dir /opt/proxystack setup --start
 ```
 
-脚本会安装 `ps-agent` 和 `ps-sub` 到 `/usr/local/bin`。mihomo、xray-core 和 geo 数据由 `ps-agent setup` 或 `ps-agent install all` 管理。
+脚本会安装 `psctl` 和 `pssub` 到 `/usr/local/bin`，并保留 `ps-agent`、`ps-sub` 兼容软链接。mihomo、xray-core 和 geo 数据由 `psctl setup` 或 `psctl install all` 管理。
 
 ### 从源码构建
 
@@ -40,8 +40,8 @@ sudo /usr/local/bin/ps-agent --base-dir /opt/proxystack setup --start
 
 ```bash
 make build
-./ps-agent version
-./ps-sub version
+./psctl version
+./pssub version
 ```
 
 构建 Linux 静态二进制：
@@ -61,7 +61,7 @@ sudo scripts/install-sub-local.sh \
   --start
 ```
 
-也可以使用 Docker 运行 `ps-sub`：
+也可以使用 Docker 运行 `pssub`：
 
 ```bash
 sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack-sub
@@ -78,7 +78,7 @@ docker compose -f docker-compose.sub.yml up -d --build
 初始化默认目录和配置：
 
 ```bash
-sudo ps-agent --base-dir /opt/proxystack init --external-host proxy.example.com
+sudo psctl --base-dir /opt/proxystack init --external-host proxy.example.com
 ```
 
 主要文件和目录：
@@ -108,29 +108,29 @@ security:
   allow_noauth_public: false
 ```
 
-`external_host` 用于生成订阅节点地址，执行 `ps-agent sub export` 前必须配置。更多字段见 [配置与数据 Schema](docs/schema-spec.md)。
+`external_host` 用于生成订阅节点地址，执行 `psctl sub export` 前必须配置。更多字段见 [配置与数据 Schema](docs/schema-spec.md)。
 
 ### stack 配置
 
 创建 stack：
 
 ```bash
-sudo ps-agent --base-dir /opt/proxystack add usa1 --template pair
-sudo ps-agent --base-dir /opt/proxystack add auto --template auto-url-test --members usa1
+sudo psctl --base-dir /opt/proxystack add usa1 --template pair
+sudo psctl --base-dir /opt/proxystack add auto --template auto-url-test --members usa1
 ```
 
 编辑全局配置或指定 stack：
 
 ```bash
-sudo ps-agent --base-dir /opt/proxystack config
-sudo ps-agent --base-dir /opt/proxystack config usa1
+sudo psctl --base-dir /opt/proxystack config
+sudo psctl --base-dir /opt/proxystack config usa1
 ```
 
 校验配置并预览 runtime 变化：
 
 ```bash
-sudo ps-agent --base-dir /opt/proxystack validate
-sudo ps-agent --base-dir /opt/proxystack check
+sudo psctl --base-dir /opt/proxystack validate
+sudo psctl --base-dir /opt/proxystack check
 ```
 
 ### 订阅服务配置
@@ -138,7 +138,7 @@ sudo ps-agent --base-dir /opt/proxystack check
 初始化订阅目录：
 
 ```bash
-sudo ps-sub --base-dir /opt/proxystack-sub init
+sudo pssub --base-dir /opt/proxystack-sub init
 ```
 
 订阅服务配置固定为 `<base-dir>/config.yaml`。不要在该 YAML 中写 `data_dir`，运行数据目录固定由 `--base-dir` 推导为 `<base-dir>`：
@@ -158,15 +158,15 @@ managed_config:
 查看和校验订阅服务配置：
 
 ```bash
-sudo ps-sub --base-dir /opt/proxystack-sub config show
-sudo ps-sub --base-dir /opt/proxystack-sub config check
+sudo pssub --base-dir /opt/proxystack-sub config show
+sudo pssub --base-dir /opt/proxystack-sub config check
 ```
 
 如果编辑配置时报 `field data_dir not found`，删除 `config.yaml` 中的 `data_dir` 字段，并在命令中通过 `--base-dir` 指定目录：
 
 ```bash
-sudo ps-sub --base-dir /opt/proxystack-sub config
-sudo ps-sub --base-dir /opt/proxystack-sub serve
+sudo pssub --base-dir /opt/proxystack-sub config
+sudo pssub --base-dir /opt/proxystack-sub serve
 ```
 
 ## 使用
@@ -175,41 +175,41 @@ sudo ps-sub --base-dir /opt/proxystack-sub serve
 
 ```bash
 # 初始化配置、安装 mihomo/xray/geo 并安装服务文件
-sudo ps-agent --base-dir /opt/proxystack setup
+sudo psctl --base-dir /opt/proxystack setup
 
 # 创建或调整 stack 后先校验和预览
-sudo ps-agent --base-dir /opt/proxystack validate
-sudo ps-agent --base-dir /opt/proxystack check
+sudo psctl --base-dir /opt/proxystack validate
+sudo psctl --base-dir /opt/proxystack check
 
 # 启动和查看服务
-sudo ps-agent --base-dir /opt/proxystack start
-sudo ps-agent --base-dir /opt/proxystack status
-sudo ps-agent --base-dir /opt/proxystack logs -f
+sudo psctl --base-dir /opt/proxystack start
+sudo psctl --base-dir /opt/proxystack status
+sudo psctl --base-dir /opt/proxystack logs -f
 
 # 生成订阅发布包
-sudo ps-agent --base-dir /opt/proxystack sub export
+sudo psctl --base-dir /opt/proxystack sub export
 ```
 
 ### 订阅服务常用流程
 
 ```bash
 # 导入 agent 生成的订阅包
-sudo ps-sub --base-dir /opt/proxystack-sub import /opt/proxystack/publish/sub-bundle.zip
+sudo pssub --base-dir /opt/proxystack-sub import /opt/proxystack/publish/sub-bundle.zip
 
 # 查询、校验或编辑订阅 input
-sudo ps-sub --base-dir /opt/proxystack-sub input list
-sudo ps-sub --base-dir /opt/proxystack-sub input show manual
-sudo ps-sub --base-dir /opt/proxystack-sub input validate
-sudo ps-sub --base-dir /opt/proxystack-sub input edit manual
-sudo ps-sub --base-dir /opt/proxystack-sub input clone manual manual-copy
+sudo pssub --base-dir /opt/proxystack-sub input list
+sudo pssub --base-dir /opt/proxystack-sub input show manual
+sudo pssub --base-dir /opt/proxystack-sub input validate
+sudo pssub --base-dir /opt/proxystack-sub input edit manual
+sudo pssub --base-dir /opt/proxystack-sub input clone manual manual-copy
 
 # 前台运行订阅服务
-sudo ps-sub --base-dir /opt/proxystack-sub serve
+sudo pssub --base-dir /opt/proxystack-sub serve
 
 # 或安装为系统服务后运行
-sudo ps-sub --base-dir /opt/proxystack-sub service install
-sudo ps-sub --base-dir /opt/proxystack-sub start
-sudo ps-sub --base-dir /opt/proxystack-sub status
+sudo pssub --base-dir /opt/proxystack-sub service install
+sudo pssub --base-dir /opt/proxystack-sub start
+sudo pssub --base-dir /opt/proxystack-sub status
 ```
 
 HTTP 路由：
@@ -226,11 +226,11 @@ HTTP 路由：
 ### 诊断和备份
 
 ```bash
-sudo ps-agent --base-dir /opt/proxystack doctor
-sudo ps-agent --base-dir /opt/proxystack ipinfo usa1
-sudo ps-agent --base-dir /opt/proxystack export
+sudo psctl --base-dir /opt/proxystack doctor
+sudo psctl --base-dir /opt/proxystack ipinfo usa1
+sudo psctl --base-dir /opt/proxystack export
 
-sudo ps-sub --base-dir /opt/proxystack-sub doctor
+sudo pssub --base-dir /opt/proxystack-sub doctor
 ```
 
 ## 更多文档

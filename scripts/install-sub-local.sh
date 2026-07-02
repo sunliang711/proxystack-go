@@ -232,13 +232,16 @@ install_file() {
 	if [[ ! -f "${source_path}" && "${DRY_RUN}" != "1" ]]; then
 		die "Source file does not exist: ${source_path}"
 	fi
+	if [[ -L "${target_path}" ]]; then
+		run rm -f "${target_path}"
+	fi
 	run install -m "${mode_value}" "${source_path}" "${target_path}"
 	if [[ -n "${owner_group}" ]]; then
 		run chown "${owner_group}" "${target_path}"
 	fi
 }
 
-# install_cli_alias 在 CLI 安装目录创建无横线命令软链接。
+# install_cli_alias 在 CLI 安装目录创建兼容命令软链接。
 install_cli_alias() {
 	local target_name="${1:-}"
 	local link_path="${2:-}"
@@ -470,8 +473,8 @@ install_release_binaries() {
 	download_file "${checksums_url}" "${checksums_path}"
 	verify_release_checksum "${temp_dir}" "${checksums_path}" "${asset_name}"
 	run tar -xzf "${archive_path}" -C "${temp_dir}"
-	sub_binary="$(release_binary_path "${temp_dir}" "ps-sub")"
-	install_file "${sub_binary}" "${bin_dir}/ps-sub" "0755"
+	sub_binary="$(release_binary_path "${temp_dir}" "pssub")"
+	install_file "${sub_binary}" "${bin_dir}/pssub" "0755"
 	if ! is_dry_run; then
 		run rm -rf "${temp_dir}"
 	fi
@@ -514,7 +517,7 @@ usage() {
 	cat <<'EOF'
 Usage: scripts/install-sub-local.sh [options]
 
-Download and install proxystack ps-sub release binary by default for a local
+Download and install proxystack pssub release binary by default for a local
 non-Docker deployment. The script creates subscription data directories,
 optionally imports a bundle, and optionally installs or starts
 proxystack-sub.service.
@@ -528,8 +531,8 @@ Options:
   --import-bundle FILE     Import a sub-bundle.zip after installation.
   --user USER              System user. Default: proxystack
   --group GROUP            System group. Default: proxystack
-  --install-systemd        Run ps-sub service install.
-  --start                  Run ps-sub start.
+  --install-systemd        Run pssub service install.
+  --start                  Run pssub start.
   --dry-run                Print commands without executing writes.
   -h, --help               Show this help.
 EOF
@@ -677,7 +680,7 @@ ensure_cli_dir() {
 	run install -d -m 0755 "${BIN_DIR}"
 }
 
-# build_go_binaries 构建 ps-sub，并安装到系统 bin 目录。
+# build_go_binaries 构建 pssub，并安装到系统 bin 目录。
 build_go_binaries() {
 	local build_ldflags
 	local temp_dir
@@ -689,8 +692,8 @@ build_go_binaries() {
 	else
 		temp_dir="$(mktemp -d)"
 	fi
-	run_stream go build -trimpath -ldflags "${build_ldflags}" -o "${temp_dir}/ps-sub" "${SOURCE_DIR}/cmd/ps-sub"
-	install_file "${temp_dir}/ps-sub" "${BIN_DIR}/ps-sub" "0755"
+	run_stream go build -trimpath -ldflags "${build_ldflags}" -o "${temp_dir}/pssub" "${SOURCE_DIR}/cmd/ps-sub"
+	install_file "${temp_dir}/pssub" "${BIN_DIR}/pssub" "0755"
 	if ! is_dry_run; then
 		run rm -rf "${temp_dir}"
 	fi
@@ -703,12 +706,12 @@ install_binaries() {
 	else
 		install_release_binaries "${RELEASE_REPO}" "${RELEASE_VERSION}" "${BIN_DIR}"
 	fi
-	install_cli_alias "ps-sub" "${BIN_DIR}/pssub"
+	install_cli_alias "pssub" "${BIN_DIR}/ps-sub"
 }
 
 # ensure_config 创建默认 sub 配置，已存在时保持不动。
 ensure_config() {
-	run_as_user "${INSTALL_USER}" "${BIN_DIR}/ps-sub" --base-dir "${BASE_DIR}" init
+	run_as_user "${INSTALL_USER}" "${BIN_DIR}/pssub" --base-dir "${BASE_DIR}" init
 }
 
 # maybe_import_bundle 根据参数决定是否导入订阅发布包。
@@ -716,7 +719,7 @@ maybe_import_bundle() {
 	if [[ -z "${IMPORT_BUNDLE}" ]]; then
 		return 0
 	fi
-	run_as_user "${INSTALL_USER}" "${BIN_DIR}/ps-sub" --base-dir "${BASE_DIR}" import "${IMPORT_BUNDLE}"
+	run_as_user "${INSTALL_USER}" "${BIN_DIR}/pssub" --base-dir "${BASE_DIR}" import "${IMPORT_BUNDLE}"
 }
 
 # maybe_install_systemd 根据参数决定是否安装 sub systemd unit。
@@ -724,7 +727,7 @@ maybe_install_systemd() {
 	if [[ "${INSTALL_SYSTEMD}" != "1" ]]; then
 		return 0
 	fi
-	run "${BIN_DIR}/ps-sub" --base-dir "${BASE_DIR}" service install
+	run "${BIN_DIR}/pssub" --base-dir "${BASE_DIR}" service install
 }
 
 # maybe_start_service 根据参数决定是否启动订阅服务。
@@ -732,7 +735,7 @@ maybe_start_service() {
 	if [[ "${START_SERVICE}" != "1" ]]; then
 		return 0
 	fi
-	run "${BIN_DIR}/ps-sub" --base-dir "${BASE_DIR}" start
+	run "${BIN_DIR}/pssub" --base-dir "${BASE_DIR}" start
 }
 
 # main 执行本地 sub bootstrap 主流程。
@@ -749,7 +752,7 @@ main() {
 	ensure_sub_dirs
 	log "Prepare CLI directory"
 	ensure_cli_dir
-	log "Install ps-sub binary"
+	log "Install pssub binary"
 	install_binaries
 	log "Ensure config"
 	ensure_config

@@ -31,17 +31,17 @@
 
 1. 初始化 Go module。
 2. 引入 Cobra 和 Zerolog。
-3. 建立 `ps-agent` 和 `ps-sub` root command。
+3. 建立 `psctl` 和 `pssub` root command。
 4. 实现 `version` 命令。
 5. 建立统一 exit code 和错误输出入口。
 6. 增加最小 smoke test。
 
 ## 验收标准
 
-- `ps-agent --help` 可运行。
-- `ps-sub --help` 可运行。
-- `ps-agent version` 可运行。
-- `ps-sub version` 可运行。
+- `psctl --help` 可运行。
+- `pssub --help` 可运行。
+- `psctl version` 可运行。
+- `pssub version` 可运行。
 - `cmd/*/main.go` 不包含业务逻辑。
 - 不创建配置文件，不写 runtime，不调用 systemd。
 

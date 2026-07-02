@@ -2,7 +2,7 @@
 
 ## 目标
 
-实现 `ps-sub serve` 的 HTTP 服务和内存索引。
+实现 `pssub serve` 的 HTTP 服务和内存索引。
 
 ## 范围
 

@@ -21,10 +21,10 @@ func newLifecycleCommand(action string) *cobra.Command {
 		Use:   action + " [TARGET]",
 		Short: "Run service manager " + action + " for stack services",
 		Long:  lifecycleCommandLong(action),
-		Example: "  ps-agent " + action + "\n" +
-			"  ps-agent " + action + " usa1\n" +
-			"  ps-agent " + action + " xrelay/usa1\n" +
-			"  ps-agent " + action + " clash/usa1",
+		Example: "  psctl " + action + "\n" +
+			"  psctl " + action + " usa1\n" +
+			"  psctl " + action + " xrelay/usa1\n" +
+			"  psctl " + action + " clash/usa1",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			return runLifecycle(command, action, optionalArg(args), follow)
@@ -62,9 +62,9 @@ func newServiceInstallCommand(uninstall bool) *cobra.Command {
 		Use:   name + " [TARGET]",
 		Short: name + " stack service files",
 		Long:  serviceInstallCommandLong(name),
-		Example: "  ps-agent service " + name + "\n" +
-			"  ps-agent service " + name + " xrelay/usa1\n" +
-			"  ps-agent service " + name + " clash/usa1",
+		Example: "  psctl service " + name + "\n" +
+			"  psctl service " + name + " xrelay/usa1\n" +
+			"  psctl service " + name + " clash/usa1",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			configPath, err := agentConfigPath(command)
@@ -159,10 +159,10 @@ func newServiceActionCommand(action string) *cobra.Command {
 		Use:   action + " [TARGET]",
 		Short: "Run service manager " + action + " for installed stack services",
 		Long:  lifecycleCommandLong(action),
-		Example: "  ps-agent service " + action + "\n" +
-			"  ps-agent service " + action + " usa1\n" +
-			"  ps-agent service " + action + " xrelay/usa1\n" +
-			"  ps-agent service " + action + " clash/usa1",
+		Example: "  psctl service " + action + "\n" +
+			"  psctl service " + action + " usa1\n" +
+			"  psctl service " + action + " xrelay/usa1\n" +
+			"  psctl service " + action + " clash/usa1",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			configPath, err := agentConfigPath(command)

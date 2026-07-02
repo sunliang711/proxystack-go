@@ -10,8 +10,8 @@ VERSION_PACKAGE := github.com/eagle/proxystack-go/internal/version
 VERSION_LDFLAGS := -X $(VERSION_PACKAGE).Version=$(BUILD_VERSION) -X $(VERSION_PACKAGE).Commit=$(BUILD_COMMIT) -X $(VERSION_PACKAGE).BuildDateTime=$(BUILD_DATETIME)
 GO_LDFLAGS := $(LDFLAGS) $(VERSION_LDFLAGS)
 
-PS_AGENT := $(BIN_DIR)/ps-agent
-PS_SUB := $(BIN_DIR)/ps-sub
+PS_AGENT := $(BIN_DIR)/psctl
+PS_SUB := $(BIN_DIR)/pssub
 
 .PHONY: build build-linux
 

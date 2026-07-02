@@ -68,7 +68,7 @@ func TestMigrationMainFlowE2E(t *testing.T) {
 	requireHTTPContains(t, baseURL+"/surge_sub/user1", "[Proxy]")
 }
 
-// runAgentCommand 执行 ps-agent 命令并返回合并输出。
+// runAgentCommand 执行 psctl 命令并返回合并输出。
 func runAgentCommand(t *testing.T, baseDir string, args ...string) string {
 	t.Helper()
 	command := agentcli.NewRootCommand()
@@ -81,7 +81,7 @@ func runAgentCommand(t *testing.T, baseDir string, args ...string) string {
 	return output.String()
 }
 
-// runSubCommand 执行 ps-sub 命令并返回合并输出。
+// runSubCommand 执行 pssub 命令并返回合并输出。
 func runSubCommand(t *testing.T, args ...string) string {
 	t.Helper()
 	command := subcli.NewRootCommand()
@@ -145,7 +145,7 @@ managed_config:
 `, port)), 0o640))
 }
 
-// startSubServer 启动 ps-sub serve 命令并返回取消函数和完成通道。
+// startSubServer 启动 pssub serve 命令并返回取消函数和完成通道。
 func startSubServer(t *testing.T, baseDir string) (context.CancelFunc, <-chan error) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -165,7 +165,7 @@ func startSubServer(t *testing.T, baseDir string) (context.CancelFunc, <-chan er
 	return cancel, done
 }
 
-// stopSubServer 停止 E2E 启动的 ps-sub serve 命令。
+// stopSubServer 停止 E2E 启动的 pssub serve 命令。
 func stopSubServer(t *testing.T, cancel context.CancelFunc, done <-chan error) {
 	t.Helper()
 	cancel()
@@ -173,7 +173,7 @@ func stopSubServer(t *testing.T, cancel context.CancelFunc, done <-chan error) {
 	case err := <-done:
 		require.NoError(t, err)
 	case <-time.After(3 * time.Second):
-		t.Fatal("ps-sub serve did not stop")
+		t.Fatal("pssub serve did not stop")
 	}
 }
 

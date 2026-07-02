@@ -18,10 +18,10 @@ func TestRootCommandsSmoke(t *testing.T) {
 		args    []string
 		want    string
 	}{
-		{name: "agent help", command: agent.NewRootCommand, args: []string{"--help"}, want: "ps-agent"},
-		{name: "sub help", command: sub.NewRootCommand, args: []string{"--help"}, want: "ps-sub"},
-		{name: "agent version", command: agent.NewRootCommand, args: []string{"version"}, want: "ps-agent\n  version: 0.1.0-dev\n  commit: "},
-		{name: "sub version", command: sub.NewRootCommand, args: []string{"version"}, want: "ps-sub\n  version: 0.1.0-dev\n  commit: "},
+		{name: "agent help", command: agent.NewRootCommand, args: []string{"--help"}, want: "psctl"},
+		{name: "sub help", command: sub.NewRootCommand, args: []string{"--help"}, want: "pssub"},
+		{name: "agent version", command: agent.NewRootCommand, args: []string{"version"}, want: "psctl\n  version: 0.1.0-dev\n  commit: "},
+		{name: "sub version", command: sub.NewRootCommand, args: []string{"version"}, want: "pssub\n  version: 0.1.0-dev\n  commit: "},
 	}
 
 	for _, tt := range tests {

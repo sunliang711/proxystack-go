@@ -17,7 +17,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Server 封装 ps-sub HTTP 服务和 watcher 生命周期。
+// Server 封装 pssub HTTP 服务和 watcher 生命周期。
 type Server struct {
 	Config config.SubServerConfig
 	State  *State

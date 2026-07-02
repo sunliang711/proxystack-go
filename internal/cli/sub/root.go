@@ -46,10 +46,10 @@ const (
 	subHelpGroup    = "help"
 )
 
-// NewRootCommand 创建 ps-sub 的根命令和 T01 要求的最小命令树。
+// NewRootCommand 创建 pssub 的根命令和 T01 要求的最小命令树。
 func NewRootCommand() *cobra.Command {
 	command := &cobra.Command{
-		Use:           "ps-sub",
+		Use:           "pssub",
 		Short:         "Serve proxystack subscription data",
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -67,7 +67,7 @@ func NewRootCommand() *cobra.Command {
 	command.PersistentFlags().String("base-dir", defaultBaseDir, "Subscription base directory")
 	command.PersistentFlags().String("listen", defaultListen, "Subscription listen address")
 	command.PersistentFlags().String("service-manager", defaultServiceManager, "Service manager: auto, systemd, launchd")
-	command.AddCommand(groupedCommand(subHelpGroup, newVersionCommand("ps-sub")))
+	command.AddCommand(groupedCommand(subHelpGroup, newVersionCommand("pssub")))
 	command.AddCommand(groupedCommand(subInitGroup, newInitCommand()))
 	command.AddCommand(groupedCommand(subServiceGroup, newServeCommand()))
 	command.AddCommand(groupedCommand(subDataGroup, newImportCommand()))
@@ -82,7 +82,7 @@ func NewRootCommand() *cobra.Command {
 	return command
 }
 
-// groupedCommand 给根命令子命令设置 usage 分组，保持 ps-sub help 分块展示。
+// groupedCommand 给根命令子命令设置 usage 分组，保持 pssub help 分块展示。
 func groupedCommand(groupID string, command *cobra.Command) *cobra.Command {
 	command.GroupID = groupID
 	return command
@@ -290,7 +290,7 @@ func editSubConfig(command *cobra.Command, editor string) (string, bool, error) 
 	}
 	if _, err := os.Stat(configPath); err != nil {
 		if os.IsNotExist(err) {
-			return "", false, fmt.Errorf("sub config does not exist: %s; run ps-sub init first", configPath)
+			return "", false, fmt.Errorf("sub config does not exist: %s; run pssub init first", configPath)
 		}
 		return "", false, err
 	}
@@ -324,7 +324,7 @@ type initSubResult struct {
 	CreatedConfig bool
 }
 
-// initSubLayout 幂等创建 ps-sub 独立运行所需的目录和默认配置文件。
+// initSubLayout 幂等创建 pssub 独立运行所需的目录和默认配置文件。
 func initSubLayout(baseDir string, force bool) (initSubResult, error) {
 	dataDir := subDataDir(baseDir)
 	inputDir := filepath.Join(dataDir, "inputs")
@@ -409,17 +409,17 @@ func subConfigPath(command *cobra.Command) (string, error) {
 	return subConfigPathForBaseDir(baseDir), nil
 }
 
-// subDataDir 返回 ps-sub 的运行数据根目录。
+// subDataDir 返回 pssub 的运行数据根目录。
 func subDataDir(baseDir string) string {
 	return baseDir
 }
 
-// subConfigPathForBaseDir 返回 ps-sub 根目录下的配置文件路径。
+// subConfigPathForBaseDir 返回 pssub 根目录下的配置文件路径。
 func subConfigPathForBaseDir(baseDir string) string {
 	return filepath.Join(subDataDir(baseDir), "config.yaml")
 }
 
-// subBaseDir 读取 ps-sub 全局 base dir，并解析为绝对路径。
+// subBaseDir 读取 pssub 全局 base dir，并解析为绝对路径。
 func subBaseDir(command *cobra.Command) (string, error) {
 	flag := command.Flag("base-dir")
 	if flag == nil {
@@ -472,7 +472,7 @@ func applyHostPortOverrides(command *cobra.Command, subConfig *config.SubServerC
 	return nil
 }
 
-// newServiceCommand 创建 ps-sub 自身 service 管理命令集合。
+// newServiceCommand 创建 pssub 自身 service 管理命令集合。
 func newServiceCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "service",
@@ -511,7 +511,7 @@ func newServiceInstallCommand() *cobra.Command {
 	}
 }
 
-// newLifecycleCommand 创建 ps-sub 顶层生命周期命令。
+// newLifecycleCommand 创建 pssub 顶层生命周期命令。
 func newLifecycleCommand(action string) *cobra.Command {
 	var follow bool
 	command := &cobra.Command{
@@ -529,7 +529,7 @@ func newLifecycleCommand(action string) *cobra.Command {
 	return command
 }
 
-// runSubLifecycle 分派 ps-sub 生命周期动作，作用域固定为订阅服务。
+// runSubLifecycle 分派 pssub 生命周期动作，作用域固定为订阅服务。
 func runSubLifecycle(command *cobra.Command, action string, follow bool) error {
 	manager, err := subServiceManager(command)
 	if err != nil {

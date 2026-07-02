@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestIPInfoCommandIsRegistered 验证 ps-agent 命令树包含 ipinfo 诊断入口。
+// TestIPInfoCommandIsRegistered 验证 psctl 命令树包含 ipinfo 诊断入口。
 func TestIPInfoCommandIsRegistered(t *testing.T) {
 	command := NewRootCommand()
 	var output bytes.Buffer
@@ -33,7 +33,7 @@ func TestIPInfoCommandIsRegistered(t *testing.T) {
 	require.Contains(t, output.String(), "--timeout")
 }
 
-// TestDoctorCommandIsRegistered 验证 ps-agent 命令树包含 doctor 诊断入口。
+// TestDoctorCommandIsRegistered 验证 psctl 命令树包含 doctor 诊断入口。
 func TestDoctorCommandIsRegistered(t *testing.T) {
 	command := NewRootCommand()
 	var output bytes.Buffer
@@ -55,7 +55,7 @@ func TestRunDoctorMissingConfigSuggestsInit(t *testing.T) {
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "agent config is missing")
-	require.Contains(t, err.Error(), "ps-agent --base-dir")
+	require.Contains(t, err.Error(), "psctl --base-dir")
 	require.Contains(t, err.Error(), "init")
 }
 

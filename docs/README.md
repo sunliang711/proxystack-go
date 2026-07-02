@@ -15,7 +15,7 @@
 | [schema-spec.md](schema-spec.md) | 配置与传输 schema 字段级契约 |
 | [generator-spec.md](generator-spec.md) | Xray/mihomo/sub 生成器、manifest 和 runtime 规则 |
 | [template-compat-spec.md](template-compat-spec.md) | `.j2` 模板兼容决策和验收 |
-| [http-subserver-spec.md](http-subserver-spec.md) | `ps-sub serve` HTTP 路由、鉴权和 watcher |
+| [http-subserver-spec.md](http-subserver-spec.md) | `pssub serve` HTTP 路由、鉴权和 watcher |
 | [install-systemd-security-spec.md](install-systemd-security-spec.md) | 安装更新、服务管理、权限和安全规则 |
 | [deployment.md](deployment.md) | Go 版本地和 Docker 部署说明 |
 | [testing-acceptance-matrix.md](testing-acceptance-matrix.md) | 自动化测试、golden、手工验收矩阵 |

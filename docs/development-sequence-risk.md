@@ -152,7 +152,7 @@
 范围：
 
 - `internal/subserver`
-- `ps-sub config/import/clear/serve`
+- `pssub config/import/clear/serve`
 
 前置：
 

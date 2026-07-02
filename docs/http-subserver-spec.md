@@ -2,11 +2,11 @@
 
 生成日期：2026-06-17
 
-本文定义 `ps-sub serve` 的 HTTP 行为、鉴权、状态管理和 watcher 语义。
+本文定义 `pssub serve` 的 HTTP 行为、鉴权、状态管理和 watcher 语义。
 
 ## 1. 服务边界
 
-`ps-sub` 只允许读取：
+`pssub` 只允许读取：
 
 - `config.yaml`
 - `inputs/*.yaml|*.yml|*.json`

@@ -14,8 +14,8 @@ Python 版使用 Jinja2 渲染三类模板：
 
 用户可通过以下路径覆盖模板：
 
-1. `ps-sub config.yaml` 中 `templates_dir/sub/<template>`
-2. `ps-sub config.yaml` 中 `templates_dir/<template>`
+1. `pssub config.yaml` 中 `templates_dir/sub/<template>`
+2. `pssub config.yaml` 中 `templates_dir/<template>`
 3. `<data_dir>/templates/sub/<template>`
 4. 包内默认模板
 

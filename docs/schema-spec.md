@@ -24,7 +24,7 @@ Go 实现建议：
 
 ## 2. 全局配置 `config.yaml`
 
-文件位置：由 `ps-agent --base-dir DIR` 决定，固定为 `<base-dir>/config.yaml`，默认 `/opt/proxystack/config.yaml`。
+文件位置：由 `psctl --base-dir DIR` 决定，固定为 `<base-dir>/config.yaml`，默认 `/opt/proxystack/config.yaml`。
 
 | 字段 | 类型 | 必填 | 默认值 | 校验 |
 | --- | --- | --- | --- | --- |
@@ -294,7 +294,7 @@ P0 不支持 `xrelay-http`。
 
 ## 6. 订阅服务配置 `config.yaml`
 
-默认路径：`/opt/proxystack-sub/config.yaml`。实际路径由 `ps-sub --base-dir DIR` 决定，固定为 `<base-dir>/config.yaml`；运行时 sub root 固定为 `<base-dir>`。
+默认路径：`/opt/proxystack-sub/config.yaml`。实际路径由 `pssub --base-dir DIR` 决定，固定为 `<base-dir>/config.yaml`；运行时 sub root 固定为 `<base-dir>`。
 
 | 字段 | 类型 | 必填 | 默认值 |
 | --- | --- | --- | --- |
@@ -386,7 +386,7 @@ nodes: []
 
 字段：
 
-- `access`：只来自 ps-sub `config.yaml`，agent 预览默认 `none`。
+- `access`：只来自 pssub `config.yaml`，agent 预览默认 `none`。
 - `sources`：来源摘要，稳定排序。
 - `users`：按用户分组后的节点列表。
 - `generated_at`：索引生成时间；测试可注入固定时钟。
@@ -422,5 +422,5 @@ nodes: []
 
 - schema 与 bundle manifest 不同，必须互相拒绝。
 - 只包含 `config.yaml` 和 `stacks/*.yaml`。
-- 不包含 runtime/generated、manifest、downloads、ps-sub inputs。
+- 不包含 runtime/generated、manifest、downloads、pssub inputs。
 - 导入前先完整校验 manifest、hash、schema 和目标覆盖策略。

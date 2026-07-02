@@ -162,7 +162,7 @@ ensure_base_dirs() {
 	ensure_dir "${BASE_DIR}/templates" "0750" "${DATA_OWNER}"
 }
 
-# ensure_sub_config_exists 确认 ps-sub 配置存在，避免容器以隐式默认配置启动。
+# ensure_sub_config_exists 确认 pssub 配置存在，避免容器以隐式默认配置启动。
 ensure_sub_config_exists() {
 	if is_dry_run; then
 		log "SKIP sub config check in dry-run"
@@ -247,7 +247,7 @@ run_container() {
 		--security-opt no-new-privileges:true \
 		--tmpfs /tmp:rw,noexec,nosuid,size=64m \
 		"${IMAGE}" \
-		ps-sub --base-dir /data serve
+		pssub --base-dir /data serve
 }
 
 # main 执行 Docker sub 部署主流程。
@@ -261,7 +261,7 @@ main() {
 	check_container_conflict
 	log "Prepare data directories"
 	ensure_base_dirs
-	log "Check ps-sub config"
+	log "Check pssub config"
 	ensure_sub_config_exists
 	log "Pull image"
 	maybe_pull_image

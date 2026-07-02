@@ -418,7 +418,7 @@ nodes:
 	require.Contains(t, err.Error(), "node.server is required")
 }
 
-// TestLoadInputContentRejectsUDPForHTTPNode 验证 ps-sub input 会拒绝不支持 UDP 的协议。
+// TestLoadInputContentRejectsUDPForHTTPNode 验证 pssub input 会拒绝不支持 UDP 的协议。
 func TestLoadInputContentRejectsUDPForHTTPNode(t *testing.T) {
 	_, err := subgen.LoadInputContent("manual.yaml", []byte(`input_schema: proxystack.subscription-input
 input_version: 1

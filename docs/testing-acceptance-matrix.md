@@ -72,11 +72,11 @@ tests/fixtures/sub/manual.yaml
 | `render *` | 写 runtime、调用服务管理器 |
 | `list` | 写文件；默认不做系统端口检测 |
 | `doctor` | 写文件、修复权限 |
-| `ps-sub start` | 读取 agent config 或 stack、创建 generated、写 agent manifest |
+| `pssub start` | 读取 agent config 或 stack、创建 generated、写 agent manifest |
 | `sub export --summary` | 写 zip |
-| `ps-sub serve` | 读取 agent config 或 stack |
-| `ps-sub import` | 接受 native backup |
-| `ps-agent import` | 接受 subscription bundle |
+| `pssub serve` | 读取 agent config 或 stack |
+| `pssub import` | 接受 native backup |
+| `psctl import` | 接受 subscription bundle |
 
 ## 6. 安全负面测试
 
@@ -101,20 +101,20 @@ tests/fixtures/sub/manual.yaml
 1. 本机临时目录完整流程：
 
 ```bash
-ps-agent --base-dir ./tmp init
-ps-agent --base-dir ./tmp add usa1 --no-edit
-ps-agent --base-dir ./tmp validate
-ps-agent --base-dir ./tmp check
+psctl --base-dir ./tmp init
+psctl --base-dir ./tmp add usa1 --no-edit
+psctl --base-dir ./tmp validate
+psctl --base-dir ./tmp check
 ```
 
 2. fake 二进制 + fake systemd 完整流程：
 
 ```bash
-ps-agent --base-dir ./tmp start
-ps-agent --base-dir ./tmp status
-ps-agent --base-dir ./tmp sub export
-ps-sub --base-dir ./tmp import ./tmp/publish/sub-bundle.zip
-ps-sub --base-dir ./tmp serve
+psctl --base-dir ./tmp start
+psctl --base-dir ./tmp status
+psctl --base-dir ./tmp sub export
+pssub --base-dir ./tmp import ./tmp/publish/sub-bundle.zip
+pssub --base-dir ./tmp serve
 ```
 
 3. HTTP 订阅请求：
@@ -129,19 +129,19 @@ curl http://127.0.0.1:3003/surge_sub/<token>/alice
 4. Linux systemd 环境：
 
 ```bash
-sudo ps-agent service install
-sudo ps-agent start usa1
-sudo ps-agent status usa1
-sudo ps-agent logs usa1 --follow
+sudo psctl service install
+sudo psctl start usa1
+sudo psctl status usa1
+sudo psctl logs usa1 --follow
 ```
 
 5. macOS launchd 环境：
 
 ```bash
-sudo ps-agent --service-manager launchd service install
-sudo ps-agent --service-manager launchd start usa1
-sudo ps-agent --service-manager launchd status usa1
-sudo ps-agent --service-manager launchd logs usa1 --follow
+sudo psctl --service-manager launchd service install
+sudo psctl --service-manager launchd start usa1
+sudo psctl --service-manager launchd status usa1
+sudo psctl --service-manager launchd logs usa1 --follow
 ```
 
 ## 8. 覆盖率要求
@@ -149,4 +149,4 @@ sudo ps-agent --service-manager launchd logs usa1 --follow
 - 生成器、schema、bundle、install 安全逻辑必须有表驱动单测。
 - CLI 只要求关键路径和副作用边界，不追求 help 文案逐字节一致。
 - watcher 需要覆盖 fsnotify 触发和 polling fallback；平台差异可用接口 fake。
-- 端到端测试至少覆盖一次 `init -> add -> validate -> check -> start -> sub export -> ps-sub import -> ps-sub serve -> HTTP subscription`。
+- 端到端测试至少覆盖一次 `init -> add -> validate -> check -> start -> sub export -> pssub import -> pssub serve -> HTTP subscription`。

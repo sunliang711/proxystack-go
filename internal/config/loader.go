@@ -125,7 +125,7 @@ func DecodeStrictYAML(data []byte, target any) error {
 	return decoder.Decode(target)
 }
 
-// LoadSubServerConfig 读取 ps-sub 自身配置，未知字段会 fail fast。
+// LoadSubServerConfig 读取 pssub 自身配置，未知字段会 fail fast。
 func LoadSubServerConfig(path string) (SubServerConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

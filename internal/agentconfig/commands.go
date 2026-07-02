@@ -375,15 +375,15 @@ func randomUUID() (string, error) {
 
 func defaultAgentConfig(externalHost string) string {
 	return fmt.Sprintf(`# default agent 配置。
-# 文件路径固定为 <base-dir>/config.yaml；运行时 base dir 由 ps-agent --base-dir 指定。
-# 修改后建议执行 ps-agent --base-dir <base-dir> validate 或 check 校验。
+# 文件路径固定为 <base-dir>/config.yaml；运行时 base dir 由 psctl --base-dir 指定。
+# 修改后建议执行 psctl --base-dir <base-dir> validate 或 check 校验。
 
 # 配置 schema 版本。当前固定为 1。
 version: 1
 
 # 路径配置。相对路径均以 <base-dir> 为基准解析。
 paths:
-  # ps-agent、ps-sub、xray、mihomo 等二进制所在目录。
+  # psctl、pssub、xray、mihomo 等二进制所在目录。
   bin: bin
   # geoip/geosite 等地理数据目录。
   geo: geo

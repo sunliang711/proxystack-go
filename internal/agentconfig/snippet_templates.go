@@ -8,7 +8,7 @@ import (
 	"text/template"
 )
 
-// stackSnippetFiles 保存 ps-agent example 和内置 stack 模板共享的 YAML 片段。
+// stackSnippetFiles 保存 psctl example 和内置 stack 模板共享的 YAML 片段。
 //
 //go:embed templates/snippets
 var stackSnippetFiles embed.FS

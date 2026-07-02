@@ -44,7 +44,7 @@ func TestRenderLaunchdPlistsUsesStackInstances(t *testing.T) {
 	require.NotContains(t, plists, LaunchdSubLabel+".plist")
 }
 
-// TestRenderLaunchdSubPlistUsesBaseDir 验证 launchd sub plist 使用 ps-sub 自身 base dir。
+// TestRenderLaunchdSubPlistUsesBaseDir 验证 launchd sub plist 使用 pssub 自身 base dir。
 func TestRenderLaunchdSubPlistUsesBaseDir(t *testing.T) {
 	baseDir := t.TempDir()
 	cfg := domain.GlobalConfig{BaseDir: baseDir, Paths: domain.DefaultConfigPaths()}
@@ -55,7 +55,7 @@ func TestRenderLaunchdSubPlistUsesBaseDir(t *testing.T) {
 	requireLaunchdBaseDirArgument(t, plists[LaunchdSubLabel+".plist"], baseDir)
 }
 
-// TestRenderLaunchdSubPlistUsesSubOnlyRoot 验证 ps-sub 独立安装时 launchd plist 使用整个 sub base dir。
+// TestRenderLaunchdSubPlistUsesSubOnlyRoot 验证 pssub 独立安装时 launchd plist 使用整个 sub base dir。
 func TestRenderLaunchdSubPlistUsesSubOnlyRoot(t *testing.T) {
 	baseDir := t.TempDir()
 	paths := domain.DefaultConfigPaths()

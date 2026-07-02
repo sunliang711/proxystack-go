@@ -78,7 +78,7 @@ func formatExampleSnippets(snippets []agentconfig.StackExampleSnippet) string {
 		if index > 0 {
 			builder.WriteString("\n")
 		}
-		fmt.Fprintf(&builder, "# ps-agent example %s %s %s - %s\n", snippet.Area, snippet.Section, snippet.Type, snippet.Description)
+		fmt.Fprintf(&builder, "# psctl example %s %s %s - %s\n", snippet.Area, snippet.Section, snippet.Type, snippet.Description)
 		builder.WriteString(snippet.Content)
 	}
 	return builder.String()
@@ -87,7 +87,7 @@ func formatExampleSnippets(snippets []agentconfig.StackExampleSnippet) string {
 // exampleUsage 返回包含全部片段说明的 usage 文本。
 func exampleUsage(snippets []agentconfig.StackExampleSnippet) string {
 	return "Usage:\n" +
-		"  ps-agent example [stack|xrelay|clash] [SECTION] [TYPE]\n\n" +
+		"  psctl example [stack|xrelay|clash] [SECTION] [TYPE]\n\n" +
 		"Supported snippets:\n" +
 		exampleCatalog(snippets) +
 		"\nExamples:\n" +
@@ -122,21 +122,21 @@ func supportedExamplePaths(snippets []agentconfig.StackExampleSnippet) string {
 	var builder strings.Builder
 	builder.WriteString("Supported snippets:\n")
 	for _, snippet := range snippets {
-		fmt.Fprintf(&builder, "  ps-agent example %s %s %s\n", snippet.Area, snippet.Section, snippet.Type)
+		fmt.Fprintf(&builder, "  psctl example %s %s %s\n", snippet.Area, snippet.Section, snippet.Type)
 	}
 	return strings.TrimRight(builder.String(), "\n")
 }
 
 // exampleCommandExamples 返回 help 中展示的常用调用方式。
 func exampleCommandExamples() string {
-	return "  ps-agent example\n" +
-		"  ps-agent example stack role edge\n" +
-		"  ps-agent example xrelay inbound\n" +
-		"  ps-agent example xrelay inbound vmess\n" +
-		"  ps-agent example xrelay outbound direct\n" +
-		"  ps-agent example clash listener socks\n" +
-		"  ps-agent example clash upstream raw\n" +
-		"  ps-agent example clash group url-test"
+	return "  psctl example\n" +
+		"  psctl example stack role edge\n" +
+		"  psctl example xrelay inbound\n" +
+		"  psctl example xrelay inbound vmess\n" +
+		"  psctl example xrelay outbound direct\n" +
+		"  psctl example clash listener socks\n" +
+		"  psctl example clash upstream raw\n" +
+		"  psctl example clash group url-test"
 }
 
 // normalizeExampleTerm 兼容复数和少量历史拼写错误，输出统一查询键。

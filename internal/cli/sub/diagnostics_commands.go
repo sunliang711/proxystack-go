@@ -19,7 +19,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newDoctorCommand 创建 ps-sub 本机订阅服务只读诊断命令。
+// newDoctorCommand 创建 pssub 本机订阅服务只读诊断命令。
 func newDoctorCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
@@ -64,7 +64,7 @@ func runSubDoctor(configPath string, managerKind string) (subDoctorReport, error
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			baseDir := filepath.Dir(configPath)
-			return subDoctorReport{}, fmt.Errorf("sub config is missing: %s; run `ps-sub --base-dir %s init` first", configPath, baseDir)
+			return subDoctorReport{}, fmt.Errorf("sub config is missing: %s; run `pssub --base-dir %s init` first", configPath, baseDir)
 		}
 		return subDoctorReport{}, fmt.Errorf("doctor config failed: %w", err)
 	}
@@ -210,8 +210,8 @@ func addSubDoctorSystemdUnitIssues(report *subDoctorReport) {
 		report.Issues = append(report.Issues, "systemd unit could not be checked: "+path+" "+err.Error())
 		return
 	}
-	if !bytes.Contains(data, []byte("/usr/local/bin/ps-sub")) {
-		report.Issues = append(report.Issues, "systemd unit command mismatch: "+path+" want /usr/local/bin/ps-sub")
+	if !bytes.Contains(data, []byte("/usr/local/bin/pssub")) {
+		report.Issues = append(report.Issues, "systemd unit command mismatch: "+path+" want /usr/local/bin/pssub")
 	}
 	report.Checks = append(report.Checks, "systemd unit checked")
 }

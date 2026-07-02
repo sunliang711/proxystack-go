@@ -8,15 +8,16 @@
 
 二进制入口：
 
-- `ps-agent`
-- `ps-sub`
+- `psctl`
+- `pssub`
 
 通用约定：
 
-- `ps-agent` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`。
+- 安装脚本保留 `ps-agent`、`ps-sub` 兼容软链接，文档和新生成服务文件统一使用 `psctl`、`pssub`。
+- `psctl` 通过全局 `--base-dir DIR` 指定环境目录，默认 `/opt/proxystack`。
 - agent 全局配置文件固定为 `<base-dir>/config.yaml`，不再提供 `-c/--config`。
-- `ps-sub` 通过全局 `--base-dir DIR` 指定独立环境目录，默认 `/opt/proxystack-sub`；sub root 固定为 `<base-dir>`。
-- `ps-sub` 通过全局 `--listen HOST:PORT` 覆盖订阅 HTTP 监听地址，默认 `0.0.0.0:3003`；`serve --host/--port` 可进一步覆盖 host 或 port。
+- `pssub` 通过全局 `--base-dir DIR` 指定独立环境目录，默认 `/opt/proxystack-sub`；sub root 固定为 `<base-dir>`。
+- `pssub` 通过全局 `--listen HOST:PORT` 覆盖订阅 HTTP 监听地址，默认 `0.0.0.0:3003`；`serve --host/--port` 可进一步覆盖 host 或 port。
 - 服务管理器通过全局 `--service-manager auto|systemd|launchd` 指定，默认 `auto`；Linux 解析为 `systemd`，macOS 解析为 `launchd`，其他平台需要显式支持后才能使用 `auto`。
 - CLI 日志消息使用英文，面向用户的错误摘要可以使用中文。
 - 外部命令必须使用参数数组执行，禁止拼接 shell 字符串。
@@ -27,23 +28,23 @@
 | 分类 | 含义 | 命令 |
 | --- | --- | --- |
 | 只读 | 不写文件，不调用服务管理器，不启动 HTTP 服务 | `version`、`list`、`validate`、`check`、`render *`、`doctor`、`sub validate-inputs` |
-| 写 agent 配置 | 写 `config.yaml` 或 `stacks/*.yaml` | `ps-agent init`、`config`、`add`、`clone`、`member add/remove`、`remove` |
-| 写 sub 配置 | 写 `<sub-base-dir>/config.yaml` | `ps-sub init` |
+| 写 agent 配置 | 写 `config.yaml` 或 `stacks/*.yaml` | `psctl init`、`config`、`add`、`clone`、`member add/remove`、`remove` |
+| 写 sub 配置 | 写 `<sub-base-dir>/config.yaml` | `pssub init` |
 | 写 runtime | 写 `runtime/generated`、`runtime/manifest.json` 或 `publish` | `start`、`restart`、`sub export`、`export`、`import` |
 | 服务管理器 | 调用 `systemctl`/`journalctl` 或 `launchctl`/`log` | `start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`service *` |
 | 下载/安装 | 写 `downloads`、`bin`、`geo` 或 `.venv` | `install`、`update` |
-| HTTP 运行 | 启动长期运行进程 | `ps-sub serve` |
+| HTTP 运行 | 启动长期运行进程 | `pssub serve` |
 
 `check` 必须只做完整编译和 diff 预览，不能写 `runtime`，不能调用服务管理器。
 
-订阅服务生命周期必须通过 `ps-sub start|stop|restart|status|logs|enable|disable` 管理；`ps-agent` 生命周期命令不提供订阅服务 target。
+订阅服务生命周期必须通过 `pssub start|stop|restart|status|logs|enable|disable` 管理；`psctl` 生命周期命令不提供订阅服务 target。
 
-## 3. `ps-agent` 命令
+## 3. `psctl` 命令
 
 ### 3.1 `init`
 
 ```bash
-ps-agent [--base-dir DIR] init [--external-host HOST] [--force]
+psctl [--base-dir DIR] init [--external-host HOST] [--force]
 ```
 
 职责：
@@ -68,7 +69,7 @@ ps-agent [--base-dir DIR] init [--external-host HOST] [--force]
 ### 3.2 `setup`
 
 ```bash
-ps-agent [--base-dir DIR] setup [--external-host HOST] [--force] [--start]
+psctl [--base-dir DIR] setup [--external-host HOST] [--force] [--start]
 ```
 
 职责：
@@ -92,7 +93,7 @@ ps-agent [--base-dir DIR] setup [--external-host HOST] [--force] [--start]
 ### 3.3 `add`
 
 ```bash
-ps-agent [--base-dir DIR] add NAME [--template pair|auto-url-test|load-balance] [--from-file FILE] [--members a,b] [--allocate-ports|--keep-template-ports] [--edit|--no-edit] [--editor CMD]
+psctl [--base-dir DIR] add NAME [--template pair|auto-url-test|load-balance] [--from-file FILE] [--members a,b] [--allocate-ports|--keep-template-ports] [--edit|--no-edit] [--editor CMD]
 ```
 
 职责：
@@ -120,7 +121,7 @@ ps-agent [--base-dir DIR] add NAME [--template pair|auto-url-test|load-balance] 
 ### 3.3.1 `example`
 
 ```bash
-ps-agent example [stack|xrelay|clash] [SECTION] [TYPE]
+psctl example [stack|xrelay|clash] [SECTION] [TYPE]
 ```
 
 职责：
@@ -142,7 +143,7 @@ ps-agent example [stack|xrelay|clash] [SECTION] [TYPE]
 ### 3.4 `config`
 
 ```bash
-ps-agent [--base-dir DIR] config [NAME] [--editor CMD] [--check-only]
+psctl [--base-dir DIR] config [NAME] [--editor CMD] [--check-only]
 ```
 
 职责：
@@ -168,7 +169,7 @@ ps-agent [--base-dir DIR] config [NAME] [--editor CMD] [--check-only]
 ### 3.5 `list`
 
 ```bash
-ps-agent [--base-dir DIR] list [--verbose] [--check-system-ports]
+psctl [--base-dir DIR] list [--verbose] [--check-system-ports]
 ```
 
 职责：
@@ -189,7 +190,7 @@ ps-agent [--base-dir DIR] list [--verbose] [--check-system-ports]
 ### 3.6 `clone`
 
 ```bash
-ps-agent [--base-dir DIR] clone SOURCE TARGET [--allocate-ports] [--edit|--no-edit] [--editor CMD]
+psctl [--base-dir DIR] clone SOURCE TARGET [--allocate-ports] [--edit|--no-edit] [--editor CMD]
 ```
 
 职责：
@@ -216,9 +217,9 @@ ps-agent [--base-dir DIR] clone SOURCE TARGET [--allocate-ports] [--edit|--no-ed
 ### 3.7 `member`
 
 ```bash
-ps-agent [--base-dir DIR] member list STACK
-ps-agent [--base-dir DIR] member add STACK MEMBER
-ps-agent [--base-dir DIR] member remove STACK MEMBER
+psctl [--base-dir DIR] member list STACK
+psctl [--base-dir DIR] member add STACK MEMBER
+psctl [--base-dir DIR] member remove STACK MEMBER
 ```
 
 职责：
@@ -240,7 +241,7 @@ ps-agent [--base-dir DIR] member remove STACK MEMBER
 ### 3.8 `remove`
 
 ```bash
-ps-agent [--base-dir DIR] remove NAME [--purge]
+psctl [--base-dir DIR] remove NAME [--purge]
 ```
 
 职责：
@@ -261,7 +262,7 @@ ps-agent [--base-dir DIR] remove NAME [--purge]
 ### 3.9 `validate`
 
 ```bash
-ps-agent [--base-dir DIR] validate [TARGET] [--skip-system-ports]
+psctl [--base-dir DIR] validate [TARGET] [--skip-system-ports]
 ```
 
 职责：
@@ -278,7 +279,7 @@ ps-agent [--base-dir DIR] validate [TARGET] [--skip-system-ports]
 ### 3.10 `check`
 
 ```bash
-ps-agent [--base-dir DIR] check [TARGET] [--skip-system-ports]
+psctl [--base-dir DIR] check [TARGET] [--skip-system-ports]
 ```
 
 职责：
@@ -296,11 +297,11 @@ ps-agent [--base-dir DIR] check [TARGET] [--skip-system-ports]
 ### 3.11 `render`
 
 ```bash
-ps-agent [--base-dir DIR] render model [--skip-system-ports]
-ps-agent [--base-dir DIR] render xrelay STACK [--skip-system-ports]
-ps-agent [--base-dir DIR] render clash STACK [--skip-system-ports]
-ps-agent [--base-dir DIR] render sub [--input-dir DIR] [--skip-system-ports]
-ps-agent [--base-dir DIR] export-config sub|premium_sub|surge_sub USER
+psctl [--base-dir DIR] render model [--skip-system-ports]
+psctl [--base-dir DIR] render xrelay STACK [--skip-system-ports]
+psctl [--base-dir DIR] render clash STACK [--skip-system-ports]
+psctl [--base-dir DIR] render sub [--input-dir DIR] [--skip-system-ports]
+psctl [--base-dir DIR] export-config sub|premium_sub|surge_sub USER
 ```
 
 职责：
@@ -317,18 +318,18 @@ ps-agent [--base-dir DIR] export-config sub|premium_sub|surge_sub USER
 
 - 输出必须稳定。
 - `render sub --input-dir` 不读取 stack。
-- `export-config` 不写 publish 目录或 ps-sub inputs。
+- `export-config` 不写 publish 目录或 pssub inputs。
 
 ### 3.12 生命周期命令
 
 ```bash
-ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] start [TARGET]
-ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] stop [TARGET]
-ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] restart [TARGET]
-ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] status [TARGET]
-ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] logs [TARGET] [--follow|-f]
-ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] enable [TARGET]
-ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] disable [TARGET]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] start [TARGET]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] stop [TARGET]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] restart [TARGET]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] status [TARGET]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] logs [TARGET] [--follow|-f]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] enable [TARGET]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] disable [TARGET]
 ```
 
 target 规则：
@@ -354,10 +355,10 @@ target 规则：
 ### 3.13 `service`
 
 ```bash
-ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] service install [TARGET]
-ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] service uninstall [TARGET]
-ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] service start|stop|restart|status|enable|disable [TARGET]
-ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] service logs|log [TARGET] [--follow|-f]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] service install [TARGET]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] service uninstall [TARGET]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] service start|stop|restart|status|enable|disable [TARGET]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] service logs|log [TARGET] [--follow|-f]
 ```
 
 职责：
@@ -379,16 +380,16 @@ ps-agent [--base-dir DIR] [--service-manager auto|systemd|launchd] service logs|
 ### 3.14 `install/update/version`
 
 ```bash
-ps-agent [--base-dir DIR] install mihomo|xray|geo|all [--version V] [--source SOURCE] [--sha256 HASH] [--archive-member NAME]
-ps-agent [--base-dir DIR] update mihomo|xray|geo|all [--version V] [--source SOURCE] [--sha256 HASH] [--archive-member NAME]
-ps-agent [--base-dir DIR] update self [--wheel FILE|PACKAGE_SPEC] [--sha256 HASH]
-ps-agent version [mihomo|xray|geo]
+psctl [--base-dir DIR] install mihomo|xray|geo|all [--version V] [--source SOURCE] [--sha256 HASH] [--archive-member NAME]
+psctl [--base-dir DIR] update mihomo|xray|geo|all [--version V] [--source SOURCE] [--sha256 HASH] [--archive-member NAME]
+psctl [--base-dir DIR] update self [--wheel FILE|PACKAGE_SPEC] [--sha256 HASH]
+psctl version [mihomo|xray|geo]
 ```
 
 输出：
 
 ```text
-ps-agent
+psctl
   version: <git tag>
   commit: <short hash>
   build_datetime: <UTC RFC3339>
@@ -405,8 +406,8 @@ ps-agent
 ### 3.15 `sub` 子命令
 
 ```bash
-ps-agent [--base-dir DIR] sub export [STACK] [-o OUTPUT] [--summary|--dry-run]
-ps-agent sub validate-inputs --input-dir DIR
+psctl [--base-dir DIR] sub export [STACK] [-o OUTPUT] [--summary|--dry-run]
+psctl sub validate-inputs --input-dir DIR
 ```
 
 职责：
@@ -424,13 +425,13 @@ ps-agent sub validate-inputs --input-dir DIR
 
 - `sub export` 缺少 `external_host` 时失败。
 - 指定 stack 时默认输出 `<stack>-sub-bundle.zip`。
-- 不直接写 ps-sub `inputs`。
+- 不直接写 pssub `inputs`。
 
 ### 3.16 `export/import`
 
 ```bash
-ps-agent [--base-dir DIR] export [-o OUTPUT]
-ps-agent [--base-dir DIR] import BACKUP [--force]
+psctl [--base-dir DIR] export [-o OUTPUT]
+psctl [--base-dir DIR] import BACKUP [--force]
 ```
 
 职责：
@@ -444,14 +445,14 @@ ps-agent [--base-dir DIR] import BACKUP [--force]
 
 验收：
 
-- 原生 backup 不能被 `ps-sub import` 接受。
-- 订阅 bundle 不能被 `ps-agent import` 当作 native backup。
+- 原生 backup 不能被 `pssub import` 接受。
+- 订阅 bundle 不能被 `psctl import` 当作 native backup。
 
 ### 3.17 `doctor/ipinfo`
 
 ```bash
-ps-agent [--base-dir DIR] doctor
-ps-agent [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECONDS]
+psctl [--base-dir DIR] doctor
+psctl [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECONDS]
 ```
 
 职责：
@@ -471,11 +472,11 @@ ps-agent [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECON
 - `ipinfo` 不是 mihomo REST API。
 - IPv4/IPv6 默认来源和 fallback 与 Python 版一致。
 
-## 4. `ps-sub` 命令
+## 4. `pssub` 命令
 
 全局路径入口：
 
-- `ps-sub` 通过全局 `--base-dir DIR` 指定独立环境目录，默认 `/opt/proxystack-sub`。
+- `pssub` 通过全局 `--base-dir DIR` 指定独立环境目录，默认 `/opt/proxystack-sub`。
 - sub root 固定为 `<base-dir>`。
 - sub config 固定为 `<base-dir>/config.yaml`。
 - inputs 固定为 `<base-dir>/inputs`。
@@ -487,7 +488,7 @@ ps-agent [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECON
 ### 4.1 `init`
 
 ```bash
-ps-sub [--base-dir DIR] init [--force]
+pssub [--base-dir DIR] init [--force]
 ```
 
 职责：
@@ -498,24 +499,24 @@ ps-sub [--base-dir DIR] init [--force]
 
 副作用：
 
-- 只写 `<base-dir>` 下的 ps-sub 目录和配置。
+- 只写 `<base-dir>` 下的 pssub 目录和配置。
 
 验收：
 
 - 不读取 agent `config.yaml`。
 - 不读取或创建 `stacks/`、`runtime/`、`publish/`。
-- 默认配置必须可被 `ps-sub config check`、`ps-sub config show` 和 `ps-sub serve` 加载。
+- 默认配置必须可被 `pssub config check`、`pssub config show` 和 `pssub serve` 加载。
 
 ### 4.2 `version`
 
 ```bash
-ps-sub version
+pssub version
 ```
 
 输出：
 
 ```text
-ps-sub
+pssub
   version: <git tag>
   commit: <short hash>
   build_datetime: <UTC RFC3339>
@@ -526,9 +527,9 @@ ps-sub
 ### 4.3 `config`
 
 ```bash
-ps-sub [--base-dir DIR] config
-ps-sub [--base-dir DIR] config show [--show-secrets]
-ps-sub [--base-dir DIR] config check
+pssub [--base-dir DIR] config
+pssub [--base-dir DIR] config show [--show-secrets]
+pssub [--base-dir DIR] config check
 ```
 
 职责：
@@ -554,7 +555,7 @@ ps-sub [--base-dir DIR] config check
 ### 4.4 `import`
 
 ```bash
-ps-sub [--base-dir DIR] import BUNDLE [--replace-all]
+pssub [--base-dir DIR] import BUNDLE [--replace-all]
 ```
 
 职责：
@@ -574,7 +575,7 @@ ps-sub [--base-dir DIR] import BUNDLE [--replace-all]
 ### 4.5 `clear`
 
 ```bash
-ps-sub [--base-dir DIR] clear
+pssub [--base-dir DIR] clear
 ```
 
 职责：
@@ -593,13 +594,13 @@ ps-sub [--base-dir DIR] clear
 ### 4.6 `input`
 
 ```bash
-ps-sub [--base-dir DIR] input list
-ps-sub [--base-dir DIR] input show SOURCE [--raw] [--show-secrets]
-ps-sub [--base-dir DIR] input validate [SOURCE]
-ps-sub [--base-dir DIR] input edit SOURCE [--editor CMD]
-ps-sub [--base-dir DIR] input clone SOURCE TARGET [--editor CMD]
-ps-sub [--base-dir DIR] input set-host HOST [SOURCE] [--all]
-ps-sub [--base-dir DIR] input remove SOURCE
+pssub [--base-dir DIR] input list
+pssub [--base-dir DIR] input show SOURCE [--raw] [--show-secrets]
+pssub [--base-dir DIR] input validate [SOURCE]
+pssub [--base-dir DIR] input edit SOURCE [--editor CMD]
+pssub [--base-dir DIR] input clone SOURCE TARGET [--editor CMD]
+pssub [--base-dir DIR] input set-host HOST [SOURCE] [--all]
+pssub [--base-dir DIR] input remove SOURCE
 ```
 
 职责：
@@ -635,7 +636,7 @@ ps-sub [--base-dir DIR] input remove SOURCE
 ### 4.7 `serve`
 
 ```bash
-ps-sub [--base-dir DIR] [--listen HOST:PORT] serve [--host HOST] [--port PORT]
+pssub [--base-dir DIR] [--listen HOST:PORT] serve [--host HOST] [--port PORT]
 ```
 
 职责：
@@ -656,13 +657,13 @@ ps-sub [--base-dir DIR] [--listen HOST:PORT] serve [--host HOST] [--port PORT]
 ### 4.8 `service install`
 
 ```bash
-ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] service install
+pssub [--base-dir DIR] [--service-manager auto|systemd|launchd] service install
 ```
 
 职责：
 
 - 只安装订阅服务对应的 systemd unit 或 launchd plist。
-- unit/plist 中固化当前 `--base-dir`，运行命令为 `ps-sub --base-dir DIR serve`。
+- unit/plist 中固化当前 `--base-dir`，运行命令为 `pssub --base-dir DIR serve`。
 
 副作用：
 
@@ -677,13 +678,13 @@ ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] service install
 ### 4.9 生命周期命令
 
 ```bash
-ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] start
-ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] stop
-ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] restart
-ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] status
-ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] logs [--follow|-f]
-ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] enable
-ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] disable
+pssub [--base-dir DIR] [--service-manager auto|systemd|launchd] start
+pssub [--base-dir DIR] [--service-manager auto|systemd|launchd] stop
+pssub [--base-dir DIR] [--service-manager auto|systemd|launchd] restart
+pssub [--base-dir DIR] [--service-manager auto|systemd|launchd] status
+pssub [--base-dir DIR] [--service-manager auto|systemd|launchd] logs [--follow|-f]
+pssub [--base-dir DIR] [--service-manager auto|systemd|launchd] enable
+pssub [--base-dir DIR] [--service-manager auto|systemd|launchd] disable
 ```
 
 职责：
@@ -705,7 +706,7 @@ ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] disable
 ### 4.10 `doctor`
 
 ```bash
-ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] doctor
+pssub [--base-dir DIR] [--service-manager auto|systemd|launchd] doctor
 ```
 
 职责：
@@ -723,4 +724,4 @@ ps-sub [--base-dir DIR] [--service-manager auto|systemd|launchd] doctor
 
 - 不读取 agent `config.yaml`。
 - 不读取 `stacks/` 或写 `runtime`。
-- 输出格式与 `ps-agent doctor` 保持一致：通过项打印 `OK`，问题项打印 `ISSUE`，存在问题时返回非零退出。
+- 输出格式与 `psctl doctor` 保持一致：通过项打印 `OK`，问题项打印 `ISSUE`，存在问题时返回非零退出。

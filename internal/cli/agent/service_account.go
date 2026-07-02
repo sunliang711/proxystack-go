@@ -115,11 +115,11 @@ func repairServiceMetadataForConfigPath(configPath string) error {
 func serviceAccountOwnerIDs() (int, int, error) {
 	serviceUser, err := user.Lookup(systemd.DefaultServiceUser)
 	if err != nil {
-		return 0, 0, fmt.Errorf("service user %s is missing; run ps-agent init first: %w", systemd.DefaultServiceUser, err)
+		return 0, 0, fmt.Errorf("service user %s is missing; run psctl init first: %w", systemd.DefaultServiceUser, err)
 	}
 	serviceGroup, err := user.LookupGroup(systemd.DefaultServiceGroup)
 	if err != nil {
-		return 0, 0, fmt.Errorf("service group %s is missing; run ps-agent init first: %w", systemd.DefaultServiceGroup, err)
+		return 0, 0, fmt.Errorf("service group %s is missing; run psctl init first: %w", systemd.DefaultServiceGroup, err)
 	}
 	uid, err := strconv.Atoi(serviceUser.Uid)
 	if err != nil {

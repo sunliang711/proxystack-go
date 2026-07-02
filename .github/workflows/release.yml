@@ -48,9 +48,9 @@ jobs:
               archive="proxystack-go_${release_version}_${asset_os}_${goarch}.tar.gz"
               latest_archive="proxystack-go_${asset_os}_${goarch}.tar.gz"
               mkdir -p "${work_dir}"
-              CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags="${version_ldflags}" -o "${work_dir}/ps-agent" ./cmd/ps-agent
-              CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags="${version_ldflags}" -o "${work_dir}/ps-sub" ./cmd/ps-sub
-              tar -C "${work_dir}" -czf "dist/${archive}" ps-agent ps-sub
+              CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags="${version_ldflags}" -o "${work_dir}/psctl" ./cmd/ps-agent
+              CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags="${version_ldflags}" -o "${work_dir}/pssub" ./cmd/ps-sub
+              tar -C "${work_dir}" -czf "dist/${archive}" psctl pssub
               cp "dist/${archive}" "dist/${latest_archive}"
             done
           done

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestDoctorCommandIsRegistered 验证 ps-sub 命令树包含 doctor 诊断入口。
+// TestDoctorCommandIsRegistered 验证 pssub 命令树包含 doctor 诊断入口。
 func TestDoctorCommandIsRegistered(t *testing.T) {
 	command := NewRootCommand()
 	var output bytes.Buffer
@@ -33,7 +33,7 @@ func TestRunSubDoctorMissingConfigSuggestsInit(t *testing.T) {
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "sub config is missing")
-	require.Contains(t, err.Error(), "ps-sub --base-dir")
+	require.Contains(t, err.Error(), "pssub --base-dir")
 	require.Contains(t, err.Error(), "init")
 }
 

@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestNativeBackupCommandsExportAndImport 验证 ps-agent 顶层 export/import 可完成原生备份闭环。
+// TestNativeBackupCommandsExportAndImport 验证 psctl 顶层 export/import 可完成原生备份闭环。
 func TestNativeBackupCommandsExportAndImport(t *testing.T) {
 	sourceDir := t.TempDir()
 	sourceConfigPath := filepath.Join(sourceDir, "config.yaml")
@@ -165,7 +165,7 @@ func TestAgentInitUsesGlobalBaseDir(t *testing.T) {
 	require.Equal(t, filepath.Join(baseDir, "sub"), cfg.ResolvePath(cfg.Paths.Sub))
 }
 
-// TestAgentRejectsRemovedConfigFlag 验证 ps-agent 不再接受旧版 --config 入口。
+// TestAgentRejectsRemovedConfigFlag 验证 psctl 不再接受旧版 --config 入口。
 func TestAgentRejectsRemovedConfigFlag(t *testing.T) {
 	command := NewRootCommand()
 	var output bytes.Buffer
@@ -179,7 +179,7 @@ func TestAgentRejectsRemovedConfigFlag(t *testing.T) {
 	require.Contains(t, err.Error(), "unknown flag")
 }
 
-// TestSetupCommandIsRegistered 验证 ps-agent 命令树包含 setup 入口。
+// TestSetupCommandIsRegistered 验证 psctl 命令树包含 setup 入口。
 func TestSetupCommandIsRegistered(t *testing.T) {
 	output := runAgentCommandForTest(t, "setup", "--help")
 

@@ -104,7 +104,7 @@ func TestRenderUnitsUsesGeneratedFiles(t *testing.T) {
 
 	require.Contains(t, units[XrayUnitTemplate], "/opt/proxystack/runtime/generated/xray/%i.json")
 	require.Contains(t, units[ClashUnitTemplate], "/opt/proxystack/runtime/generated/mihomo/%i.yaml")
-	require.Contains(t, units[SubUnit], "ps-sub --base-dir /opt/proxystack serve")
+	require.Contains(t, units[SubUnit], "pssub --base-dir /opt/proxystack serve")
 	require.NotContains(t, units[SubUnit], "--config")
 	require.NotContains(t, units[SubUnit], "runtime/generated")
 }
@@ -118,11 +118,11 @@ func TestRenderUnitsUsesCustomBaseDir(t *testing.T) {
 
 	require.Contains(t, units[XrayUnitTemplate], filepath.Join(baseDir, "runtime", "generated", "xray", "%i.json"))
 	require.Contains(t, units[ClashUnitTemplate], filepath.Join(baseDir, "runtime", "generated", "mihomo", "%i.yaml"))
-	require.Contains(t, units[SubUnit], "ps-sub --base-dir "+baseDir+" serve")
+	require.Contains(t, units[SubUnit], "pssub --base-dir "+baseDir+" serve")
 	require.Contains(t, units[SubUnit], "ReadWritePaths="+filepath.Join(baseDir, "sub"))
 }
 
-// TestRenderSubUnitUsesSubOnlyRoot 验证 ps-sub 独立安装时 unit 读写整个 sub base dir。
+// TestRenderSubUnitUsesSubOnlyRoot 验证 pssub 独立安装时 unit 读写整个 sub base dir。
 func TestRenderSubUnitUsesSubOnlyRoot(t *testing.T) {
 	paths := domain.DefaultConfigPaths()
 	paths.Sub = "."
@@ -130,7 +130,7 @@ func TestRenderSubUnitUsesSubOnlyRoot(t *testing.T) {
 
 	units := RenderUnits(cfg)
 
-	require.Contains(t, units[SubUnit], "ps-sub --base-dir /opt/proxystack-sub serve")
+	require.Contains(t, units[SubUnit], "pssub --base-dir /opt/proxystack-sub serve")
 	require.Contains(t, units[SubUnit], "ReadWritePaths=/opt/proxystack-sub")
 }
 

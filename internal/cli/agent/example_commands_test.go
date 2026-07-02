@@ -53,9 +53,9 @@ func TestAgentExampleHelpListsAllSnippets(t *testing.T) {
 func TestAgentExampleNoArgsPrintsUsage(t *testing.T) {
 	output := runAgentCommandForTest(t, "example")
 
-	require.Contains(t, output, "ps-agent example [stack|xrelay|clash] [SECTION] [TYPE]")
-	require.Contains(t, output, "ps-agent example stack role edge")
-	require.Contains(t, output, "ps-agent example clash upstream raw")
+	require.Contains(t, output, "psctl example [stack|xrelay|clash] [SECTION] [TYPE]")
+	require.Contains(t, output, "psctl example stack role edge")
+	require.Contains(t, output, "psctl example clash upstream raw")
 }
 
 // TestAgentExampleSingleSnippetPrintsPlainYAML 验证精确片段输出带片段内注释的纯 YAML。
@@ -76,10 +76,10 @@ func TestAgentExampleSectionPrintsAllTypes(t *testing.T) {
 
 	require.Contains(t, output, "选择其中一个")
 	require.Contains(t, output, "如需纯 YAML 输出")
-	require.Contains(t, output, "# ps-agent example xrelay outbound clash")
-	require.Contains(t, output, "# ps-agent example xrelay outbound socks5")
-	require.Contains(t, output, "# ps-agent example xrelay outbound http")
-	require.Contains(t, output, "# ps-agent example xrelay outbound direct")
+	require.Contains(t, output, "# psctl example xrelay outbound clash")
+	require.Contains(t, output, "# psctl example xrelay outbound socks5")
+	require.Contains(t, output, "# psctl example xrelay outbound http")
+	require.Contains(t, output, "# psctl example xrelay outbound direct")
 }
 
 // TestAgentExampleAcceptsCommonTypos 验证命令兼容用户常见拼写错误。

@@ -20,7 +20,7 @@
 ## 交付物
 
 - `internal/diagnostics`
-- `ps-agent ipinfo` 命令。
+- `psctl ipinfo` 命令。
 - fake command runner tests。
 
 ## 实现步骤

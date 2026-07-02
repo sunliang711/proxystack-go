@@ -33,7 +33,7 @@
 
 ## 验收标准
 
-- 订阅服务生命周期由 `ps-sub` 管理，不通过 `ps-agent` target 操作。
+- 订阅服务生命周期由 `pssub` 管理，不通过 `psctl` target 操作。
 - 代理目标启动前检查二进制。
 - `journalctl -f` 多 unit 一次调用。
 - inactive status 退出码 3 不当作失败。

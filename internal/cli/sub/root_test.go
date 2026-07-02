@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestHelpUsesCommandGroupsAndBaseDirOnly 验证 ps-sub usage 分组展示且只暴露 base-dir 路径入口。
+// TestHelpUsesCommandGroupsAndBaseDirOnly 验证 pssub usage 分组展示且只暴露 base-dir 路径入口。
 func TestHelpUsesCommandGroupsAndBaseDirOnly(t *testing.T) {
 	command := NewRootCommand()
 	var output bytes.Buffer
@@ -50,7 +50,7 @@ func TestHelpUsesCommandGroupsAndBaseDirOnly(t *testing.T) {
 	require.NotContains(t, helpText, "Additional Commands:")
 }
 
-// TestInitCommandCreatesSubLayout 验证 ps-sub init 只创建独立运行目录和默认配置。
+// TestInitCommandCreatesSubLayout 验证 pssub init 只创建独立运行目录和默认配置。
 func TestInitCommandCreatesSubLayout(t *testing.T) {
 	baseDir := t.TempDir()
 	command := NewRootCommand()
@@ -71,7 +71,7 @@ func TestInitCommandCreatesSubLayout(t *testing.T) {
 	require.Contains(t, output.String(), "created_config=true")
 	data, err := os.ReadFile(filepath.Join(baseDir, "config.yaml"))
 	require.NoError(t, err)
-	require.Contains(t, string(data), "# ps-sub 订阅服务配置。")
+	require.Contains(t, string(data), "# pssub 订阅服务配置。")
 	require.Contains(t, string(data), "# HTTP 监听地址")
 	require.Contains(t, string(data), "# 日志输出设置。")
 	require.Contains(t, string(data), "format: json")
@@ -83,7 +83,7 @@ func TestInitCommandCreatesSubLayout(t *testing.T) {
 	require.Equal(t, config.LogFormatJSON, subConfig.Log.Format)
 }
 
-// TestConfigureSubLoggerSupportsJSONAndConsole 验证 ps-sub serve 可按配置切换日志格式。
+// TestConfigureSubLoggerSupportsJSONAndConsole 验证 pssub serve 可按配置切换日志格式。
 func TestConfigureSubLoggerSupportsJSONAndConsole(t *testing.T) {
 	originalLogger := log.Logger
 	originalTimeFormat := zerolog.TimeFieldFormat
@@ -127,7 +127,7 @@ func TestConfigureSubLoggerRejectsUnknownFormat(t *testing.T) {
 	require.Contains(t, err.Error(), "log.format must be json or console")
 }
 
-// TestInitCommandKeepsExistingConfig 验证 ps-sub init 默认不覆盖既有 sub config。
+// TestInitCommandKeepsExistingConfig 验证 pssub init 默认不覆盖既有 sub config。
 func TestInitCommandKeepsExistingConfig(t *testing.T) {
 	baseDir := t.TempDir()
 	configPath := filepath.Join(baseDir, "config.yaml")
@@ -382,7 +382,7 @@ func TestImportAndClearUseBaseDirSubInputs(t *testing.T) {
 	require.NoFileExists(t, inputPath)
 }
 
-// TestServiceInstallUsesSubOnlyConfig 验证 ps-sub service install 只用 base-dir 渲染 sub 服务。
+// TestServiceInstallUsesSubOnlyConfig 验证 pssub service install 只用 base-dir 渲染 sub 服务。
 func TestServiceInstallUsesSubOnlyConfig(t *testing.T) {
 	baseDir := t.TempDir()
 	manager := &fakeSubManager{installPaths: []string{"/tmp/proxystack-sub.service"}}
@@ -409,7 +409,7 @@ func TestServiceInstallUsesSubOnlyConfig(t *testing.T) {
 	require.Contains(t, output.String(), "Installed units:")
 }
 
-// TestLifecycleCommandsUseSubServiceOnly 验证 ps-sub 生命周期命令固定只操作订阅服务。
+// TestLifecycleCommandsUseSubServiceOnly 验证 pssub 生命周期命令固定只操作订阅服务。
 func TestLifecycleCommandsUseSubServiceOnly(t *testing.T) {
 	actions := []string{"start", "stop", "restart", "enable", "disable"}
 	for _, action := range actions {
@@ -465,7 +465,7 @@ func TestStatusAndLogsForwardOutput(t *testing.T) {
 	}
 }
 
-// TestRejectsRemovedPathFlags 验证 ps-sub 不再接受旧版路径 flag。
+// TestRejectsRemovedPathFlags 验证 pssub 不再接受旧版路径 flag。
 func TestRejectsRemovedPathFlags(t *testing.T) {
 	tests := [][]string{
 		{"--config", filepath.Join(t.TempDir(), "config.yaml"), "version"},
@@ -547,7 +547,7 @@ func (f *fakeSubManager) InstallUnits(config domain.GlobalConfig, target string)
 	return f.installPaths, nil
 }
 
-// UninstallUnits 满足 service.Manager 接口，当前 ps-sub 测试不会调用。
+// UninstallUnits 满足 service.Manager 接口，当前 pssub 测试不会调用。
 func (f *fakeSubManager) UninstallUnits(config domain.GlobalConfig, target string) ([]string, error) {
 	return nil, nil
 }

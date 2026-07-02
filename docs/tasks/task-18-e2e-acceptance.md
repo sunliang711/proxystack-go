@@ -30,8 +30,8 @@
 2. 执行 `init -> add -> validate -> check`。
 3. 使用 fake binary 和 fake systemd 执行 `start`。
 4. 执行 `sub export`。
-5. 执行 `ps-sub import`。
-6. 启动 `ps-sub serve`。
+5. 执行 `pssub import`。
+6. 启动 `pssub serve`。
 7. 请求三类订阅。
 8. 对照 Python golden 和行为边界。
 

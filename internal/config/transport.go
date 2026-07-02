@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// SubServerConfig 保存 ps-sub 自身运行配置，使用 strict decode 防止误写字段。
+// SubServerConfig 保存 pssub 自身运行配置，使用 strict decode 防止误写字段。
 type SubServerConfig struct {
 	DataDir       string        `json:"-" yaml:"-" mapstructure:"-"`
 	Listen        string        `json:"listen" yaml:"listen" mapstructure:"listen"`
@@ -22,11 +22,11 @@ type SubServerConfig struct {
 	fields map[string]bool `json:"-" yaml:"-"`
 }
 
-// DefaultSubServerConfigYAML 返回 ps-sub init 使用的默认订阅服务配置。
+// DefaultSubServerConfigYAML 返回 pssub init 使用的默认订阅服务配置。
 func DefaultSubServerConfigYAML() string {
-	return `# ps-sub 订阅服务配置。
+	return `# pssub 订阅服务配置。
 # 文件路径固定为 <base-dir>/config.yaml，运行数据目录固定为 <base-dir>。
-# 修改后可执行 ps-sub --base-dir <base-dir> config check 校验。
+# 修改后可执行 pssub --base-dir <base-dir> config check 校验。
 
 # HTTP 监听地址，格式为 host:port。
 # 默认只监听本机；Docker 或公网暴露可改为 0.0.0.0:3003，但必须启用 token。
@@ -140,7 +140,7 @@ const (
 	LogFormatConsole = "console"
 )
 
-// LogConfig 保存 ps-sub 日志输出配置。
+// LogConfig 保存 pssub 日志输出配置。
 type LogConfig struct {
 	Format string `json:"format" yaml:"format" mapstructure:"format"`
 }

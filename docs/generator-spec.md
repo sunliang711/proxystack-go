@@ -9,7 +9,7 @@
 输入：
 
 - agent 生成器只读取 `config.yaml` 和 `stacks/*.yaml`。
-- `render sub --input-dir` 和 `ps-sub serve` 只读取 inputs 和 sub config。
+- `render sub --input-dir` 和 `pssub serve` 只读取 inputs 和 sub config。
 
 输出：
 
@@ -26,7 +26,7 @@
 - 未变化文件不改写。
 - 生成前必须完整校验。
 - `start` 不隐式生成订阅发布包。
-- `sub export` 不直接写 ps-sub `inputs`。
+- `sub export` 不直接写 pssub `inputs`。
 
 ## 2. Runtime Plan
 
@@ -418,7 +418,7 @@ sub-bundle.zip
 - 未知成员。
 - native backup schema。
 
-## 8. `ps-sub serve` 运行时
+## 8. `pssub serve` 运行时
 
 启动流程：
 

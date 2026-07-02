@@ -223,7 +223,7 @@ func (m LaunchdManager) SubService() string {
 func RenderLaunchdPlists(config domain.GlobalConfig, target string) (map[string]string, error) {
 	selected := map[string]string{}
 	if target == "sub" && config.ConfigPath == "" {
-		selected[LaunchdSubLabel+".plist"] = renderLaunchdPlist(LaunchdSubLabel, []string{"/usr/local/bin/ps-sub", "--base-dir", launchdBaseDir(config), "serve"}, launchdBaseDir(config))
+		selected[LaunchdSubLabel+".plist"] = renderLaunchdPlist(LaunchdSubLabel, []string{"/usr/local/bin/pssub", "--base-dir", launchdBaseDir(config), "serve"}, launchdBaseDir(config))
 		return selected, nil
 	}
 	nodes, err := launchdTargetNodes(config, target)
@@ -516,7 +516,7 @@ func launchdLogPredicate(services []string) string {
 	for _, label := range services {
 		switch {
 		case label == LaunchdSubLabel:
-			processes["ps-sub"] = true
+			processes["pssub"] = true
 		case strings.HasPrefix(label, "com.proxystack.xray."):
 			processes["xray"] = true
 		case strings.HasPrefix(label, "com.proxystack.mihomo."):

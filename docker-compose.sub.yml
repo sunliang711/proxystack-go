@@ -24,7 +24,7 @@ services:
       timeout: 3s
       retries: 3
     command:
-      - ps-sub
+      - pssub
       - --base-dir
       - /data
       - serve

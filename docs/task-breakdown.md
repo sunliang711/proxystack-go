@@ -20,7 +20,7 @@
 - 目标：创建 Go module、两个二进制入口和基础命令树。
 - 输入：`docs/cli-spec.md`、源项目 `pyproject.toml` 中的 console scripts。
 - 输出：`cmd/ps-agent`、`cmd/ps-sub`、Cobra 根命令、版本命令、基础日志初始化。
-- 验收标准：`ps-agent --help`、`ps-sub --help`、`ps-agent version`、`ps-sub version` 可运行；不包含业务逻辑。
+- 验收标准：`psctl --help`、`pssub --help`、`psctl version`、`pssub version` 可运行；不包含业务逻辑。
 - 依赖：无。
 
 ## T02 配置模型与加载
@@ -89,7 +89,7 @@
 
 ## T10 sub HTTP 服务
 
-- 目标：实现 `ps-sub serve` 的 HTTP 服务和内存索引。
+- 目标：实现 `pssub serve` 的 HTTP 服务和内存索引。
 - 输入：`docs/http-subserver-spec.md`、`src/proxystack/subserver/app.py`、`state.py`、`watcher.py`、`config.py`。
 - 输出：Gin routes、SubscriptionState、watcher、token 鉴权。
 - 验收标准：`/health`、`/sub/:user?token=`、`/sub/:token/:user`、`/premium_sub`、`/surge_sub` 兼容；token 缺失 401、错误 403、无用户 404、模板错误 503；运行期 reload 失败保留上一版内存索引。
@@ -116,7 +116,7 @@
 - 目标：实现 `start/stop/restart/status/logs/enable/disable/service`。
 - 输入：`docs/cli-spec.md`、`src/proxystack/systemd/service.py`、fake runner 测试。
 - 输出：target scope 解析、systemd runner、日志查看、服务 wrapper。
-- 验收标准：订阅服务生命周期由 `ps-sub` 管理；代理目标启动前检查二进制；`journalctl -f` 多 unit 一次调用；inactive status 退出码 3 不当作失败。
+- 验收标准：订阅服务生命周期由 `pssub` 管理；代理目标启动前检查二进制；`journalctl -f` 多 unit 一次调用；inactive status 退出码 3 不当作失败。
 - 依赖：T12。
 
 ## T14 systemd unit 与权限
@@ -156,5 +156,5 @@
 - 目标：确认 Go 版可替代 Python 版。
 - 输入：`docs/testing-acceptance-matrix.md`、当前 fixtures、golden、主流程测试。
 - 输出：端到端测试矩阵和迁移验收报告。
-- 验收标准：跑通 `init -> add -> validate -> check -> start -> sub export -> ps-sub import -> ps-sub serve -> HTTP subscription`；确认 Go 版不会读取或写入越界目录；关键生成物与 Python 版对照通过。
+- 验收标准：跑通 `init -> add -> validate -> check -> start -> sub export -> pssub import -> pssub serve -> HTTP subscription`；确认 Go 版不会读取或写入越界目录；关键生成物与 Python 版对照通过。
 - 依赖：全部任务。

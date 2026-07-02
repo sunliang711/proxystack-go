@@ -232,10 +232,23 @@ install_file() {
 	if [[ ! -f "${source_path}" && "${DRY_RUN}" != "1" ]]; then
 		die "Source file does not exist: ${source_path}"
 	fi
+	if [[ -L "${target_path}" ]]; then
+		run rm -f "${target_path}"
+	fi
 	run install -m "${mode_value}" "${source_path}" "${target_path}"
 	if [[ -n "${owner_group}" ]]; then
 		run chown "${owner_group}" "${target_path}"
 	fi
+}
+
+# install_cli_alias 创建兼容命令软链接。
+install_cli_alias() {
+	local target_name="${1:-}"
+	local link_path="${2:-}"
+	if [[ -z "${target_name}" || -z "${link_path}" ]]; then
+		die "CLI alias target and link path are required"
+	fi
+	run ln -sfn "${target_name}" "${link_path}"
 }
 
 # validate_release_repo 校验 GitHub Release 仓库名。
@@ -453,10 +466,13 @@ install_release_binaries() {
 	download_file "${checksums_url}" "${checksums_path}"
 	verify_release_checksum "${temp_dir}" "${checksums_path}" "${asset_name}"
 	run tar -xzf "${archive_path}" -C "${temp_dir}"
-	agent_binary="$(release_binary_path "${temp_dir}" "ps-agent")"
-	sub_binary="$(release_binary_path "${temp_dir}" "ps-sub")"
-	install_file "${agent_binary}" "${base_dir}/bin/ps-agent" "0750" "${owner_group}"
-	install_file "${sub_binary}" "${base_dir}/bin/ps-sub" "0750" "${owner_group}"
+	agent_binary="$(release_binary_path "${temp_dir}" "psctl")"
+	sub_binary="$(release_binary_path "${temp_dir}" "pssub")"
+	install_file "${agent_binary}" "${base_dir}/bin/psctl" "0750" "${owner_group}"
+	install_file "${sub_binary}" "${base_dir}/bin/pssub" "0750" "${owner_group}"
+	install_cli_alias "psctl" "${base_dir}/bin/ps-agent"
+	install_cli_alias "psctl" "${base_dir}/bin/psagent"
+	install_cli_alias "pssub" "${base_dir}/bin/ps-sub"
 	if ! is_dry_run; then
 		run rm -rf "${temp_dir}"
 	fi

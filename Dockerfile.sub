@@ -13,7 +13,7 @@ COPY cmd ./cmd
 COPY internal ./internal
 COPY templates ./templates
 
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/eagle/proxystack-go/internal/version.Version=${BUILD_VERSION} -X github.com/eagle/proxystack-go/internal/version.Commit=${BUILD_COMMIT} -X github.com/eagle/proxystack-go/internal/version.BuildDateTime=${BUILD_DATETIME}" -o /out/ps-sub ./cmd/ps-sub
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/eagle/proxystack-go/internal/version.Version=${BUILD_VERSION} -X github.com/eagle/proxystack-go/internal/version.Commit=${BUILD_COMMIT} -X github.com/eagle/proxystack-go/internal/version.BuildDateTime=${BUILD_DATETIME}" -o /out/pssub ./cmd/ps-sub
 
 FROM alpine:3.22
 
@@ -21,7 +21,8 @@ RUN addgroup -S -g 10001 proxystack \
 	&& adduser -S -D -H -u 10001 -G proxystack -s /sbin/nologin proxystack \
 	&& apk add --no-cache ca-certificates wget
 
-COPY --from=builder /out/ps-sub /usr/local/bin/ps-sub
+COPY --from=builder /out/pssub /usr/local/bin/pssub
+RUN ln -s /usr/local/bin/pssub /usr/local/bin/ps-sub
 
 USER 10001:10001
 WORKDIR /data
@@ -31,4 +32,4 @@ VOLUME ["/data"]
 
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -qO- http://127.0.0.1:3003/health >/dev/null
 
-CMD ["ps-sub", "--base-dir", "/data", "serve"]
+CMD ["pssub", "--base-dir", "/data", "serve"]

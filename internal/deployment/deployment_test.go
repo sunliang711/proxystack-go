@@ -31,12 +31,12 @@ func TestDeploymentScriptsUseReleaseBinaryBootstrap(t *testing.T) {
 			require.Contains(t, content, "install_release_binaries")
 			require.Contains(t, content, "go build -trimpath")
 			require.Contains(t, content, "go_build_ldflags")
-			require.Contains(t, content, "ps-sub")
+			require.Contains(t, content, "pssub")
 			if scriptName == "install-agent.sh" {
-				require.Contains(t, content, "ps-agent")
-				require.Contains(t, content, "install_file \"${agent_binary}\" \"${bin_dir}/ps-agent\" \"0755\"")
+				require.Contains(t, content, "psctl")
+				require.Contains(t, content, "install_file \"${agent_binary}\" \"${bin_dir}/psctl\" \"0755\"")
 			} else {
-				require.NotContains(t, content, "install_file \"${agent_binary}\" \"${bin_dir}/ps-agent\" \"0755\"")
+				require.NotContains(t, content, "install_file \"${agent_binary}\" \"${bin_dir}/psctl\" \"0755\"")
 			}
 			require.NotContains(t, content, "scripts/lib/common.sh")
 			require.NotContains(t, content, "python3 -m venv")
@@ -56,7 +56,7 @@ func TestDeploymentScriptsUseReleaseBinaryBootstrap(t *testing.T) {
 	require.Contains(t, common, "resolve_build_datetime")
 
 	workflow := readRepoFile(t, ".github", "workflows", "release.yml")
-	require.Contains(t, workflow, `tar -C "${work_dir}" -czf "dist/${archive}" ps-agent ps-sub`)
+	require.Contains(t, workflow, `tar -C "${work_dir}" -czf "dist/${archive}" psctl pssub`)
 }
 
 // TestDockerSubDeploymentUsesSecureDefaults 验证 Docker 部署文件保留 sub-only 和安全运行参数。
@@ -80,7 +80,7 @@ func TestDockerSubDeploymentUsesSecureDefaults(t *testing.T) {
 	require.Contains(t, compose, "no-new-privileges:true")
 	require.Contains(t, compose, "/opt/proxystack-sub:/data")
 	require.Contains(t, compose, "user: \"10001:10001\"")
-	require.Contains(t, compose, "- ps-sub")
+	require.Contains(t, compose, "- pssub")
 	require.NotContains(t, compose, "- proxystack-sub")
 
 	require.Contains(t, deployScript, "--read-only")
@@ -88,7 +88,7 @@ func TestDockerSubDeploymentUsesSecureDefaults(t *testing.T) {
 	require.Contains(t, deployScript, "--security-opt no-new-privileges:true")
 	require.Contains(t, deployScript, "--build")
 	require.Contains(t, deployScript, "--volume \"${BASE_DIR}:/data\"")
-	require.Contains(t, deployScript, "ps-sub --base-dir /data serve")
+	require.Contains(t, deployScript, "pssub --base-dir /data serve")
 }
 
 // TestDockerSubDeployDryRunUsesBaseDir 验证 Docker dry-run 使用 host base dir 映射到容器 /data。
@@ -105,7 +105,7 @@ func TestDockerSubDeployDryRunUsesBaseDir(t *testing.T) {
 	require.Contains(t, output, "install -d -m 0750 "+filepath.Join(baseDir, "inputs"))
 	require.Contains(t, output, "install -d -m 0750 "+filepath.Join(baseDir, "templates"))
 	require.Contains(t, output, "--volume "+baseDir+":/data")
-	require.Contains(t, output, "ps-sub --base-dir /data serve")
+	require.Contains(t, output, "pssub --base-dir /data serve")
 }
 
 // TestInstallScriptsDryRunDownloadRelease 验证安装脚本 dry-run 会从默认 GitHub Release 下载二进制。
@@ -124,17 +124,19 @@ func TestInstallScriptsDryRunDownloadRelease(t *testing.T) {
 			require.Contains(t, output, "https://github.com/"+defaultReleaseRepo+"/releases/download/v1.2.3/SHA256SUMS")
 			require.Contains(t, output, "tar -xzf")
 			require.Contains(t, output, "proxystack-release-dry-run")
-			require.Contains(t, output, filepath.Join(binDir, "ps-sub"))
 			require.Contains(t, output, filepath.Join(binDir, "pssub"))
+			require.Contains(t, output, filepath.Join(binDir, "ps-sub"))
 			if scriptName == "install-agent.sh" {
+				require.Contains(t, output, filepath.Join(binDir, "psctl"))
 				require.Contains(t, output, filepath.Join(binDir, "ps-agent"))
 				require.Contains(t, output, filepath.Join(binDir, "psagent"))
 				require.NotContains(t, output, filepath.Join(baseDir, "sub"))
 			} else {
+				require.NotContains(t, output, filepath.Join(binDir, "psctl"))
 				require.NotContains(t, output, filepath.Join(binDir, "ps-agent"))
 				require.NotContains(t, output, filepath.Join(binDir, "psagent"))
 			}
-			require.NotContains(t, output, filepath.Join(baseDir, "bin", "ps-agent"))
+			require.NotContains(t, output, filepath.Join(baseDir, "bin", "psctl"))
 		})
 	}
 }

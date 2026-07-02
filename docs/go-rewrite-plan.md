@@ -40,7 +40,7 @@
 | 订阅生成器 | 从 `xrelay.inbounds[].sub == true` 生成 subscription input/index，不读取 clash 内部配置 |
 | 订阅格式 | Clash、Premium Clash、Surge 三类输出；Surge 支持 `#!MANAGED-CONFIG` |
 | 订阅服务 | 支持 `/health`、`/sub`、`/premium_sub`、`/surge_sub`，token query/path 鉴权，启动加载 inputs，运行期 watcher reload |
-| CLI | `ps-agent` 与 `ps-sub`，覆盖 init/setup/add/config/list/remove/clone/member/check/start/restart/status/logs/doctor/install/update/export/import/sub export/sub validate-inputs/service 等 |
+| CLI | `psctl` 与 `pssub`，覆盖 init/setup/add/config/list/remove/clone/member/check/start/restart/status/logs/doctor/install/update/export/import/sub export/sub validate-inputs/service 等 |
 | 服务管理 | Linux 生成并安装 `proxystack-xray@.service`、`proxystack-clash@.service`、`proxystack-sub.service`；macOS 生成 launchd plist |
 | 安装更新 | mihomo、xray、geo 下载/校验/原子替换；托管源 GitHub/R2 fallback；self update；远端 URL SSRF 防护 |
 | 备份发布 | 原生 agent backup 与订阅 bundle 分离；zip manifest/hash/path 安全校验 |
@@ -50,9 +50,9 @@
 
 Go 版需要保持以下兼容契约：
 
-- 保持现有用户配置格式：agent `config.yaml`、`stacks/*.yaml`、ps-sub `config.yaml`、订阅 input、订阅 bundle、原生 backup。
-- 保持现有命令入口：`ps-agent`、`ps-sub`。
-- 保持 agent/sub 数据边界：`ps-sub` 不读取 `config.yaml`、`stacks/`、`runtime/`。
+- 保持现有用户配置格式：agent `config.yaml`、`stacks/*.yaml`、pssub `config.yaml`、订阅 input、订阅 bundle、原生 backup。
+- 保持现有命令入口：`psctl`、`pssub`。
+- 保持 agent/sub 数据边界：`pssub` 不读取 `config.yaml`、`stacks/`、`runtime/`。
 - 保持订阅边界：订阅只来自 `xrelay.inbounds[]` 中 `sub: true` 的节点，不把 clash upstream、groups、rules、controller 写入订阅。
 - 保持生成边界：`start` 写 runtime/generated 和 manifest，但不隐式生成订阅发布包；`sub export` 才生成发布包。
 - 保持安全边界：下载、归档、服务管理、日志、token、目录权限和安装更新行为不能弱化。
@@ -96,9 +96,9 @@ Go 版需要保持以下兼容契约：
 ```text
 proxystack-go/
   cmd/
-    ps-agent/
+    psctl/
       main.go
-    ps-sub/
+    pssub/
       main.go
   internal/
     agentconfig/

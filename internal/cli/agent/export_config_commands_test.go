@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestExportConfigCommandRendersSubscription 验证 export-config 作为 ps-agent 顶层命令输出订阅文本。
+// TestExportConfigCommandRendersSubscription 验证 export-config 作为 psctl 顶层命令输出订阅文本。
 func TestExportConfigCommandRendersSubscription(t *testing.T) {
 	output := runAgentCommandForTest(t, "--base-dir", agentTestFixtureBaseDir(), "export-config", "sub", "alice")
 
@@ -15,7 +15,7 @@ func TestExportConfigCommandRendersSubscription(t *testing.T) {
 	require.Contains(t, output, "usa1 vmess")
 }
 
-// TestSubExportConfigCommandIsRemoved 验证旧的 ps-agent sub export-config 入口不再注册。
+// TestSubExportConfigCommandIsRemoved 验证旧的 psctl sub export-config 入口不再注册。
 func TestSubExportConfigCommandIsRemoved(t *testing.T) {
 	_, err := runAgentCommandForTestError("--base-dir", agentTestFixtureBaseDir(), "sub", "export-config", "sub", "alice")
 

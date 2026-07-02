@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestRootHelpUsesCommandGroups 验证 ps-agent 无参数 usage 按 Python 版 help panel 分组展示。
+// TestRootHelpUsesCommandGroups 验证 psctl 无参数 usage 按 Python 版 help panel 分组展示。
 func TestRootHelpUsesCommandGroups(t *testing.T) {
 	command := NewRootCommand()
 	var output bytes.Buffer

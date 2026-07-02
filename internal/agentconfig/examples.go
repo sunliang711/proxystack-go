@@ -9,7 +9,7 @@ type StackExampleSnippet struct {
 	Content     string
 }
 
-// StackExampleSnippets 返回 ps-agent example 支持的全部 stack 配置片段。
+// StackExampleSnippets 返回 psctl example 支持的全部 stack 配置片段。
 func StackExampleSnippets() []StackExampleSnippet {
 	snippets, err := stackSnippetExamples()
 	if err != nil {

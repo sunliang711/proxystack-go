@@ -232,13 +232,16 @@ install_file() {
 	if [[ ! -f "${source_path}" && "${DRY_RUN}" != "1" ]]; then
 		die "Source file does not exist: ${source_path}"
 	fi
+	if [[ -L "${target_path}" ]]; then
+		run rm -f "${target_path}"
+	fi
 	run install -m "${mode_value}" "${source_path}" "${target_path}"
 	if [[ -n "${owner_group}" ]]; then
 		run chown "${owner_group}" "${target_path}"
 	fi
 }
 
-# install_cli_alias 在 CLI 安装目录创建无横线命令软链接。
+# install_cli_alias 在 CLI 安装目录创建兼容命令软链接。
 install_cli_alias() {
 	local target_name="${1:-}"
 	local link_path="${2:-}"
@@ -470,10 +473,10 @@ install_release_binaries() {
 	download_file "${checksums_url}" "${checksums_path}"
 	verify_release_checksum "${temp_dir}" "${checksums_path}" "${asset_name}"
 	run tar -xzf "${archive_path}" -C "${temp_dir}"
-	agent_binary="$(release_binary_path "${temp_dir}" "ps-agent")"
-	sub_binary="$(release_binary_path "${temp_dir}" "ps-sub")"
-	install_file "${agent_binary}" "${bin_dir}/ps-agent" "0755"
-	install_file "${sub_binary}" "${bin_dir}/ps-sub" "0755"
+	agent_binary="$(release_binary_path "${temp_dir}" "psctl")"
+	sub_binary="$(release_binary_path "${temp_dir}" "pssub")"
+	install_file "${agent_binary}" "${bin_dir}/psctl" "0755"
+	install_file "${sub_binary}" "${bin_dir}/pssub" "0755"
 	if ! is_dry_run; then
 		run rm -rf "${temp_dir}"
 	fi
@@ -527,8 +530,8 @@ Options:
   --bin-dir DIR            CLI install directory. Default: /usr/local/bin
   --user USER              System user. Default: proxystack
   --group GROUP            System group. Default: proxystack
-  --no-init                Do not run ps-agent init.
-  --install-systemd        Run ps-agent service install.
+  --no-init                Do not run psctl init.
+  --install-systemd        Run psctl service install.
   --dry-run                Print commands without executing writes.
   -h, --help               Show this help.
 EOF
@@ -668,7 +671,7 @@ ensure_cli_dir() {
 	run install -d -m 0755 "${BIN_DIR}"
 }
 
-# build_go_binaries 构建 ps-agent 和 ps-sub，并安装到系统 bin 目录。
+# build_go_binaries 构建 psctl 和 pssub，并安装到系统 bin 目录。
 build_go_binaries() {
 	local build_ldflags
 	local temp_dir
@@ -680,10 +683,10 @@ build_go_binaries() {
 	else
 		temp_dir="$(mktemp -d)"
 	fi
-	run_stream go build -trimpath -ldflags "${build_ldflags}" -o "${temp_dir}/ps-agent" "${SOURCE_DIR}/cmd/ps-agent"
-	run_stream go build -trimpath -ldflags "${build_ldflags}" -o "${temp_dir}/ps-sub" "${SOURCE_DIR}/cmd/ps-sub"
-	install_file "${temp_dir}/ps-agent" "${BIN_DIR}/ps-agent" "0755"
-	install_file "${temp_dir}/ps-sub" "${BIN_DIR}/ps-sub" "0755"
+	run_stream go build -trimpath -ldflags "${build_ldflags}" -o "${temp_dir}/psctl" "${SOURCE_DIR}/cmd/ps-agent"
+	run_stream go build -trimpath -ldflags "${build_ldflags}" -o "${temp_dir}/pssub" "${SOURCE_DIR}/cmd/ps-sub"
+	install_file "${temp_dir}/psctl" "${BIN_DIR}/psctl" "0755"
+	install_file "${temp_dir}/pssub" "${BIN_DIR}/pssub" "0755"
 	if ! is_dry_run; then
 		run rm -rf "${temp_dir}"
 	fi
@@ -696,8 +699,9 @@ install_binaries() {
 	else
 		install_release_binaries "${RELEASE_REPO}" "${RELEASE_VERSION}" "${BIN_DIR}"
 	fi
-	install_cli_alias "ps-agent" "${BIN_DIR}/psagent"
-	install_cli_alias "ps-sub" "${BIN_DIR}/pssub"
+	install_cli_alias "psctl" "${BIN_DIR}/ps-agent"
+	install_cli_alias "psctl" "${BIN_DIR}/psagent"
+	install_cli_alias "pssub" "${BIN_DIR}/ps-sub"
 }
 
 # maybe_init_project 根据参数决定是否初始化 config.yaml。
@@ -710,7 +714,7 @@ maybe_init_project() {
 		log "SKIP config exists: ${BASE_DIR}/config.yaml"
 		return 0
 	fi
-	run_as_user "${INSTALL_USER}" "${BIN_DIR}/ps-agent" --base-dir "${BASE_DIR}" init
+	run_as_user "${INSTALL_USER}" "${BIN_DIR}/psctl" --base-dir "${BASE_DIR}" init
 }
 
 # maybe_install_systemd 根据参数决定是否安装 systemd unit。
@@ -718,7 +722,7 @@ maybe_install_systemd() {
 	if [[ "${INSTALL_SYSTEMD}" != "1" ]]; then
 		return 0
 	fi
-	run "${BIN_DIR}/ps-agent" --base-dir "${BASE_DIR}" service install
+	run "${BIN_DIR}/psctl" --base-dir "${BASE_DIR}" service install
 }
 
 # print_next_steps 输出安装后的建议命令。
@@ -726,10 +730,10 @@ print_next_steps() {
 	cat <<EOF
 
 Next steps:
-  sudo ${BIN_DIR}/ps-agent --base-dir ${BASE_DIR} install all
-  sudo ${BIN_DIR}/ps-agent --base-dir ${BASE_DIR} service install
-  sudo ${BIN_DIR}/ps-agent --base-dir ${BASE_DIR} add usa1 --no-edit
-  sudo ${BIN_DIR}/ps-agent --base-dir ${BASE_DIR} check
+  sudo ${BIN_DIR}/psctl --base-dir ${BASE_DIR} install all
+  sudo ${BIN_DIR}/psctl --base-dir ${BASE_DIR} service install
+  sudo ${BIN_DIR}/psctl --base-dir ${BASE_DIR} add usa1 --no-edit
+  sudo ${BIN_DIR}/psctl --base-dir ${BASE_DIR} check
 EOF
 }
 

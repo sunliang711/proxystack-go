@@ -303,7 +303,7 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 ReadWritePaths=` + subDir + `
-ExecStart=/usr/local/bin/ps-sub --base-dir ` + baseDir + ` serve
+ExecStart=/usr/local/bin/pssub --base-dir ` + baseDir + ` serve
 Restart=on-failure
 
 [Install]
@@ -583,7 +583,7 @@ func componentUsedOutsideTarget(nodes []graph.ServiceNode, targetSet map[graph.S
 	return false
 }
 
-// selectLegacyUnitFiles 保留 ps-sub 对订阅服务 unit 的显式安装入口。
+// selectLegacyUnitFiles 保留 pssub 对订阅服务 unit 的显式安装入口。
 func selectLegacyUnitFiles(units map[string]string, target string) (map[string]string, error) {
 	selected := map[string]string{}
 	if target != "sub" {

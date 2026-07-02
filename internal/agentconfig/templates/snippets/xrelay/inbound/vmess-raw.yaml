@@ -8,9 +8,13 @@
   # server: edge.example.com
   # region: US
   network: raw
+  # 【按需改】订阅展示名模板；多用户未配置 users[].display_template 时继承这里。
+  # display_template: '{{ "{{" }} .stack {{ "}}" }} {{ "{{" }} .protocol {{ "}}" }} {{ "{{" }} .user {{ "}}" }}'
   sub: true
   users:
     - user: user1
       uuid: 11111111-1111-4111-8111-111111111111
       email:
       remark: example vmess
+      # 【按需改】单个用户的订阅展示名模板；配置后覆盖 inbound 级 display_template。
+      # display_template: '{{ "{{" }} .stack {{ "}}" }} {{ "{{" }} .user {{ "}}" }} {{ "{{" }} .remark {{ "}}" }}'

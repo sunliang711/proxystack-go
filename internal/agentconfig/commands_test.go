@@ -166,6 +166,8 @@ func TestAddStackUsesSharedSnippetComments(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, content, strings.SplitN(upstreamSnippet, "\n", 2)[0])
 	require.Contains(t, content, strings.SplitN(listenerSnippet, "\n", 2)[0])
+	require.Contains(t, content, "# display_template: '{{ .stack }} {{ .protocol }} {{ .user }}'")
+	require.Contains(t, content, "# display_template: '{{ .stack }} {{ .user }} {{ .remark }}'")
 	require.Contains(t, content, "port: 17090")
 }
 

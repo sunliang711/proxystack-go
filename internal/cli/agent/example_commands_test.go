@@ -67,6 +67,8 @@ func TestAgentExampleSingleSnippetPrintsPlainYAML(t *testing.T) {
 	require.Contains(t, output, "protocol: vmess")
 	require.Contains(t, output, "udp: true")
 	require.Contains(t, output, "uuid: 11111111-1111-4111-8111-111111111111")
+	require.Contains(t, output, "# display_template: '{{ .stack }} {{ .protocol }} {{ .user }}'")
+	require.Contains(t, output, "# display_template: '{{ .stack }} {{ .user }} {{ .remark }}'")
 	require.NotContains(t, output, "# xrelay inbound vmess")
 }
 

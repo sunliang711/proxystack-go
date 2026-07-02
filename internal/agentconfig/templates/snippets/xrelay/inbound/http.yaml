@@ -10,5 +10,7 @@
     password: change-me-http-password
   user: user1
   remark: example http
+  # 【按需改】订阅展示名模板；支持 .stack/.protocol/.port/.user/.remark。
+  # display_template: '{{ "{{" }} .stack {{ "}}" }} {{ "{{" }} .protocol {{ "}}" }} {{ "{{" }} .remark {{ "}}" }}'
   region: US
   sub: true

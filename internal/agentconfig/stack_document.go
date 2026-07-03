@@ -18,7 +18,7 @@ const templateVmessUUIDPlaceholder = "11111111-1111-4111-8111-111111111111"
 
 // stackTemplateFiles 保存带片段 include 指令的内置 stack 模板。
 //
-//go:embed templates/stack.*.yaml
+//go:embed templates/stack.*.yaml.tmpl
 var stackTemplateFiles embed.FS
 
 // stackDocument 保存带注释和 YAML 样式的 stack 文档。
@@ -77,7 +77,7 @@ func loadStackDocumentFromFile(path string, expectedName string) (*stackDocument
 
 // loadStackTemplateDocument 读取包内 stack 模板文档。
 func loadStackTemplateDocument(templateName string, stackName string) (*stackDocument, error) {
-	data, err := stackTemplateFiles.ReadFile("templates/stack." + templateName + ".yaml")
+	data, err := stackTemplateFiles.ReadFile("templates/stack." + templateName + ".yaml.tmpl")
 	if err != nil {
 		return nil, fmt.Errorf("stack template could not be read: %s (%w)", templateName, err)
 	}
@@ -89,7 +89,7 @@ func loadStackTemplateDocument(templateName string, stackName string) (*stackDoc
 	if err != nil {
 		return nil, err
 	}
-	return decodeStackDocument(data, "Stack template", "stack."+templateName+".yaml")
+	return decodeStackDocument(data, "Stack template", "stack."+templateName+".yaml.tmpl")
 }
 
 // loadStackDocument 读取已有 stack 文件为 YAML 文档节点。

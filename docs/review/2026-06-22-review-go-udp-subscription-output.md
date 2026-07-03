@@ -23,7 +23,7 @@
 - `applyInboundUDP` 会把显式 `udp:true/false` 原样写入 `ps-sub` 节点。
 - `Node.Validate` 会拒绝 `http` 节点显式配置 `udp`。
 - `RenderClashProxy` 对 `vmess`、`shadowsocks`、`socks5` 输出 `udp`。
-- `schema-spec`、`generator-spec`、`internal/agentconfig/templates/*.yaml`、`internal/agentconfig/examples.go` 和示例 fixture 已同步。
+- `schema-spec`、`generator-spec`、`internal/agentconfig/templates/*.yaml.tmpl`、`internal/agentconfig/examples.go` 和示例 fixture 已同步。
 - 测试覆盖了显式 `udp:false` 传递、HTTP 不支持协议拒绝、CLI example 输出。
 
 ## 本地验证

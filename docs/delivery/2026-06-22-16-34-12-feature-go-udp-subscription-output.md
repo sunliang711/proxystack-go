@@ -18,7 +18,7 @@
 - `internal/generator/sub/types.go`：订阅 input 默认节点增加 UDP 协议支持校验。
 - `internal/generator/sub/render.go`：Clash/Premium Clash 输出支持 vmess UDP 字段。
 - `internal/config/loader_test.go`、`internal/generator/sub/sub_test.go`：补充 `udp: false` 传递和不支持协议拒绝测试。
-- `internal/agentconfig/templates/*.yaml`、`internal/agentconfig/examples.go`：配置模板和 CLI 示例补充 vmess `udp: true`。
+- `internal/agentconfig/templates/*.yaml.tmpl`、`internal/agentconfig/examples.go`：配置模板和 CLI 示例补充 vmess `udp: true`。
 - `docs/schema-spec.md`、`docs/generator-spec.md`：更新 inbound、SubscriptionNode 和订阅字段映射的 UDP 字段说明。
 
 ## 测试结果

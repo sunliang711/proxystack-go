@@ -17,7 +17,7 @@
 - `internal/generator/xray/config.go`：新增 routing 结构、私网直连 outbound 和路由生成逻辑。
 - `internal/generator/xray/config_test.go`：补充开启场景 golden 测试和误用校验测试。
 - `tests/golden/xray/socks-private-direct.json`：新增 Xray 私网直连 golden。
-- `internal/agentconfig/templates/snippets/xray/outbound/*.yaml`：补充示例注释。
+- `internal/agentconfig/templates/snippets/xray/outbound/*.yaml.tmpl`：补充示例注释。
 - `docs/schema-spec.md`、`docs/generator-spec.md`：补充配置和生成行为说明。
 
 ## 配置与依赖变更

@@ -307,6 +307,91 @@ func TestRenderStackInputRejectsBadDisplayTemplate(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid display_template")
 }
 
+// TestRenderStackInputUsesGenericUserRefs 验证 socks/http 展开后的用户引用会生成用户级订阅节点。
+func TestRenderStackInputUsesGenericUserRefs(t *testing.T) {
+	stackSet := domain.StackSet{
+		Config: domain.GlobalConfig{ExternalHost: "proxy.example.com"},
+		Stacks: []domain.Stack{
+			{
+				Name:    "edge",
+				Enabled: true,
+				Xrelay: domain.XrelayConfig{
+					Enabled: true,
+					Inbounds: []domain.Inbound{
+						{
+							Name:     "relay",
+							Protocol: "socks5",
+							Listen:   "127.0.0.1",
+							Port:     24001,
+							Auth:     &domain.InboundAuth{Type: "password", Username: "demo-user", Password: "demo-pass"},
+							Sub:      true,
+							Users: []domain.InboundUser{
+								{
+									User:            "alice",
+									Profile:         "mobile",
+									Remark:          "Pocket",
+									DisplayTemplate: "{{ .inbound }} {{ .profile }} {{ .user }} {{ .remark }}",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	input, err := subgen.RenderSingleStackInputAt(stackSet, "edge", fixedGeneratedAt)
+
+	require.NoError(t, err)
+	require.Len(t, input.Nodes, 1)
+	require.Equal(t, "relay mobile alice Pocket", input.Nodes[0].Remark)
+	require.Equal(t, "alice", input.Nodes[0].User)
+	require.Equal(t, "demo-user", input.Nodes[0].Auth.Username)
+}
+
+// TestRenderStackInputRejectsDuplicateProxyName 验证订阅 input 生成阶段会拒绝同一 user 下重复节点名。
+func TestRenderStackInputRejectsDuplicateProxyName(t *testing.T) {
+	stackSet := domain.StackSet{
+		Config: domain.GlobalConfig{ExternalHost: "proxy.example.com", Subscription: domain.SubscriptionConfig{Source: "local"}},
+		Stacks: []domain.Stack{
+			{
+				Name:    "edge",
+				Enabled: true,
+				Xrelay: domain.XrelayConfig{
+					Enabled: true,
+					Inbounds: []domain.Inbound{
+						{
+							Name:     "relay-a",
+							Protocol: "socks5",
+							Listen:   "127.0.0.1",
+							Port:     24001,
+							Auth:     &domain.InboundAuth{Type: "password", Username: "demo-user", Password: "demo-pass"},
+							User:     "alice",
+							Remark:   "Same Name",
+							Sub:      true,
+						},
+						{
+							Name:     "relay-b",
+							Protocol: "http",
+							Listen:   "127.0.0.1",
+							Port:     24002,
+							Auth:     &domain.InboundAuth{Type: "password", Username: "demo-user", Password: "demo-pass"},
+							User:     "alice",
+							Remark:   "Same Name",
+							Sub:      true,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := subgen.RenderStackInputAt(stackSet, "local", fixedGeneratedAt)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate proxy name for user")
+}
+
 // TestRenderStackInputKeepsVmessTransportOptions 验证 agent 导出的 websocket/grpc 参数会传递到 Clash 订阅。
 func TestRenderStackInputKeepsVmessTransportOptions(t *testing.T) {
 	baseDir := t.TempDir()

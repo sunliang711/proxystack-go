@@ -1,0 +1,10 @@
+# 全局订阅用户档案：stack 通过 xrelay.inbounds[].user_refs 引用。
+# VMess/Shadowsocks 会使用这里的 uuid/password；socks5/http 的实际连接账号仍配置在 inbound.auth。
+users:
+  - user: user1
+    profile: default
+    uuid: 11111111-1111-4111-8111-111111111111
+    password: change-me-user1-password
+    email: user1@example.com
+    remark: user1
+    # display_template: '{{ "{{" }} .stack {{ "}}" }} {{ "{{" }} .inbound {{ "}}" }} {{ "{{" }} .protocol {{ "}}" }} {{ "{{" }} .user {{ "}}" }} {{ "{{" }} .profile {{ "}}" }} {{ "{{" }} .remark {{ "}}" }}'

@@ -281,7 +281,11 @@ func validateEditTarget(path string, configPath string, name string, hasName boo
 	if !replaced {
 		nextStacks = append(nextStacks, stack)
 	}
-	return validation.ValidateStackSet(domain.StackSet{Config: cfg, Stacks: nextStacks}, validation.WithPortChecker(validation.NoopPortChecker{}))
+	nextStackSet, err := domain.ResolveStackSetUserRefs(domain.StackSet{Config: cfg, Stacks: nextStacks})
+	if err != nil {
+		return err
+	}
+	return validation.ValidateStackSet(nextStackSet, validation.WithPortChecker(validation.NoopPortChecker{}))
 }
 
 func loadEditedStack(path string, expectedName string, sourcePath string) (domain.Stack, error) {

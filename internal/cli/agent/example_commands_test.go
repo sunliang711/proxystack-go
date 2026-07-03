@@ -13,6 +13,8 @@ func TestAgentExampleHelpListsAllSnippets(t *testing.T) {
 
 	require.Contains(t, output, "Usage:")
 	require.Contains(t, output, "Supported snippets:")
+	require.Contains(t, output, "config:")
+	require.Contains(t, output, "users:")
 	require.Contains(t, output, "stack:")
 	require.Contains(t, output, "role:")
 	require.Contains(t, output, "edge")
@@ -53,7 +55,8 @@ func TestAgentExampleHelpListsAllSnippets(t *testing.T) {
 func TestAgentExampleNoArgsPrintsUsage(t *testing.T) {
 	output := runAgentCommandForTest(t, "example")
 
-	require.Contains(t, output, "psctl example [stack|xrelay|clash] [SECTION] [TYPE]")
+	require.Contains(t, output, "psctl example [config|stack|xrelay|clash] [SECTION] [TYPE]")
+	require.Contains(t, output, "psctl example config users default")
 	require.Contains(t, output, "psctl example stack role edge")
 	require.Contains(t, output, "psctl example clash upstream raw")
 }
@@ -66,10 +69,23 @@ func TestAgentExampleSingleSnippetPrintsPlainYAML(t *testing.T) {
 	require.Contains(t, output, "- name: vmess")
 	require.Contains(t, output, "protocol: vmess")
 	require.Contains(t, output, "udp: true")
-	require.Contains(t, output, "uuid: 11111111-1111-4111-8111-111111111111")
-	require.Contains(t, output, "# display_template: '{{ .stack }} {{ .protocol }} {{ .user }}'")
-	require.Contains(t, output, "# display_template: '{{ .stack }} {{ .user }} {{ .remark }}'")
+	require.Contains(t, output, "user_refs:")
+	require.Contains(t, output, "profile: default")
+	require.NotContains(t, output, "uuid: 11111111-1111-4111-8111-111111111111")
+	require.Contains(t, output, "# display_template: '{{ .stack }} {{ .inbound }} {{ .protocol }} {{ .user }}'")
+	require.Contains(t, output, "# display_template: '{{ .stack }} {{ .user }} {{ .profile }} {{ .remark }}'")
 	require.NotContains(t, output, "# xrelay inbound vmess")
+}
+
+// TestAgentExampleConfigUsersSnippet 验证 example 子命令提供 config.yaml 用户档案模板。
+func TestAgentExampleConfigUsersSnippet(t *testing.T) {
+	output := runAgentCommandForTest(t, "example", "config", "users", "default")
+
+	require.True(t, strings.HasPrefix(output, "# 全局订阅用户档案"))
+	require.Contains(t, output, "users:")
+	require.Contains(t, output, "profile: default")
+	require.Contains(t, output, "socks5/http 的实际连接账号仍配置在 inbound.auth")
+	require.Contains(t, output, "display_template")
 }
 
 // TestAgentExampleSectionPrintsAllTypes 验证分类输出包含该分类下所有类型。
@@ -89,6 +105,7 @@ func TestAgentExampleAcceptsCommonTypos(t *testing.T) {
 	output := runAgentCommandForTest(t, "example", "xrelay", "inboud", "socks5")
 
 	require.Contains(t, output, "protocol: socks5")
+	require.Contains(t, output, "auth 是 socks5 的实际连接账号")
 	require.Contains(t, output, "auth:")
 }
 

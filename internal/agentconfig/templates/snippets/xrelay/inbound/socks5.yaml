@@ -5,13 +5,17 @@
   listen: 0.0.0.0
   port: {{ .RelayPort }}
   udp: true
+  # auth 是 socks5 的实际连接账号；不会从 config.yaml users 自动读取。
+  # user_refs 只决定订阅归属和节点名。
   auth:
     type: password
     username: {{ .RelayUsername }}
     password: change-me-relay-password
-  user: user1
-  remark: {{ .RelayRemark }}
-  # 【按需改】订阅展示名模板；支持 .stack/.protocol/.port/.user/.remark。
-  # display_template: '{{ "{{" }} .stack {{ "}}" }} {{ "{{" }} .protocol {{ "}}" }} {{ "{{" }} .remark {{ "}}" }}'
+  # 【按需改】订阅展示名模板；支持 .stack/.inbound/.protocol/.port/.user/.profile/.remark。
+  # display_template: '{{ "{{" }} .stack {{ "}}" }} {{ "{{" }} .inbound {{ "}}" }} {{ "{{" }} .protocol {{ "}}" }} {{ "{{" }} .remark {{ "}}" }}'
   # region: US
   sub: true
+  user_refs:
+    - user: user1
+      profile: default
+      remark: {{ .RelayRemark }}

@@ -95,7 +95,11 @@ func InitProject(options InitOptions) error {
 	if err := EnsureProjectLayout(options); err != nil {
 		return err
 	}
-	if err := writeFileAtomic(configPath, []byte(defaultAgentConfig(options.ExternalHost)), 0o640); err != nil {
+	defaultUserUUID, err := randomUUID()
+	if err != nil {
+		return err
+	}
+	if err := writeFileAtomic(configPath, []byte(defaultAgentConfig(options.ExternalHost, defaultUserUUID)), 0o640); err != nil {
 		return err
 	}
 	return nil
@@ -190,6 +194,7 @@ func BuildCloneStackCandidate(options CloneOptions) (StackCandidate, error) {
 	}
 	setMappingScalar(document.root, "name", options.Target)
 	rewriteSelfRefsInNode(document.root, options.Source, options.Target)
+	rewriteSubscriptionRemarksInNode(document.root, options.Source, options.Target)
 	if options.AllocatePorts {
 		if err := allocateStackDocumentPorts(document, stackSet); err != nil {
 			return StackCandidate{}, err
@@ -373,7 +378,7 @@ func randomUUID() (string, error) {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", bytes[0:4], bytes[4:6], bytes[6:8], bytes[8:10], bytes[10:16]), nil
 }
 
-func defaultAgentConfig(externalHost string) string {
+func defaultAgentConfig(externalHost string, defaultUserUUID string) string {
 	return fmt.Sprintf(`# default agent 配置。
 # 文件路径固定为 <base-dir>/config.yaml；运行时 base dir 由 psctl --base-dir 指定。
 # 修改后建议执行 psctl --base-dir <base-dir> validate 或 check 校验。
@@ -405,6 +410,21 @@ external_host: %s
 subscription:
   # source 标识导出来源；local 表示本机 agent 生成。
   source: local
+
+# 全局订阅用户档案。stack 的 xrelay.inbounds[].user_refs 会引用这里的 user/profile。
+# VMess/Shadowsocks 会使用这里的 uuid/password；socks5/http 的实际连接账号仍配置在 inbound.auth。
+users:
+  # user 是订阅入口用户；profile 用来区分同一 user 的不同凭据档案，默认 default。
+  - user: user1
+    profile: default
+    # VMess inbound 引用该用户时使用 uuid。
+    uuid: %s
+    # Shadowsocks inbound 引用该用户时使用 password；部署前请替换。
+    password: change-me-user1-password
+    # 订阅节点默认备注；单个 inbound 可通过 user_refs[].remark 覆盖。
+    remark: user1
+    # 节点展示名模板支持 .stack/.inbound/.protocol/.port/.user/.profile/.remark。
+    # display_template: '{{ .stack }} {{ .inbound }} {{ .protocol }} {{ .remark }}'
 
 # 自动分配端口范围。仅 add/clone --allocate-ports 使用；手工配置端口可在范围外。
 port_ranges:
@@ -477,7 +497,7 @@ install:
     version: latest
     # auto 表示由安装器自动选择下载来源。
     source: auto
-`, externalHost)
+`, externalHost, defaultUserUUID)
 }
 
 func firstNonEmpty(values ...string) string {

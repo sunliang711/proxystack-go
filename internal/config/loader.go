@@ -108,6 +108,10 @@ func LoadStacks(config domain.GlobalConfig, checkSystemPorts bool) (domain.Stack
 		stacks = append(stacks, stack)
 	}
 	stackSet := domain.StackSet{Config: config, Stacks: stacks}
+	stackSet, err = domain.ResolveStackSetUserRefs(stackSet)
+	if err != nil {
+		return domain.StackSet{}, err
+	}
 	options := []validation.Option{}
 	if !checkSystemPorts {
 		options = append(options, validation.WithPortChecker(validation.NoopPortChecker{}))

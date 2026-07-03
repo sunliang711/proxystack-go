@@ -25,9 +25,9 @@ xrelay:
         type: password
         username: usa2
         password: demo-usa2-relay-password
-      user: alice
       remark: usa2 relay socks
       sub: true
+      user_refs: [alice]
 
 clash:
   enabled: true

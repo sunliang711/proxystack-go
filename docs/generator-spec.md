@@ -147,9 +147,10 @@ API listen 必须是 loopback。
 vmess：
 
 - 一个 inbound 对应多个 client。
-- `settings.clients[].id` 来自 `users[].uuid`。
+- `user_refs` 会先按 `config.yaml users` 展开为内部用户。
+- `settings.clients[].id` 来自展开后用户的 `uuid`。
 - `alterId` 固定 `0`。
-- `email` 来自 `users[].email`，缺省使用 `users[].user`。
+- `email` 来自展开后用户的 `email`，缺省使用 `user`。
 
 shadowsocks：
 
@@ -311,12 +312,12 @@ remark: Tokyo 01
 display_template: '{{ .stack | toUpper }} {{ .protocol }} {{ .port }} {{ .remark | replace " " "-" }}'
 ```
 
-模板结果会 trim；语法错误、未知变量或渲染后为空时生成失败。多用户节点优先使用 `users[].display_template`，未配置时继承 inbound 级 `display_template`。
+模板结果会 trim；语法错误、未知变量或渲染后为空时生成失败。优先级为 `user_refs[].display_template`、`config.yaml users[].display_template`、inbound 级 `display_template`、`remark`、默认名称。模板上下文包含 `.stack/.inbound/.protocol/.port/.user/.profile/.remark`。
 
 vmess 多用户：
 
 - 每个 user 生成一个节点。
-- uuid 来自 `users[].uuid`。
+- uuid 来自展开后用户的 `uuid`。
 
 shadowsocks 多用户：
 

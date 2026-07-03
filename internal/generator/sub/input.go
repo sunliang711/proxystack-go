@@ -30,6 +30,10 @@ var displayTemplateFuncs = template.FuncMap{
 
 // RenderStackInputAt 从所有启用 stack 的 sub inbound 生成订阅 input。
 func RenderStackInputAt(stackSet domain.StackSet, source string, generatedAt string) (Input, error) {
+	stackSet, err := domain.ResolveStackSetUserRefs(stackSet)
+	if err != nil {
+		return Input{}, err
+	}
 	nodes := make([]Node, 0)
 	for _, stack := range stackSet.Stacks {
 		if !stack.Enabled || !stack.Xrelay.Enabled {
@@ -56,6 +60,10 @@ func RenderStackInputAt(stackSet domain.StackSet, source string, generatedAt str
 
 // RenderSingleStackInputAt 从指定 stack 的 sub inbound 生成订阅 input。
 func RenderSingleStackInputAt(stackSet domain.StackSet, stackName string, generatedAt string) (Input, error) {
+	stackSet, err := domain.ResolveStackSetUserRefs(stackSet)
+	if err != nil {
+		return Input{}, err
+	}
 	stack, ok := stackSet.ByName()[stackName]
 	if !ok {
 		return Input{}, GeneratorError{Message: "stack does not exist: " + stackName}
@@ -114,6 +122,16 @@ func renderInboundNodes(stackSet domain.StackSet, stack domain.Stack, inbound do
 			nodes = append(nodes, node)
 		}
 		return nodes, nil
+	case (inbound.Protocol == "socks5" || inbound.Protocol == "http") && len(inbound.Users) > 0:
+		nodes := make([]Node, 0, len(inbound.Users))
+		for _, user := range inbound.Users {
+			node, err := renderGenericUserNode(stackSet, stack, inbound, user)
+			if err != nil {
+				return nil, err
+			}
+			nodes = append(nodes, node)
+		}
+		return nodes, nil
 	default:
 		node, err := renderSingleInboundNode(stackSet, stack, inbound)
 		if err != nil {
@@ -128,7 +146,7 @@ func renderSingleInboundNode(stackSet domain.StackSet, stack domain.Stack, inbou
 	if user == "" {
 		user = "default"
 	}
-	remark, err := subscriptionRemark(stack.Name, inbound, user, inbound.Remark, inbound.DisplayTemplate)
+	remark, err := subscriptionRemark(stack.Name, inbound, user, domain.DefaultUserProfile, inbound.Remark, inbound.DisplayTemplate)
 	if err != nil {
 		return Node{}, err
 	}
@@ -165,7 +183,7 @@ func renderVmessUserNode(stackSet domain.StackSet, stack domain.Stack, inbound d
 	if tag == "" {
 		tag = inbound.TagOrDefault() + ":" + user.User
 	}
-	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.Remark, firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
+	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark), firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
 	if err != nil {
 		return Node{}, err
 	}
@@ -196,7 +214,7 @@ func renderShadowsocksUserNode(stackSet domain.StackSet, stack domain.Stack, inb
 		tag = inbound.TagOrDefault() + ":" + user.User
 	}
 	method := firstNonEmpty(user.Method, user.Cipher, inbound.MethodOrCipher())
-	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.Remark, firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
+	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark), firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
 	if err != nil {
 		return Node{}, err
 	}
@@ -220,6 +238,36 @@ func renderShadowsocksUserNode(stackSet domain.StackSet, stack domain.Stack, inb
 	return node, nil
 }
 
+// renderGenericUserNode 为 socks/http 的 user_refs 订阅引用生成用户级节点。
+func renderGenericUserNode(stackSet domain.StackSet, stack domain.Stack, inbound domain.Inbound, user domain.InboundUser) (Node, error) {
+	tag := user.Tag
+	if tag == "" {
+		tag = inbound.TagOrDefault() + ":" + user.User
+	}
+	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark), firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
+	if err != nil {
+		return Node{}, err
+	}
+	node := Node{
+		ID:       stack.Name + ":" + inbound.Name + ":" + user.User,
+		User:     user.User,
+		Protocol: inbound.Protocol,
+		Server:   subscriptionServer(stackSet, inbound),
+		Port:     inbound.Port,
+		Tag:      tag,
+		Remark:   remark,
+		Region:   inbound.Region,
+	}
+	applyInboundUDP(&node, inbound)
+	if inbound.Auth != nil {
+		node.Auth = &Auth{Type: inbound.Auth.Type, Username: inbound.Auth.Username, Password: inbound.Auth.Password}
+	}
+	if err := node.Validate(); err != nil {
+		return Node{}, err
+	}
+	return node, nil
+}
+
 // applyInboundUDP 把显式 udp 配置原样传递给订阅节点。
 func applyInboundUDP(node *Node, inbound domain.Inbound) {
 	if inbound.UDPConfigured() {
@@ -235,7 +283,7 @@ func subscriptionServer(stackSet domain.StackSet, inbound domain.Inbound) string
 }
 
 // subscriptionRemark 生成订阅节点展示名；display_template 优先，其次使用显式 remark，未配置时使用稳定的 stack/protocol 名称。
-func subscriptionRemark(stackName string, inbound domain.Inbound, user string, configuredRemark string, displayTemplate string) (string, error) {
+func subscriptionRemark(stackName string, inbound domain.Inbound, user string, profile string, configuredRemark string, displayTemplate string) (string, error) {
 	baseRemark := configuredRemark
 	if baseRemark == "" {
 		baseRemark = inbound.Name
@@ -243,9 +291,11 @@ func subscriptionRemark(stackName string, inbound domain.Inbound, user string, c
 	if displayTemplate != "" {
 		return renderDisplayTemplate(displayTemplate, map[string]any{
 			"stack":    stackName,
+			"inbound":  inbound.Name,
 			"protocol": inbound.Protocol,
 			"port":     inbound.Port,
 			"user":     user,
+			"profile":  domain.NormalizeUserProfile(profile),
 			"remark":   baseRemark,
 		})
 	}

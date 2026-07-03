@@ -44,6 +44,18 @@ func TestValidateDuplicatePort(t *testing.T) {
 	require.Contains(t, err.Error(), "duplicate listen port")
 }
 
+// TestValidateSubscriptionProxyNamesRejectsDuplicateName 验证同一订阅用户下最终节点名不能重复。
+func TestValidateSubscriptionProxyNamesRejectsDuplicateName(t *testing.T) {
+	stackSet := loadExampleStackSet(t)
+	stackSet.Stacks[1].Xrelay.Inbounds[0].Remark = stackSet.Stacks[0].Xrelay.Inbounds[0].Remark
+
+	err := validation.ValidateStackSet(stackSet, validation.WithPortChecker(validation.NoopPortChecker{}))
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate proxy name for user")
+	require.Contains(t, err.Error(), "user=alice")
+}
+
 // TestDisabledStackDoesNotParticipateInRuntimeValidation 验证 disabled stack 不参与端口和公开鉴权校验。
 func TestDisabledStackDoesNotParticipateInRuntimeValidation(t *testing.T) {
 	stackSet := loadExampleStackSet(t)

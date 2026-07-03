@@ -25,24 +25,24 @@ const (
 var regionPattern = regexp.MustCompile(`^[A-Z]{2}$`)
 
 var nodeKnownFields = map[string]bool{
-	"id":       true,
-	"user":     true,
-	"protocol": true,
-	"server":   true,
-	"port":     true,
-	"tag":      true,
-	"remark":   true,
-	"uuid":     true,
-	"network":  true,
-	"ws_opts":  true,
+	"id":        true,
+	"user":      true,
+	"protocol":  true,
+	"server":    true,
+	"port":      true,
+	"tag":       true,
+	"remark":    true,
+	"uuid":      true,
+	"network":   true,
+	"ws_opts":   true,
 	"grpc_opts": true,
-	"method":   true,
-	"cipher":   true,
-	"password": true,
-	"udp":      true,
-	"auth":     true,
-	"region":   true,
-	"direct":   true,
+	"method":    true,
+	"cipher":    true,
+	"password":  true,
+	"udp":       true,
+	"auth":      true,
+	"region":    true,
+	"direct":    true,
 }
 
 var authKnownFields = map[string]bool{
@@ -95,24 +95,24 @@ func (a Auth) Validate() error {
 
 // Node 是 agent 和 sub 之间传递的单个订阅节点。
 type Node struct {
-	ID       string `json:"id" yaml:"id"`
-	User     string `json:"user" yaml:"user"`
-	Direct   bool   `json:"direct,omitempty" yaml:"direct,omitempty"`
-	Protocol string `json:"protocol" yaml:"protocol"`
-	Server   string `json:"server" yaml:"server"`
-	Port     int    `json:"port" yaml:"port"`
-	Tag      string `json:"tag" yaml:"tag"`
-	Remark   string `json:"remark" yaml:"remark"`
-	UUID     string `json:"uuid,omitempty" yaml:"uuid,omitempty"`
-	Network  string `json:"network,omitempty" yaml:"network,omitempty"`
+	ID       string                   `json:"id" yaml:"id"`
+	User     string                   `json:"user" yaml:"user"`
+	Direct   bool                     `json:"direct,omitempty" yaml:"direct,omitempty"`
+	Protocol string                   `json:"protocol" yaml:"protocol"`
+	Server   string                   `json:"server" yaml:"server"`
+	Port     int                      `json:"port" yaml:"port"`
+	Tag      string                   `json:"tag" yaml:"tag"`
+	Remark   string                   `json:"remark" yaml:"remark"`
+	UUID     string                   `json:"uuid,omitempty" yaml:"uuid,omitempty"`
+	Network  string                   `json:"network,omitempty" yaml:"network,omitempty"`
 	WSOpts   *domain.WebSocketOptions `json:"ws_opts,omitempty" yaml:"ws_opts,omitempty"`
 	GRPCOpts *domain.GRPCOptions      `json:"grpc_opts,omitempty" yaml:"grpc_opts,omitempty"`
-	Method   string `json:"method,omitempty" yaml:"method,omitempty"`
-	Cipher   string `json:"cipher,omitempty" yaml:"cipher,omitempty"`
-	Password string `json:"password,omitempty" yaml:"password,omitempty"`
-	UDP      *bool  `json:"udp,omitempty" yaml:"udp,omitempty"`
-	Auth     *Auth  `json:"auth,omitempty" yaml:"auth,omitempty"`
-	Region   string `json:"region,omitempty" yaml:"region,omitempty"`
+	Method   string                   `json:"method,omitempty" yaml:"method,omitempty"`
+	Cipher   string                   `json:"cipher,omitempty" yaml:"cipher,omitempty"`
+	Password string                   `json:"password,omitempty" yaml:"password,omitempty"`
+	UDP      *bool                    `json:"udp,omitempty" yaml:"udp,omitempty"`
+	Auth     *Auth                    `json:"auth,omitempty" yaml:"auth,omitempty"`
+	Region   string                   `json:"region,omitempty" yaml:"region,omitempty"`
 
 	rawFields []yamlNodePair
 }
@@ -355,7 +355,7 @@ func (i Input) resolveExternalHostDefault() Input {
 	return input
 }
 
-// Validate 校验 input schema、版本和内部 node.id 唯一性。
+// Validate 校验 input schema、版本、内部 node.id 和同用户节点名唯一性。
 func (i Input) Validate() error {
 	input := i.resolveExternalHostDefault()
 	if input.InputSchema != "" && input.InputSchema != InputSchema {
@@ -371,6 +371,7 @@ func (i Input) Validate() error {
 		return fmt.Errorf("input.generated_at is required")
 	}
 	seen := map[string]bool{}
+	proxyNames := map[string]string{}
 	for _, node := range input.Nodes {
 		if err := node.Validate(); err != nil {
 			return err
@@ -379,6 +380,11 @@ func (i Input) Validate() error {
 			return fmt.Errorf("duplicate node id in input: %s", node.ID)
 		}
 		seen[node.ID] = true
+		proxyNameKey := node.User + "\x00" + node.Remark
+		if firstNodeID, ok := proxyNames[proxyNameKey]; ok {
+			return fmt.Errorf("duplicate proxy name for user: user=%s name=%s, first seen at %s, repeated at %s", node.User, node.Remark, firstNodeID, node.ID)
+		}
+		proxyNames[proxyNameKey] = node.ID
 	}
 	return nil
 }

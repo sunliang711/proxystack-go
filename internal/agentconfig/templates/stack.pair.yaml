@@ -2,7 +2,7 @@
 # 使用方式：
 #   psctl add <name> --template pair
 # 快速定位：
-# - 搜索【必改】：部署前必须替换的 server、uuid、secret 等占位值。
+# - 搜索【必改】：部署前必须替换的 server、secret、password 等占位值。
 # - 搜索【按需改】：端口、监听地址、user、remark、sub 等常见部署参数。
 # - 搜索【一般不改】：默认结构配置，除非明确调整生成逻辑。
 # - 搜索【被引用】：其他 stack 会通过 ref 引用的名称，改名需同步修改引用方。

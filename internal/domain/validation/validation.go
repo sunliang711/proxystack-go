@@ -1,9 +1,11 @@
 package validation
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"strings"
+	"text/template"
 
 	"github.com/eagle/proxystack-go/internal/domain"
 	"github.com/eagle/proxystack-go/internal/graph"
@@ -104,6 +106,7 @@ func ValidateStackSet(stackSet domain.StackSet, opts ...Option) error {
 	issues := make([]Issue, 0)
 	issues = append(issues, ValidateUniqueStackNames(stackSet.Stacks)...)
 	issues = append(issues, ValidatePublicInboundAuth(stackSet.Config, stackSet.Stacks)...)
+	issues = append(issues, ValidateSubscriptionProxyNames(stackSet.Stacks)...)
 	portBindings := CollectPortBindings(stackSet)
 	issues = append(issues, ValidateUniquePorts(portBindings)...)
 	issues = append(issues, ValidateReferenceGraph(stackSet)...)
@@ -114,6 +117,154 @@ func ValidateStackSet(stackSet domain.StackSet, opts ...Option) error {
 		return ConfigValidationError{Issues: issues}
 	}
 	return nil
+}
+
+var subscriptionDisplayTemplateFuncs = template.FuncMap{
+	"toUpper": strings.ToUpper,
+	"toLower": strings.ToLower,
+	"trim":    strings.TrimSpace,
+	"replace": func(old string, new string, value string) string {
+		return strings.ReplaceAll(value, old, new)
+	},
+}
+
+type subscriptionProxyName struct {
+	User   string
+	Remark string
+	Path   string
+}
+
+// ValidateSubscriptionProxyNames 校验同一订阅 user 下最终节点展示名不重复。
+func ValidateSubscriptionProxyNames(stacks []domain.Stack) []Issue {
+	issues := make([]Issue, 0)
+	seen := map[string]subscriptionProxyName{}
+	for _, stack := range stacks {
+		if !stack.Enabled || !stack.Xrelay.Enabled {
+			continue
+		}
+		for inboundIndex, inbound := range stack.Xrelay.Inbounds {
+			if !inbound.Sub {
+				continue
+			}
+			names, nameIssues := collectSubscriptionProxyNames(stack.Name, inboundIndex, inbound)
+			issues = append(issues, nameIssues...)
+			for _, name := range names {
+				key := name.User + "\x00" + name.Remark
+				if first, ok := seen[key]; ok {
+					issues = append(issues, Issue{
+						Path:    name.Path,
+						Message: fmt.Sprintf("duplicate proxy name for user: user=%s name=%s, first seen at %s, repeated at %s", name.User, name.Remark, first.Path, name.Path),
+					})
+					continue
+				}
+				seen[key] = name
+			}
+		}
+	}
+	return issues
+}
+
+// collectSubscriptionProxyNames 渲染一个 inbound 会贡献的订阅 user/name 对。
+func collectSubscriptionProxyNames(stackName string, inboundIndex int, inbound domain.Inbound) ([]subscriptionProxyName, []Issue) {
+	path := fmt.Sprintf("stacks.%s.xrelay.inbounds[%d]", stackName, inboundIndex)
+	users := subscriptionInboundUsers(inbound)
+	if len(users) > 0 {
+		names := make([]subscriptionProxyName, 0, len(users))
+		issues := make([]Issue, 0)
+		for userIndex, user := range users {
+			remark, err := subscriptionRemark(stackName, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark), firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
+			userPath := fmt.Sprintf("%s.user_refs[%d]", path, userIndex)
+			if !inbound.UsesUserRefs() {
+				userPath = fmt.Sprintf("%s.users[%d]", path, userIndex)
+			}
+			if err != nil {
+				issues = append(issues, Issue{Path: userPath + ".display_template", Message: err.Error()})
+				continue
+			}
+			names = append(names, subscriptionProxyName{User: user.User, Remark: remark, Path: userPath})
+		}
+		return names, issues
+	}
+	user := inbound.User
+	if user == "" {
+		user = "default"
+	}
+	remark, err := subscriptionRemark(stackName, inbound, user, domain.DefaultUserProfile, inbound.Remark, inbound.DisplayTemplate)
+	if err != nil {
+		return nil, []Issue{{Path: path + ".display_template", Message: err.Error()}}
+	}
+	return []subscriptionProxyName{{User: user, Remark: remark, Path: path}}, nil
+}
+
+// subscriptionInboundUsers 返回展开后或原始 user_refs 代表的订阅用户列表。
+func subscriptionInboundUsers(inbound domain.Inbound) []domain.InboundUser {
+	if len(inbound.Users) > 0 {
+		return inbound.Users
+	}
+	if len(inbound.UserRefs) == 0 {
+		return nil
+	}
+	users := make([]domain.InboundUser, 0, len(inbound.UserRefs))
+	for _, ref := range inbound.UserRefs {
+		users = append(users, domain.InboundUser{
+			User:            ref.User,
+			Profile:         domain.NormalizeUserProfile(ref.Profile),
+			Remark:          ref.Remark,
+			DisplayTemplate: ref.DisplayTemplate,
+			Tag:             ref.Tag,
+		})
+	}
+	return users
+}
+
+// subscriptionRemark 复用订阅生成器的命名规则渲染最终节点名。
+func subscriptionRemark(stackName string, inbound domain.Inbound, user string, profile string, configuredRemark string, displayTemplate string) (string, error) {
+	baseRemark := configuredRemark
+	if baseRemark == "" {
+		baseRemark = inbound.Name
+	}
+	if displayTemplate != "" {
+		return renderSubscriptionDisplayTemplate(displayTemplate, map[string]any{
+			"stack":    stackName,
+			"inbound":  inbound.Name,
+			"protocol": inbound.Protocol,
+			"port":     inbound.Port,
+			"user":     user,
+			"profile":  domain.NormalizeUserProfile(profile),
+			"remark":   baseRemark,
+		})
+	}
+	if configuredRemark != "" {
+		return configuredRemark, nil
+	}
+	return fmt.Sprintf("%s %s", stackName, inbound.Protocol), nil
+}
+
+// renderSubscriptionDisplayTemplate 用订阅展示名模板的受限函数集渲染文本。
+func renderSubscriptionDisplayTemplate(templateText string, data map[string]any) (string, error) {
+	parsedTemplate, err := template.New("display_template").Funcs(subscriptionDisplayTemplateFuncs).Option("missingkey=error").Parse(templateText)
+	if err != nil {
+		return "", fmt.Errorf("invalid display_template: %s", err.Error())
+	}
+	var buffer bytes.Buffer
+	if err := parsedTemplate.Execute(&buffer, data); err != nil {
+		return "", fmt.Errorf("invalid display_template: %s", err.Error())
+	}
+	displayName := strings.TrimSpace(buffer.String())
+	if displayName == "" {
+		return "", fmt.Errorf("display_template rendered empty")
+	}
+	return displayName, nil
+}
+
+// firstNonEmpty 返回第一个非空字符串，用于订阅字段覆盖优先级。
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // ValidateUniqueStackNames 校验所有 stack 名称唯一。

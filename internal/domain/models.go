@@ -29,6 +29,9 @@ const (
 	defaultClashListenerHost = "127.0.0.1"
 )
 
+// DefaultUserProfile 是未显式配置 profile 时使用的默认档案名。
+const DefaultUserProfile = "default"
+
 var (
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
 	regionPattern     = regexp.MustCompile(`^[A-Z]{2}$`)
@@ -384,6 +387,7 @@ type GlobalConfig struct {
 	Paths        ConfigPaths        `json:"paths" yaml:"paths" mapstructure:"paths"`
 	ExternalHost string             `json:"external_host" yaml:"external_host" mapstructure:"external_host"`
 	Subscription SubscriptionConfig `json:"subscription" yaml:"subscription" mapstructure:"subscription"`
+	Users        []UserProfile      `json:"users" yaml:"users" mapstructure:"users"`
 	PortRanges   PortRanges         `json:"port_ranges" yaml:"port_ranges" mapstructure:"port_ranges"`
 	Defaults     DefaultsConfig     `json:"defaults" yaml:"defaults" mapstructure:"defaults"`
 	Security     SecurityConfig     `json:"security" yaml:"security" mapstructure:"security"`
@@ -443,6 +447,9 @@ func (g *GlobalConfig) Validate() error {
 	if g.Subscription.Source != "local" {
 		return fmt.Errorf("subscription.source must be local")
 	}
+	if err := normalizeAndValidateUserProfiles(g.Users); err != nil {
+		return err
+	}
 	if err := g.PortRanges.Validate(); err != nil {
 		return err
 	}
@@ -457,6 +464,64 @@ func (g *GlobalConfig) Validate() error {
 	}
 	if err := validateDefaultXrelay(g.Defaults.Xrelay); err != nil {
 		return err
+	}
+	return nil
+}
+
+// UserProfile 保存 config.yaml 中可被 stack 引用的全局订阅用户档案。
+type UserProfile struct {
+	User            string `json:"user" yaml:"user" mapstructure:"user"`
+	Profile         string `json:"profile" yaml:"profile" mapstructure:"profile"`
+	UUID            string `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
+	Password        string `json:"password" yaml:"password" mapstructure:"password"`
+	Method          string `json:"method" yaml:"method" mapstructure:"method"`
+	Cipher          string `json:"cipher" yaml:"cipher" mapstructure:"cipher"`
+	Email           string `json:"email" yaml:"email" mapstructure:"email"`
+	Remark          string `json:"remark" yaml:"remark" mapstructure:"remark"`
+	DisplayTemplate string `json:"display_template" yaml:"display_template" mapstructure:"display_template"`
+	Tag             string `json:"tag" yaml:"tag" mapstructure:"tag"`
+}
+
+// Validate 校验全局用户档案的唯一键和可选凭据格式。
+func (u *UserProfile) Validate() error {
+	u.Profile = NormalizeUserProfile(u.Profile)
+	if err := ValidateIdentifier(u.User, "config user"); err != nil {
+		return err
+	}
+	if err := ValidateIdentifier(u.Profile, "user profile"); err != nil {
+		return err
+	}
+	if u.UUID != "" && !uuidPattern.MatchString(u.UUID) {
+		return fmt.Errorf("uuid must be a valid UUID")
+	}
+	return nil
+}
+
+// UserProfileKey 返回全局用户档案的稳定唯一键。
+func UserProfileKey(user string, profile string) string {
+	return user + "\x00" + NormalizeUserProfile(profile)
+}
+
+// NormalizeUserProfile 把空 profile 归一为 default。
+func NormalizeUserProfile(profile string) string {
+	if profile == "" {
+		return DefaultUserProfile
+	}
+	return profile
+}
+
+// normalizeAndValidateUserProfiles 校验全局用户档案并补齐默认 profile。
+func normalizeAndValidateUserProfiles(users []UserProfile) error {
+	seen := map[string]bool{}
+	for index := range users {
+		if err := users[index].Validate(); err != nil {
+			return err
+		}
+		key := UserProfileKey(users[index].User, users[index].Profile)
+		if seen[key] {
+			return fmt.Errorf("duplicate config user profile: user=%s profile=%s", users[index].User, users[index].Profile)
+		}
+		seen[key] = true
 	}
 	return nil
 }
@@ -482,6 +547,7 @@ func (a InboundAuth) Validate() error {
 // InboundUser 保存 vmess/shadowsocks 多用户凭据。
 type InboundUser struct {
 	User            string `json:"user" yaml:"user" mapstructure:"user"`
+	Profile         string `json:"profile" yaml:"profile" mapstructure:"profile"`
 	UUID            string `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
 	Password        string `json:"password" yaml:"password" mapstructure:"password"`
 	Method          string `json:"method" yaml:"method" mapstructure:"method"`
@@ -513,6 +579,59 @@ func (u InboundUser) EmailOrUser() string {
 		return u.Email
 	}
 	return u.User
+}
+
+// ProfileOrDefault 返回用户档案 profile，未配置时使用 default。
+func (u InboundUser) ProfileOrDefault() string {
+	return NormalizeUserProfile(u.Profile)
+}
+
+// InboundUserRef 保存 stack inbound 对 config.yaml 用户档案的引用和少量覆盖字段。
+type InboundUserRef struct {
+	User            string `json:"user" yaml:"user" mapstructure:"user"`
+	Profile         string `json:"profile" yaml:"profile" mapstructure:"profile"`
+	UUID            string `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
+	Password        string `json:"password" yaml:"password" mapstructure:"password"`
+	Method          string `json:"method" yaml:"method" mapstructure:"method"`
+	Cipher          string `json:"cipher" yaml:"cipher" mapstructure:"cipher"`
+	Email           string `json:"email" yaml:"email" mapstructure:"email"`
+	Remark          string `json:"remark" yaml:"remark" mapstructure:"remark"`
+	DisplayTemplate string `json:"display_template" yaml:"display_template" mapstructure:"display_template"`
+	Tag             string `json:"tag" yaml:"tag" mapstructure:"tag"`
+}
+
+// UnmarshalYAML 支持 user_refs 同时使用字符串简写和对象写法。
+func (r *InboundUserRef) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		r.User = value.Value
+		r.Profile = DefaultUserProfile
+		return r.Validate()
+	}
+	type raw InboundUserRef
+	if err := value.Decode((*raw)(r)); err != nil {
+		return err
+	}
+	return r.Validate()
+}
+
+// Validate 校验 user_ref 的引用键和可选覆盖凭据格式。
+func (r *InboundUserRef) Validate() error {
+	r.Profile = NormalizeUserProfile(r.Profile)
+	if err := ValidateIdentifier(r.User, "user ref"); err != nil {
+		return err
+	}
+	if err := ValidateIdentifier(r.Profile, "user ref profile"); err != nil {
+		return err
+	}
+	if r.UUID != "" && !uuidPattern.MatchString(r.UUID) {
+		return fmt.Errorf("uuid must be a valid UUID")
+	}
+	return nil
+}
+
+// Key 返回 user_ref 指向的全局用户档案键。
+func (r InboundUserRef) Key() string {
+	return UserProfileKey(r.User, r.Profile)
 }
 
 // WebSocketOptions 保存 vmess websocket 传输参数。
@@ -558,6 +677,7 @@ type Inbound struct {
 	Sub             bool              `json:"sub" yaml:"sub" mapstructure:"sub"`
 	UUID            string            `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
 	Users           []InboundUser     `json:"users" yaml:"users" mapstructure:"users"`
+	UserRefs        []InboundUserRef  `json:"user_refs" yaml:"user_refs" mapstructure:"user_refs"`
 	Network         string            `json:"network" yaml:"network" mapstructure:"network"`
 	Password        string            `json:"password" yaml:"password" mapstructure:"password"`
 	Method          string            `json:"method" yaml:"method" mapstructure:"method"`
@@ -616,7 +736,15 @@ func (i Inbound) Validate() error {
 			return err
 		}
 	}
-	if len(i.Users) > 0 && i.Protocol != "vmess" && i.Protocol != "shadowsocks" {
+	if len(i.UserRefs) > 0 {
+		if i.User != "" || len(i.Users) > 0 {
+			return fmt.Errorf("user_refs must not be combined with user or users")
+		}
+		if err := validateInboundUserRefs(i.UserRefs); err != nil {
+			return err
+		}
+	}
+	if len(i.Users) > 0 && i.fields != nil && i.fields["users"] && i.Protocol != "vmess" && i.Protocol != "shadowsocks" {
 		return fmt.Errorf("users is only supported for vmess or shadowsocks inbound")
 	}
 	switch i.Protocol {
@@ -625,6 +753,11 @@ func (i Inbound) Validate() error {
 	case "shadowsocks":
 		return i.validateShadowsocks()
 	case "socks5", "http":
+		if len(i.Users) > 0 {
+			if err := ensureUnique(userValues(i.Users, func(user InboundUser) string { return user.User }), "duplicate inbound user"); err != nil {
+				return err
+			}
+		}
 		if i.Sub && (i.Auth == nil || i.Auth.Type != "password") {
 			return fmt.Errorf("password auth is required when socks/http inbound is published")
 		}
@@ -635,13 +768,13 @@ func (i Inbound) Validate() error {
 // validateVmess 校验 vmess 多用户字段。
 func (i Inbound) validateVmess() error {
 	if i.UUID != "" {
-		return fmt.Errorf("uuid is not supported for vmess inbound; use users instead")
+		return fmt.Errorf("uuid is not supported for vmess inbound; use user_refs instead")
 	}
-	if i.User != "" || i.Remark != "" {
-		return fmt.Errorf("user and remark must be configured under vmess users")
+	if i.User != "" || (i.Remark != "" && !i.UsesUserRefs()) {
+		return fmt.Errorf("user and remark must be configured under vmess user_refs")
 	}
-	if len(i.Users) == 0 {
-		return fmt.Errorf("users is required for vmess inbound")
+	if len(i.Users) == 0 && len(i.UserRefs) == 0 {
+		return fmt.Errorf("user_refs is required for vmess inbound")
 	}
 	if i.Network == "" {
 		return fmt.Errorf("network is required for vmess inbound")
@@ -695,8 +828,8 @@ func (i Inbound) validateShadowsocks() error {
 	if len(i.Users) == 0 {
 		return nil
 	}
-	if i.User != "" || i.Remark != "" {
-		return fmt.Errorf("user and remark must be configured under shadowsocks users")
+	if i.User != "" || (i.Remark != "" && !i.UsesUserRefs()) {
+		return fmt.Errorf("user and remark must be configured under shadowsocks user_refs")
 	}
 	if err := ensureUnique(userValues(i.Users, func(user InboundUser) string { return user.User }), "duplicate shadowsocks user"); err != nil {
 		return err
@@ -725,6 +858,23 @@ func (i Inbound) validateShadowsocks() error {
 		return err
 	}
 	return ensureUnique(tags, "duplicate shadowsocks user tag")
+}
+
+// UsesUserRefs 判断 inbound 当前或展开前是否使用了 user_refs。
+func (i Inbound) UsesUserRefs() bool {
+	return len(i.UserRefs) > 0 || (i.fields != nil && i.fields["user_refs"])
+}
+
+// validateInboundUserRefs 校验单个 inbound 内 user_refs 的基本格式和重复引用。
+func validateInboundUserRefs(refs []InboundUserRef) error {
+	keys := make([]string, 0, len(refs))
+	for index := range refs {
+		if err := refs[index].Validate(); err != nil {
+			return err
+		}
+		keys = append(keys, refs[index].Key())
+	}
+	return ensureUnique(keys, "duplicate user_ref")
 }
 
 // MethodOrCipher 返回 shadowsocks method 字段，兼容旧配置中的 cipher。

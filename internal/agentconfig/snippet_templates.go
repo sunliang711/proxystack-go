@@ -40,6 +40,8 @@ type stackSnippetContext struct {
 }
 
 var stackSnippetDefinitions = []stackSnippetDefinition{
+	{ID: "config.users.default", Area: "config", Section: "users", Type: "default", Description: "config.yaml 全局订阅用户档案", Path: "templates/snippets/config/users/default.yaml"},
+
 	{ID: "stack.role.edge", Area: "stack", Section: "role", Type: "edge", Description: "普通边缘代理 stack 角色", Path: "templates/snippets/stack/role/edge.yaml"},
 	{ID: "stack.role.auto", Area: "stack", Section: "role", Type: "auto", Description: "聚合或自动选择节点 stack 角色", Path: "templates/snippets/stack/role/auto.yaml"},
 
@@ -57,7 +59,7 @@ var stackSnippetDefinitions = []stackSnippetDefinition{
 	{ID: "xrelay.inbound.vmess-raw", Area: "xrelay", Section: "inbound", Type: "vmess-raw", Description: "vmess raw inbound，适合对外发布到订阅", Path: "templates/snippets/xrelay/inbound/vmess-raw.yaml"},
 	{ID: "xrelay.inbound.vmess-websocket", Area: "xrelay", Section: "inbound", Type: "vmess-websocket", Description: "vmess WebSocket inbound", Path: "templates/snippets/xrelay/inbound/vmess-websocket.yaml"},
 	{ID: "xrelay.inbound.vmess-grpc", Area: "xrelay", Section: "inbound", Type: "vmess-grpc", Description: "vmess gRPC inbound", Path: "templates/snippets/xrelay/inbound/vmess-grpc.yaml"},
-	{ID: "xrelay.inbound.shadowsocks", Area: "xrelay", Section: "inbound", Type: "shadowsocks", Description: "shadowsocks inbound，示例使用传统单用户写法", Path: "templates/snippets/xrelay/inbound/shadowsocks.yaml"},
+	{ID: "xrelay.inbound.shadowsocks", Area: "xrelay", Section: "inbound", Type: "shadowsocks", Description: "shadowsocks inbound，示例使用全局 users 和 user_refs", Path: "templates/snippets/xrelay/inbound/shadowsocks.yaml"},
 	{ID: "xrelay.inbound.socks5", Area: "xrelay", Section: "inbound", Type: "socks5", Description: "socks5 inbound，公开发布时必须使用 password 认证", Path: "templates/snippets/xrelay/inbound/socks5.yaml"},
 	{ID: "xrelay.inbound.socks5-local", Area: "xrelay", Section: "inbound", Type: "socks5-local", Description: "仅本机可访问的 socks5 relay inbound", Path: "templates/snippets/xrelay/inbound/socks5-local.yaml"},
 	{ID: "xrelay.inbound.http", Area: "xrelay", Section: "inbound", Type: "http", Description: "HTTP inbound，公开发布时必须使用 password 认证", Path: "templates/snippets/xrelay/inbound/http.yaml"},

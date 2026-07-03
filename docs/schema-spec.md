@@ -32,6 +32,7 @@ Go 实现建议：
 | `paths` | object | 否 | 见下表 | 每个路径可为绝对路径或相对 `--base-dir` |
 | `external_host` | string | 否 | 无 | `sub export` 前必须设置；可为域名或公网 IP |
 | `subscription` | object | 否 | `{source: local}` | `source` 只能为 `local` |
+| `users` | list | 否 | `[]` | 全局订阅用户档案，供 stack `user_refs` 引用 |
 | `port_ranges` | object | 是 | 无 | 所有范围为 `start-end`，且 `start <= end` |
 | `defaults` | object | 否 | 见下文 | 日志级别、Xray API/stats/policy 默认值 |
 | `security` | object | 否 | 见下文 | 安全开关 |
@@ -169,7 +170,8 @@ xrelay_inbound:
 | `method` | string | shadowsocks 必填 | 无 | shadowsocks method |
 | `cipher` | string | shadowsocks 兼容 | 无 | 等价于 method |
 | `password` | string | shadowsocks 必填 | 无 | SS 密码 |
-| `users` | list | vmess 必填 | 无 | 多用户 |
+| `user_refs` | list | vmess/shadowsocks 推荐 | 无 | 引用 `config.yaml users` 的订阅用户档案 |
+| `users` | list | 否 | 无 | legacy/in-memory 多用户凭据；新配置推荐使用 `user_refs` |
 
 ### 4.3 Auth
 
@@ -197,6 +199,40 @@ xrelay_inbound:
 | `display_template` | string | 否 | 订阅节点展示名模板；覆盖 inbound 级模板 |
 | `tag` | string | 否 | 订阅 tag 覆盖 |
 | `email` | string | 否 | Xray 用户统计 |
+
+新配置推荐使用 `config.yaml users` + `xrelay.inbounds[].user_refs`。`InboundUser` 仍作为展开后的内部模型和 legacy 配置入口保留。
+
+### 4.4.1 Global UserProfile 与 user_refs
+
+`config.yaml` 支持全局 `users` 列表，唯一键为 `(user, profile)`；`profile` 为空时按 `default` 处理。
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `user` | string | 是 | 订阅用户入口 |
+| `profile` | string | 否 | 同一 user 的凭据档案名 |
+| `uuid` | string | vmess 引用时必填 | VMess 用户 UUID |
+| `password` | string | shadowsocks 引用时必填 | Shadowsocks 用户密码 |
+| `email` | string | 否 | Xray 用户统计 email |
+| `remark` | string | 否 | 订阅节点备注默认值 |
+| `display_template` | string | 否 | 订阅节点展示名模板默认值 |
+| `tag` | string | 否 | 订阅 tag 覆盖 |
+
+`xrelay.inbounds[].user_refs` 引用全局用户档案，支持字符串简写：
+
+```yaml
+user_refs: [alice]
+```
+
+也支持对象写法，并可覆盖 `uuid/password/email/remark/display_template/tag`：
+
+```yaml
+user_refs:
+  - user: alice
+    profile: tokyo
+    remark: Tokyo VMess
+```
+
+同一个 inbound 内 `user_refs` 不能与旧 `user` / `users` 同时配置。
 
 ### 4.5 Outbound
 

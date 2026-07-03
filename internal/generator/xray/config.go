@@ -205,6 +205,10 @@ type RoutingRule struct {
 
 // RenderConfig 生成指定启用 stack 的 Xray 配置结构。
 func RenderConfig(stackSet domain.StackSet, stackName string) (Config, error) {
+	stackSet, err := domain.ResolveStackSetUserRefs(stackSet)
+	if err != nil {
+		return Config{}, err
+	}
 	stack, err := enabledXrelayStack(stackSet, stackName)
 	if err != nil {
 		return Config{}, err

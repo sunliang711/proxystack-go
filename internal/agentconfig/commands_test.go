@@ -66,6 +66,8 @@ func TestInitProjectWritesCommentedAgentConfig(t *testing.T) {
 	content := string(data)
 	require.Contains(t, content, "# default agent 配置。")
 	require.Contains(t, content, "# 路径配置。相对路径均以 <base-dir> 为基准解析。")
+	require.Contains(t, content, "# 全局订阅用户档案。stack 的 xrelay.inbounds[].user_refs 会引用这里的 user/profile。")
+	require.Contains(t, content, "# VMess/Shadowsocks 会使用这里的 uuid/password；socks5/http 的实际连接账号仍配置在 inbound.auth。")
 	require.Contains(t, content, "# 自动分配端口范围。仅 add/clone --allocate-ports 使用；手工配置端口可在范围外。")
 	require.Contains(t, content, "# 安全策略。默认禁止公开 noauth socks/http。")
 	require.Contains(t, content, "# 核心组件安装来源配置。")
@@ -80,7 +82,7 @@ func TestAddCloneAndMemberCommands(t *testing.T) {
 	require.NoError(t, AddStack(AddOptions{ConfigPath: configPath, Name: "usa1", Template: "pair", AllocatePorts: true}))
 	usa1, err := config.LoadStack(filepath.Join(baseDir, "stacks", "usa1.yaml"))
 	require.NoError(t, err)
-	require.NotEqual(t, "11111111-1111-4111-8111-111111111111", usa1.Xrelay.Inbounds[1].Users[0].UUID)
+	require.Equal(t, "user1", usa1.Xrelay.Inbounds[1].UserRefs[0].User)
 	require.Equal(t, 4300, usa1.Xrelay.Inbounds[0].Port)
 
 	require.NoError(t, CloneStack(CloneOptions{ConfigPath: configPath, Source: "usa1", Target: "usa2", AllocatePorts: true}))
@@ -142,10 +144,14 @@ func TestAddStackUsesReferenceTemplateFormat(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(data), "# pair 模板，也是 add 默认模板")
 	require.Contains(t, string(data), "ref: edge1.clash.socks")
+	require.Contains(t, string(data), "user_refs:")
 	stack, err := config.LoadStack(stackPath)
 	require.NoError(t, err)
 	require.Equal(t, 24000, stack.Xrelay.Inbounds[0].Port)
-	require.NotEqual(t, "11111111-1111-4111-8111-111111111111", stack.Xrelay.Inbounds[1].Users[0].UUID)
+	require.Equal(t, "user1", stack.Xrelay.Inbounds[1].UserRefs[0].User)
+	globalConfig, err := config.LoadConfig(configPath)
+	require.NoError(t, err)
+	require.NotEqual(t, "11111111-1111-4111-8111-111111111111", globalConfig.Users[0].UUID)
 }
 
 // TestAddStackUsesSharedSnippetComments 验证 add 模板会展开 example 共用的注释片段。
@@ -166,8 +172,9 @@ func TestAddStackUsesSharedSnippetComments(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, content, strings.SplitN(upstreamSnippet, "\n", 2)[0])
 	require.Contains(t, content, strings.SplitN(listenerSnippet, "\n", 2)[0])
-	require.Contains(t, content, "# display_template: '{{ .stack }} {{ .protocol }} {{ .user }}'")
-	require.Contains(t, content, "# display_template: '{{ .stack }} {{ .user }} {{ .remark }}'")
+	require.Contains(t, content, "不会从 config.yaml users 自动读取")
+	require.Contains(t, content, "# display_template: '{{ .stack }} {{ .inbound }} {{ .protocol }} {{ .user }}'")
+	require.Contains(t, content, "# display_template: '{{ .stack }} {{ .user }} {{ .profile }} {{ .remark }}'")
 	require.Contains(t, content, "port: 17090")
 }
 

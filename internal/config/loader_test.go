@@ -38,6 +38,214 @@ func TestDomainModelsAllowUnknownFields(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestLoadConfigRejectsDuplicateUserProfile 验证 config.yaml users 中 user/profile 唯一。
+func TestLoadConfigRejectsDuplicateUserProfile(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFile(t, filepath.Join(tempDir, "config.yaml"), validConfigYAML(tempDir)+`users:
+  - user: alice
+    profile: tokyo
+    uuid: 11111111-1111-4111-8111-111111111111
+  - user: alice
+    profile: tokyo
+    uuid: 22222222-2222-4222-8222-222222222222
+`)
+
+	_, err := config.LoadConfig(filepath.Join(tempDir, "config.yaml"))
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate config user profile")
+}
+
+// TestLoadStacksExpandsGlobalUserRefs 验证 stack user_refs 会按 user/profile 展开为生成器使用的用户凭据。
+func TestLoadStacksExpandsGlobalUserRefs(t *testing.T) {
+	tempDir := t.TempDir()
+	stacksDir := filepath.Join(tempDir, "stacks")
+	require.NoError(t, os.MkdirAll(stacksDir, 0o755))
+	writeFile(t, filepath.Join(tempDir, "config.yaml"), validConfigYAML(tempDir)+`users:
+  - user: alice
+    profile: default
+    uuid: 11111111-1111-4111-8111-111111111111
+    password: alice-default-password
+  - user: alice
+    profile: tokyo
+    uuid: 22222222-2222-4222-8222-222222222222
+    password: alice-tokyo-password
+    email: alice@example.com
+    remark: Tokyo
+    display_template: '{{ .stack }} {{ .profile }} {{ .remark }}'
+    tag: alice-tokyo
+`)
+	writeFile(t, filepath.Join(stacksDir, "edge.yaml"), `name: edge
+enabled: true
+role: edge
+xrelay:
+  enabled: true
+  api:
+    enabled: false
+  stats:
+    enabled: false
+  policy:
+    enabled: false
+  outbound:
+    type: direct
+  inbounds:
+    - name: vmess
+      protocol: vmess
+      listen: 127.0.0.1
+      port: 24001
+      network: raw
+      sub: true
+      user_refs:
+        - user: alice
+          profile: tokyo
+          uuid: 33333333-3333-4333-8333-333333333333
+          remark: Tokyo Override
+    - name: ss
+      protocol: shadowsocks
+      listen: 127.0.0.1
+      port: 24002
+      method: aes-256-gcm
+      password: server-password
+      sub: true
+      user_refs:
+        - user: alice
+          profile: tokyo
+          password: alice-ss-override
+          remark: SS Tokyo
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: demo-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17091
+  upstreams: []
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [DIRECT]
+  rules:
+    profile: default
+`)
+	globalConfig, err := config.LoadConfig(filepath.Join(tempDir, "config.yaml"))
+	require.NoError(t, err)
+
+	stackSet, err := config.LoadStacks(globalConfig, false)
+
+	require.NoError(t, err)
+	vmessUser := stackSet.Stacks[0].Xrelay.Inbounds[0].Users[0]
+	require.Equal(t, "alice", vmessUser.User)
+	require.Equal(t, "tokyo", vmessUser.Profile)
+	require.Equal(t, "33333333-3333-4333-8333-333333333333", vmessUser.UUID)
+	require.Equal(t, "alice@example.com", vmessUser.Email)
+	require.Equal(t, "Tokyo Override", vmessUser.Remark)
+	require.Equal(t, "{{ .stack }} {{ .profile }} {{ .remark }}", vmessUser.DisplayTemplate)
+	require.Empty(t, stackSet.Stacks[0].Xrelay.Inbounds[0].UserRefs)
+	ssUser := stackSet.Stacks[0].Xrelay.Inbounds[1].Users[0]
+	require.Equal(t, "alice-ss-override", ssUser.Password)
+	require.Equal(t, "SS Tokyo", ssUser.Remark)
+}
+
+// TestLoadStacksRejectsUserRefMissingProtocolCredential 验证协议必需凭据缺失时 fail fast。
+func TestLoadStacksRejectsUserRefMissingProtocolCredential(t *testing.T) {
+	tempDir := t.TempDir()
+	stacksDir := filepath.Join(tempDir, "stacks")
+	require.NoError(t, os.MkdirAll(stacksDir, 0o755))
+	writeFile(t, filepath.Join(tempDir, "config.yaml"), validConfigYAML(tempDir)+`users:
+  - user: alice
+    profile: default
+    password: alice-password
+`)
+	writeFile(t, filepath.Join(stacksDir, "edge.yaml"), strings.Replace(validStackYAML("edge"), `    - name: relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24001
+      auth:
+        type: noauth
+      sub: false`, `    - name: vmess
+      protocol: vmess
+      listen: 127.0.0.1
+      port: 24001
+      network: raw
+      sub: true
+      user_refs: [alice]`, 1))
+	globalConfig, err := config.LoadConfig(filepath.Join(tempDir, "config.yaml"))
+	require.NoError(t, err)
+
+	_, err = config.LoadStacks(globalConfig, false)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "uuid is required for vmess user_ref")
+}
+
+// TestLoadStacksRejectsMissingUserRefProfile 验证 user_refs 引用不存在的全局用户档案会失败。
+func TestLoadStacksRejectsMissingUserRefProfile(t *testing.T) {
+	tempDir := t.TempDir()
+	stacksDir := filepath.Join(tempDir, "stacks")
+	require.NoError(t, os.MkdirAll(stacksDir, 0o755))
+	writeFile(t, filepath.Join(tempDir, "config.yaml"), validConfigYAML(tempDir)+`users:
+  - user: alice
+    profile: default
+    uuid: 11111111-1111-4111-8111-111111111111
+`)
+	writeFile(t, filepath.Join(stacksDir, "edge.yaml"), strings.Replace(validStackYAML("edge"), `    - name: relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24001
+      auth:
+        type: noauth
+      sub: false`, `    - name: vmess
+      protocol: vmess
+      listen: 127.0.0.1
+      port: 24001
+      network: raw
+      sub: true
+      user_refs:
+        - user: alice
+          profile: tokyo`, 1))
+	globalConfig, err := config.LoadConfig(filepath.Join(tempDir, "config.yaml"))
+	require.NoError(t, err)
+
+	_, err = config.LoadStacks(globalConfig, false)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "config user profile does not exist")
+}
+
+// TestLoadStacksRejectsDuplicateProxyNameFromUserProfileTemplate 验证全局用户模板展开后会参与订阅节点名重复检查。
+func TestLoadStacksRejectsDuplicateProxyNameFromUserProfileTemplate(t *testing.T) {
+	tempDir := t.TempDir()
+	stacksDir := filepath.Join(tempDir, "stacks")
+	require.NoError(t, os.MkdirAll(stacksDir, 0o755))
+	writeFile(t, filepath.Join(tempDir, "config.yaml"), validConfigYAML(tempDir)+`users:
+  - user: alice
+    profile: default
+    display_template: '{{ .user }} fixed'
+`)
+	firstStack := strings.Replace(validStackYAML("edge-a"), `      sub: false`, `      sub: true
+      user_refs: [alice]`, 1)
+	firstStack = strings.Replace(firstStack, "        type: noauth", "        type: password\n        username: demo-user\n        password: demo-pass", 1)
+	secondStack := strings.Replace(validStackYAML("edge-b"), `      sub: false`, `      sub: true
+      user_refs: [alice]`, 1)
+	secondStack = strings.Replace(secondStack, "        type: noauth", "        type: password\n        username: demo-user\n        password: demo-pass", 1)
+	secondStack = strings.ReplaceAll(secondStack, "24001", "24002")
+	secondStack = strings.ReplaceAll(secondStack, "17091", "17092")
+	secondStack = strings.ReplaceAll(secondStack, "19091", "19092")
+	writeFile(t, filepath.Join(stacksDir, "edge-a.yaml"), firstStack)
+	writeFile(t, filepath.Join(stacksDir, "edge-b.yaml"), secondStack)
+	globalConfig, err := config.LoadConfig(filepath.Join(tempDir, "config.yaml"))
+	require.NoError(t, err)
+
+	_, err = config.LoadStacks(globalConfig, false)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate proxy name for user")
+	require.Contains(t, err.Error(), "alice fixed")
+}
+
 // TestLoadStackRejectsUDPForHTTPInbound 验证不支持 UDP 的 inbound 协议会拒绝显式 udp 字段。
 func TestLoadStackRejectsUDPForHTTPInbound(t *testing.T) {
 	stackPath := filepath.Join(t.TempDir(), "edge.yaml")

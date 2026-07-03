@@ -5,11 +5,15 @@
   listen: 127.0.0.1
   port: {{ .RelayPort }}
   udp: true
+  # auth 是 socks5 的实际连接认证；不会从 config.yaml users 自动读取。
+  # user_refs 只决定订阅归属和节点名。
   auth:
     type: noauth
-  user: user1
-  remark: example local socks
-  # 【按需改】订阅展示名模板；支持 .stack/.protocol/.port/.user/.remark。
-  # display_template: '{{ "{{" }} .stack {{ "}}" }} {{ "{{" }} .protocol {{ "}}" }} {{ "{{" }} .remark {{ "}}" }}'
+  # 【按需改】订阅展示名模板；支持 .stack/.inbound/.protocol/.port/.user/.profile/.remark。
+  # display_template: '{{ "{{" }} .stack {{ "}}" }} {{ "{{" }} .inbound {{ "}}" }} {{ "{{" }} .protocol {{ "}}" }} {{ "{{" }} .remark {{ "}}" }}'
   # region: US
   sub: false
+  user_refs:
+    - user: user1
+      profile: default
+      remark: {{ .StackName }} local socks

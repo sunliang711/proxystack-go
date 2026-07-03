@@ -39,7 +39,7 @@ func buildStackDocument(options AddOptions) (*stackDocument, error) {
 	if !isBuiltInTemplate(templateName) {
 		return nil, fmt.Errorf("unknown stack template: %s", templateName)
 	}
-	document, err := loadStackTemplateDocument(templateName)
+	document, err := loadStackTemplateDocument(templateName, options.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -76,12 +76,16 @@ func loadStackDocumentFromFile(path string, expectedName string) (*stackDocument
 }
 
 // loadStackTemplateDocument 读取包内 stack 模板文档。
-func loadStackTemplateDocument(templateName string) (*stackDocument, error) {
+func loadStackTemplateDocument(templateName string, stackName string) (*stackDocument, error) {
 	data, err := stackTemplateFiles.ReadFile("templates/stack." + templateName + ".yaml")
 	if err != nil {
 		return nil, fmt.Errorf("stack template could not be read: %s (%w)", templateName, err)
 	}
-	data, err = renderStackTemplate(templateName, data, stackTemplateSnippetContext(templateName))
+	context := stackTemplateSnippetContext(templateName)
+	if stackName != "" {
+		context.StackName = stackName
+	}
+	data, err = renderStackTemplate(templateName, data, context)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +147,11 @@ func stackCandidateFromDocument(cfg domain.GlobalConfig, stackSet domain.StackSe
 		return StackCandidate{}, err
 	}
 	nextStacks := append(append([]domain.Stack(nil), stackSet.Stacks...), stack)
-	if err := validation.ValidateStackSet(domain.StackSet{Config: cfg, Stacks: nextStacks}, validation.WithPortChecker(validation.NoopPortChecker{})); err != nil {
+	nextStackSet, err := domain.ResolveStackSetUserRefs(domain.StackSet{Config: cfg, Stacks: nextStacks})
+	if err != nil {
+		return StackCandidate{}, err
+	}
+	if err := validation.ValidateStackSet(nextStackSet, validation.WithPortChecker(validation.NoopPortChecker{})); err != nil {
 		return StackCandidate{}, err
 	}
 	data, err := stackDocumentData(document)
@@ -160,7 +168,11 @@ func writeExistingStackDocument(cfg domain.GlobalConfig, stackSet domain.StackSe
 		return err
 	}
 	nextStacks := replaceStack(stackSet.Stacks, stack)
-	if err := validation.ValidateStackSet(domain.StackSet{Config: cfg, Stacks: nextStacks}, validation.WithPortChecker(validation.NoopPortChecker{})); err != nil {
+	nextStackSet, err := domain.ResolveStackSetUserRefs(domain.StackSet{Config: cfg, Stacks: nextStacks})
+	if err != nil {
+		return err
+	}
+	if err := validation.ValidateStackSet(nextStackSet, validation.WithPortChecker(validation.NoopPortChecker{})); err != nil {
 		return err
 	}
 	return writeStackDocument(sourcePath, document)
@@ -549,6 +561,57 @@ func rewriteClashUpstreamRefs(root *yaml.Node, rewrites map[string]string) {
 		if replacement, ok := rewrites[ref.Value]; ok {
 			ref.Value = replacement
 		}
+	}
+}
+
+// rewriteSubscriptionRemarksInNode 只改写订阅 remark 中以前 stack 名开头的值。
+func rewriteSubscriptionRemarksInNode(root *yaml.Node, source string, target string) {
+	if source == "" || source == target {
+		return
+	}
+	xrelay := mappingValue(root, "xrelay")
+	if xrelay == nil || xrelay.Kind != yaml.MappingNode {
+		return
+	}
+	inbounds := mappingValue(xrelay, "inbounds")
+	if inbounds == nil || inbounds.Kind != yaml.SequenceNode {
+		return
+	}
+	for _, inbound := range inbounds.Content {
+		if inbound.Kind != yaml.MappingNode {
+			continue
+		}
+		replaceRemarkPrefix(inbound, source, target)
+		rewriteRemarkList(mappingValue(inbound, "users"), source, target)
+		rewriteRemarkList(mappingValue(inbound, "user_refs"), source, target)
+	}
+}
+
+// rewriteRemarkList 改写 users/user_refs 列表项中的 remark 前缀。
+func rewriteRemarkList(list *yaml.Node, source string, target string) {
+	if list == nil || list.Kind != yaml.SequenceNode {
+		return
+	}
+	for _, item := range list.Content {
+		if item.Kind == yaml.MappingNode {
+			replaceRemarkPrefix(item, source, target)
+		}
+	}
+}
+
+// replaceRemarkPrefix 将 remark 中以原 stack 名开头的值替换为目标 stack 名。
+func replaceRemarkPrefix(mapping *yaml.Node, source string, target string) {
+	remark := mappingValue(mapping, "remark")
+	if remark == nil || remark.Kind != yaml.ScalarNode {
+		return
+	}
+	if remark.Value == source {
+		remark.Value = target
+		return
+	}
+	prefix := source + " "
+	if strings.HasPrefix(remark.Value, prefix) {
+		remark.Value = target + strings.TrimPrefix(remark.Value, source)
 	}
 }
 

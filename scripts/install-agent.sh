@@ -510,7 +510,7 @@ BASE_DIR="/opt/proxystack"
 BIN_DIR="/usr/local/bin"
 INSTALL_USER="proxystack"
 INSTALL_GROUP="proxystack"
-RUN_INIT="1"
+RUN_SETUP_LOCAL="1"
 INSTALL_SYSTEMD="0"
 
 # usage 展示 install-agent 用法。
@@ -519,8 +519,8 @@ usage() {
 Usage: scripts/install-agent.sh [options]
 
 Download and install proxystack release binaries by default. The script
-bootstraps users, directories, CLI links, and optionally initializes config or
-installs systemd unit files. It does not install mihomo, xray-core, or geo data.
+bootstraps users, directories, CLI links, and runs psctl setup local by default.
+It does not install mihomo, xray-core, or geo data.
 
 Options:
   --version VERSION        Release version to install. Default: latest
@@ -530,8 +530,8 @@ Options:
   --bin-dir DIR            CLI install directory. Default: /usr/local/bin
   --user USER              System user. Default: proxystack
   --group GROUP            System group. Default: proxystack
-  --no-init                Do not run psctl init.
-  --install-systemd        Run psctl service install.
+  --no-setup-local         Do not run psctl setup local.
+  --install-systemd        Compatibility flag; setup local installs service files.
   --dry-run                Print commands without executing writes.
   -h, --help               Show this help.
 EOF
@@ -599,8 +599,8 @@ parse_args() {
 				INSTALL_GROUP="${1#*=}"
 				shift
 				;;
-			--no-init)
-				RUN_INIT="0"
+			--no-setup-local|--no-init)
+				RUN_SETUP_LOCAL="0"
 				shift
 				;;
 			--install-systemd)
@@ -646,11 +646,11 @@ validate_args() {
 
 # ensure_systemd_defaults 避免自定义安装参数和固定 systemd unit 不一致。
 ensure_systemd_defaults() {
-	if [[ "${INSTALL_SYSTEMD}" != "1" ]]; then
+	if [[ "${RUN_SETUP_LOCAL}" != "1" && "${INSTALL_SYSTEMD}" != "1" ]]; then
 		return 0
 	fi
-	if [[ "${INSTALL_USER}" != "proxystack" || "${INSTALL_GROUP}" != "proxystack" || "${BIN_DIR}" != "/usr/local/bin" ]]; then
-		die "--install-systemd requires --user proxystack --group proxystack --bin-dir /usr/local/bin"
+	if [[ "${INSTALL_USER}" != "proxystack" || "${INSTALL_GROUP}" != "proxystack" ]]; then
+		die "setup local requires --user proxystack --group proxystack"
 	fi
 }
 
@@ -704,22 +704,22 @@ install_binaries() {
 	install_cli_alias "pssub" "${BIN_DIR}/ps-sub"
 }
 
-# maybe_init_project 根据参数决定是否初始化 config.yaml。
-maybe_init_project() {
-	if [[ "${RUN_INIT}" != "1" ]]; then
-		log "SKIP project init disabled"
+# maybe_setup_local 根据参数决定是否执行本地初始化和 service 文件安装。
+maybe_setup_local() {
+	if [[ "${RUN_SETUP_LOCAL}" != "1" ]]; then
+		log "SKIP setup local disabled"
 		return 0
 	fi
-	if [[ -f "${BASE_DIR}/config.yaml" && "${DRY_RUN}" != "1" ]]; then
-		log "SKIP config exists: ${BASE_DIR}/config.yaml"
-		return 0
-	fi
-	run_as_user "${INSTALL_USER}" "${BIN_DIR}/psctl" --base-dir "${BASE_DIR}" init
+	run "${BIN_DIR}/psctl" --base-dir "${BASE_DIR}" setup local
 }
 
-# maybe_install_systemd 根据参数决定是否安装 systemd unit。
+# maybe_install_systemd 兼容旧参数；setup local 已默认安装 service 文件。
 maybe_install_systemd() {
 	if [[ "${INSTALL_SYSTEMD}" != "1" ]]; then
+		return 0
+	fi
+	if [[ "${RUN_SETUP_LOCAL}" == "1" ]]; then
+		log "SKIP systemd install covered by setup local"
 		return 0
 	fi
 	run "${BIN_DIR}/psctl" --base-dir "${BASE_DIR}" service install
@@ -730,8 +730,7 @@ print_next_steps() {
 	cat <<EOF
 
 Next steps:
-  sudo ${BIN_DIR}/psctl --base-dir ${BASE_DIR} install all
-  sudo ${BIN_DIR}/psctl --base-dir ${BASE_DIR} service install
+  sudo ${BIN_DIR}/psctl --base-dir ${BASE_DIR} setup deps
   sudo ${BIN_DIR}/psctl --base-dir ${BASE_DIR} add usa1 --no-edit
   sudo ${BIN_DIR}/psctl --base-dir ${BASE_DIR} check
 EOF
@@ -753,8 +752,8 @@ main() {
 	ensure_cli_dir
 	log "Install Go binaries"
 	install_binaries
-	log "Initialize project"
-	maybe_init_project
+	log "Run local setup"
+	maybe_setup_local
 	log "Install systemd units"
 	maybe_install_systemd
 	print_next_steps

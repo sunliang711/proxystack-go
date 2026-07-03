@@ -2,7 +2,7 @@
 
 ## 目标
 
-实现 `init/add/config/list/remove/clone/member` 等配置管理命令。
+实现 `setup local/add/config/list/remove/clone/member` 等配置管理命令。
 
 ## 范围
 
@@ -27,7 +27,7 @@
 
 ## 实现步骤
 
-1. 实现 `init`。
+1. 实现 `setup local` 的默认配置生成。
 2. 实现 `add` 和端口分配。
 3. 实现 `config --check-only` 和编辑器调用。
 4. 实现 `list`。
@@ -37,7 +37,7 @@
 
 ## 验收标准
 
-- `init` 不覆盖已有文件除非 force。
+- `setup local` 不覆盖已有文件除非 force。
 - `add` 随机替换 vmess UUID。
 - `clone --allocate-ports` 只改目标 stack。
 - member 命令只允许 auto/load-balance stack。

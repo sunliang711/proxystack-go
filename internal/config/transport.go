@@ -22,7 +22,7 @@ type SubServerConfig struct {
 	fields map[string]bool `json:"-" yaml:"-"`
 }
 
-// DefaultSubServerConfigYAML 返回 pssub init 使用的默认订阅服务配置。
+// DefaultSubServerConfigYAML 返回 pssub setup local 使用的默认订阅服务配置。
 func DefaultSubServerConfigYAML() string {
 	return `# pssub 订阅服务配置。
 # 文件路径固定为 <base-dir>/config.yaml，运行数据目录固定为 <base-dir>。

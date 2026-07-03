@@ -117,7 +117,7 @@ func repairServiceMetadataForConfigPath(configPath string) error {
 	return repairServiceMetadataFunc(cfg)
 }
 
-// printNonRootLinuxInitGroupHint 在 Linux 非 root 初始化时提示用户加入服务组。
+// printNonRootLinuxInitGroupHint 在 Linux 非 root 本地初始化时提示用户加入服务组。
 func printNonRootLinuxInitGroupHint(writer io.Writer, baseDir string) {
 	if serviceAccountGOOSFunc() != "linux" || serviceAccountEUIDFunc() == 0 {
 		return
@@ -127,7 +127,7 @@ func printNonRootLinuxInitGroupHint(writer io.Writer, baseDir string) {
 		return
 	}
 	if err != nil {
-		fmt.Fprintf(writer, "Hint: non-root Linux init cannot create or verify the %s group. Run `sudo psctl init` once, or add your user after the group exists:\n  sudo usermod -aG %s \"$USER\"\nThen log in again, or run `newgrp %s` for the current shell.\n", systemd.DefaultServiceGroup, systemd.DefaultServiceGroup, systemd.DefaultServiceGroup)
+		fmt.Fprintf(writer, "Hint: non-root Linux setup local cannot create or verify the %s group. Run `sudo psctl setup local` once, or add your user after the group exists:\n  sudo usermod -aG %s \"$USER\"\nThen log in again, or run `newgrp %s` for the current shell.\n", systemd.DefaultServiceGroup, systemd.DefaultServiceGroup, systemd.DefaultServiceGroup)
 		return
 	}
 	fmt.Fprintf(writer, "Hint: add your user to the %s group so non-root psctl commands can read %s:\n  sudo usermod -aG %s \"$USER\"\nThen log in again, or run `newgrp %s` for the current shell.\n", systemd.DefaultServiceGroup, baseDir, systemd.DefaultServiceGroup, systemd.DefaultServiceGroup)
@@ -162,11 +162,11 @@ func currentProcessInServiceGroup() (bool, error) {
 func serviceAccountOwnerIDs() (int, int, error) {
 	serviceUser, err := user.Lookup(systemd.DefaultServiceUser)
 	if err != nil {
-		return 0, 0, fmt.Errorf("service user %s is missing; run psctl init first: %w", systemd.DefaultServiceUser, err)
+		return 0, 0, fmt.Errorf("service user %s is missing; run psctl setup local first: %w", systemd.DefaultServiceUser, err)
 	}
 	serviceGroup, err := user.LookupGroup(systemd.DefaultServiceGroup)
 	if err != nil {
-		return 0, 0, fmt.Errorf("service group %s is missing; run psctl init first: %w", systemd.DefaultServiceGroup, err)
+		return 0, 0, fmt.Errorf("service group %s is missing; run psctl setup local first: %w", systemd.DefaultServiceGroup, err)
 	}
 	uid, err := strconv.Atoi(serviceUser.Uid)
 	if err != nil {

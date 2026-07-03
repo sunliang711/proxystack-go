@@ -27,7 +27,7 @@
 ## 实现步骤
 
 1. 构建临时 base dir。
-2. 执行 `init -> add -> validate -> check`。
+2. 执行 `setup local -> add -> validate -> check`。
 3. 使用 fake binary 和 fake systemd 执行 `start`。
 4. 执行 `sub export`。
 5. 执行 `pssub import`。

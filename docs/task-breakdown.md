@@ -97,10 +97,10 @@
 
 ## T11 agent 配置编辑与模板命令
 
-- 目标：实现 `init/add/config/list/remove/clone/member`。
+- 目标：实现 `setup local/add/config/list/remove/clone/member`。
 - 输入：`docs/cli-spec.md`、`docs/schema-spec.md`、`src/proxystack/cli/lifecycle.py`、模板文件。
 - 输出：默认配置生成、stack 模板、端口自动分配、成员维护、配置编辑入口。
-- 验收标准：`init` 不覆盖已有文件除非 force；`add` 随机替换 vmess UUID；`clone --allocate-ports` 只改目标 stack；member 命令只允许 auto/load-balance stack。
+- 验收标准：`setup local` 不覆盖已有文件除非 force；`add` 随机替换 vmess UUID；`clone --allocate-ports` 只改目标 stack；member 命令只允许 auto/load-balance stack。
 - 依赖：T02、T04。
 
 ## T12 runtime plan、manifest 与只读命令
@@ -156,5 +156,5 @@
 - 目标：确认 Go 版可替代 Python 版。
 - 输入：`docs/testing-acceptance-matrix.md`、当前 fixtures、golden、主流程测试。
 - 输出：端到端测试矩阵和迁移验收报告。
-- 验收标准：跑通 `init -> add -> validate -> check -> start -> sub export -> pssub import -> pssub serve -> HTTP subscription`；确认 Go 版不会读取或写入越界目录；关键生成物与 Python 版对照通过。
+- 验收标准：跑通 `setup local -> add -> validate -> check -> start -> sub export -> pssub import -> pssub serve -> HTTP subscription`；确认 Go 版不会读取或写入越界目录；关键生成物与 Python 版对照通过。
 - 依赖：全部任务。

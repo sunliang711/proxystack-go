@@ -61,7 +61,7 @@ func runDoctor(configPath string) (doctorReport, error) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return doctorReport{}, fmt.Errorf("agent config is missing: %s; run `psctl --base-dir %s init` first", configPath, filepath.Dir(configPath))
+			return doctorReport{}, fmt.Errorf("agent config is missing: %s; run `psctl --base-dir %s setup local` first", configPath, filepath.Dir(configPath))
 		}
 		return doctorReport{}, fmt.Errorf("doctor config failed: %w", err)
 	}

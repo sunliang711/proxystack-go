@@ -23,10 +23,11 @@ sudo scripts/install-agent.sh --repo OWNER/REPO
 sudo scripts/install-agent.sh --source /path/to/proxystack-go
 ```
 
-如需安装后立即生成 runtime 并启动 enabled 服务，可将第二步改为：
+如需安装后立即生成 runtime 并启动服务，可继续显式执行：
 
 ```bash
-sudo /usr/local/bin/psctl --base-dir /opt/proxystack setup --start
+sudo /usr/local/bin/psctl --base-dir /opt/proxystack setup
+sudo /usr/local/bin/psctl --base-dir /opt/proxystack start
 ```
 
 脚本只做：
@@ -34,9 +35,9 @@ sudo /usr/local/bin/psctl --base-dir /opt/proxystack setup --start
 - 创建 `proxystack:proxystack` 用户和托管目录。
 - 默认下载 GitHub Release 中的 `proxystack-go_<os>_<arch>.tar.gz` 兼容别名；指定固定版本时下载 `proxystack-go_<version>_<os>_<arch>.tar.gz`，其中 `<os>` 为 `linux` 或 `macos`，并用 `SHA256SUMS` 校验；传入 `--source` 时改为本地 `go build`；如需改用其他仓库，可传入 `--repo OWNER/REPO` 或设置 `PROXYSTACK_RELEASE_REPO`。
 - 将 `psctl` 和 `pssub` 安装到 `/usr/local/bin`，并保留 `ps-agent`、`ps-sub` 兼容软链接。
-- 可选执行 `psctl init` 与 `psctl service install`。
+- 可选执行 `psctl setup local`。
 
-脚本本身不安装 mihomo、xray-core 或 geo 数据；这些由 `psctl setup` 或 `psctl install all` 管理。
+脚本本身不安装 mihomo、xray-core 或 geo 数据；这些由 `psctl setup deps` 或 `psctl setup` 管理。
 
 CLI 服务管理器支持：
 
@@ -52,7 +53,6 @@ pssub --service-manager auto|systemd|launchd ...
 ```bash
 sudo scripts/install-sub-local.sh \
   --import-bundle /opt/proxystack/publish/sub-bundle.zip \
-  --install-systemd \
   --start
 ```
 
@@ -63,10 +63,10 @@ sudo scripts/install-sub-local.sh \
 /opt/proxystack-sub/inputs/
 ```
 
-独立 sub-only 部署默认使用 `/opt/proxystack-sub`，也可以传入自定义 base dir，例如：
+独立 sub-only 部署默认使用 `/opt/proxystack-sub`。`setup local` 会安装系统服务文件，需要管理员权限；后续配置、导入和前台运行可按目录 owner 执行，例如：
 
 ```bash
-pssub --base-dir /opt/proxystack-sub init
+sudo pssub --base-dir /opt/proxystack-sub setup local
 pssub --base-dir /opt/proxystack-sub config
 pssub --base-dir /opt/proxystack-sub config check
 pssub --base-dir /opt/proxystack-sub import /path/to/sub-bundle.zip
@@ -76,7 +76,7 @@ pssub --base-dir /opt/proxystack-sub serve
 使用系统服务时：
 
 ```bash
-sudo pssub --base-dir /opt/proxystack-sub service install
+sudo pssub --base-dir /opt/proxystack-sub setup local
 sudo pssub --base-dir /opt/proxystack-sub start
 sudo pssub --base-dir /opt/proxystack-sub status
 sudo pssub --base-dir /opt/proxystack-sub logs -f
@@ -99,7 +99,7 @@ docker compose -f docker-compose.sub.yml up -d --build
 如果宿主机已安装同架构 `pssub`，也可以先生成默认配置后再调整 owner：
 
 ```bash
-sudo pssub --base-dir /opt/proxystack-sub init
+sudo pssub --base-dir /opt/proxystack-sub setup local
 sudo chown -R 10001:10001 /opt/proxystack-sub
 ```
 
@@ -123,9 +123,9 @@ sudo scripts/deploy-sub-docker.sh --build
 旧 Python venv 部署中的 `.venv` 不再是 Go 版运行依赖。迁移时建议：
 
 1. 保留原 `/opt/proxystack/config.yaml` 和 `stacks/`；将旧 `/opt/proxystack/sub/config.yaml` 与 `sub/inputs/` 迁移到 `/opt/proxystack-sub/config.yaml` 和 `/opt/proxystack-sub/inputs/`。
-2. 执行 `scripts/install-agent.sh --no-init` 安装 Go CLI。
+2. 执行 `scripts/install-agent.sh --no-setup-local` 安装 Go CLI。
 3. 执行 `psctl validate`。
 4. 执行 `psctl check` 预览 runtime 变化。
-5. 使用 `psctl service install` 重新写入 Go 版服务文件；Linux 默认写入 systemd unit，macOS 可使用 `--service-manager launchd` 写入 launchd plist。
+5. 使用 `psctl setup local` 重新写入 Go 版服务文件；Linux 默认写入 systemd unit，macOS 可使用 `--service-manager launchd` 写入 launchd plist。
 
 不建议直接复用旧 Python venv 内 console scripts。

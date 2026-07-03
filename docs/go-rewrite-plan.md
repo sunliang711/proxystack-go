@@ -40,7 +40,7 @@
 | 订阅生成器 | 从 `xray.inbounds[].sub == true` 生成 subscription input/index，不读取 clash 内部配置 |
 | 订阅格式 | Clash、Premium Clash、Surge 三类输出；Surge 支持 `#!MANAGED-CONFIG` |
 | 订阅服务 | 支持 `/health`、`/sub`、`/premium_sub`、`/surge_sub`，token query/path 鉴权，启动加载 inputs，运行期 watcher reload |
-| CLI | `psctl` 与 `pssub`，覆盖 init/setup/add/config/list/remove/clone/member/check/start/restart/status/logs/doctor/install/update/export/import/sub export/sub validate-inputs/service 等 |
+| CLI | `psctl` 与 `pssub`，覆盖 setup local/setup deps/setup all/setup/add/config/list/remove/clone/member/check/start/restart/status/logs/doctor/update/export/import/sub export/sub validate-inputs/service 等 |
 | 服务管理 | Linux 生成并安装 `proxystack-xray@.service`、`proxystack-clash@.service`、`proxystack-sub.service`；macOS 生成 launchd plist |
 | 安装更新 | mihomo、xray、geo 下载/校验/原子替换；托管源 GitHub/R2 fallback；self update；远端 URL SSRF 防护 |
 | 备份发布 | 原生 agent backup 与订阅 bundle 分离；zip manifest/hash/path 安全校验 |

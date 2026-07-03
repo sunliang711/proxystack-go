@@ -59,31 +59,33 @@ func TestEnsureLinuxServiceAccountSkipsExistingEntries(t *testing.T) {
 	}, runner.calls)
 }
 
-// TestInitPrintsNonRootLinuxGroupHint 验证 Linux 非 root 初始化时会提示加入 proxystack 组。
-func TestInitPrintsNonRootLinuxGroupHint(t *testing.T) {
+// TestSetupLocalPrintsNonRootLinuxGroupHint 验证 Linux 非 root setup local 时会提示加入 proxystack 组。
+func TestSetupLocalPrintsNonRootLinuxGroupHint(t *testing.T) {
 	withServiceAccountRuntime(t, "linux", 1000, 1000, []int{1000}, func(name string) (*user.Group, error) {
 		require.Equal(t, systemd.DefaultServiceGroup, name)
 		return &user.Group{Name: systemd.DefaultServiceGroup, Gid: "988"}, nil
 	})
+	withAgentServiceManager(t, &fakeSetupManager{})
 
-	output := runAgentCommandForTest(t, "--base-dir", t.TempDir(), "init", "--external-host", "proxy.example.com")
+	output := runAgentCommandForTest(t, "--base-dir", t.TempDir(), "setup", "local", "--external-host", "proxy.example.com")
 
 	require.Contains(t, output, "sudo usermod -aG proxystack \"$USER\"")
 	require.Contains(t, output, "newgrp proxystack")
-	require.Contains(t, output, "Initialized agent config:")
+	require.Contains(t, output, "Installed units:")
 }
 
-// TestInitSkipsNonRootLinuxGroupHintWhenAlreadyMember 验证用户已在服务组时不重复提示。
-func TestInitSkipsNonRootLinuxGroupHintWhenAlreadyMember(t *testing.T) {
+// TestSetupLocalSkipsNonRootLinuxGroupHintWhenAlreadyMember 验证用户已在服务组时不重复提示。
+func TestSetupLocalSkipsNonRootLinuxGroupHintWhenAlreadyMember(t *testing.T) {
 	withServiceAccountRuntime(t, "linux", 1000, 1000, []int{988}, func(name string) (*user.Group, error) {
 		require.Equal(t, systemd.DefaultServiceGroup, name)
 		return &user.Group{Name: systemd.DefaultServiceGroup, Gid: "988"}, nil
 	})
+	withAgentServiceManager(t, &fakeSetupManager{})
 
-	output := runAgentCommandForTest(t, "--base-dir", t.TempDir(), "init", "--external-host", "proxy.example.com")
+	output := runAgentCommandForTest(t, "--base-dir", t.TempDir(), "setup", "local", "--external-host", "proxy.example.com")
 
 	require.NotContains(t, output, "sudo usermod")
-	require.Contains(t, output, "Initialized agent config:")
+	require.Contains(t, output, "Installed units:")
 }
 
 // withServiceAccountRuntime 注入运行时账户信息，避免测试依赖真实操作系统用户和组。

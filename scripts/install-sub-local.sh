@@ -509,6 +509,7 @@ BIN_DIR="/usr/local/bin"
 IMPORT_BUNDLE=""
 INSTALL_SYSTEMD="0"
 START_SERVICE="0"
+RUN_SETUP_LOCAL="1"
 INSTALL_USER="proxystack"
 INSTALL_GROUP="proxystack"
 
@@ -519,8 +520,8 @@ Usage: scripts/install-sub-local.sh [options]
 
 Download and install proxystack pssub release binary by default for a local
 non-Docker deployment. The script creates subscription data directories,
-optionally imports a bundle, and optionally installs or starts
-proxystack-sub.service.
+installs proxystack-sub.service, optionally imports a bundle, and optionally
+starts the service.
 
 Options:
   --version VERSION        Release version to install. Default: latest
@@ -531,7 +532,8 @@ Options:
   --import-bundle FILE     Import a sub-bundle.zip after installation.
   --user USER              System user. Default: proxystack
   --group GROUP            System group. Default: proxystack
-  --install-systemd        Run pssub service install.
+  --no-setup-local         Do not run pssub setup local.
+  --install-systemd        Compatibility flag; setup local installs service files.
   --start                  Run pssub start.
   --dry-run                Print commands without executing writes.
   -h, --help               Show this help.
@@ -608,6 +610,10 @@ parse_args() {
 				INSTALL_GROUP="${1#*=}"
 				shift
 				;;
+			--no-setup-local)
+				RUN_SETUP_LOCAL="0"
+				shift
+				;;
 			--install-systemd)
 				INSTALL_SYSTEMD="1"
 				shift
@@ -658,11 +664,11 @@ validate_args() {
 
 # ensure_systemd_defaults 避免自定义安装参数和固定 systemd unit 不一致。
 ensure_systemd_defaults() {
-	if [[ "${INSTALL_SYSTEMD}" != "1" && "${START_SERVICE}" != "1" ]]; then
+	if [[ "${RUN_SETUP_LOCAL}" != "1" && "${INSTALL_SYSTEMD}" != "1" && "${START_SERVICE}" != "1" ]]; then
 		return 0
 	fi
 	if [[ "${INSTALL_USER}" != "proxystack" || "${INSTALL_GROUP}" != "proxystack" || "${BIN_DIR}" != "/usr/local/bin" ]]; then
-		die "--install-systemd/--start requires --user proxystack --group proxystack --bin-dir /usr/local/bin"
+		die "setup local/start requires --user proxystack --group proxystack --bin-dir /usr/local/bin"
 	fi
 }
 
@@ -709,9 +715,13 @@ install_binaries() {
 	install_cli_alias "pssub" "${BIN_DIR}/ps-sub"
 }
 
-# ensure_config 创建默认 sub 配置，已存在时保持不动。
+# ensure_config 创建默认 sub 配置并安装 service 文件，已存在时保持不动。
 ensure_config() {
-	run_as_user "${INSTALL_USER}" "${BIN_DIR}/pssub" --base-dir "${BASE_DIR}" init
+	if [[ "${RUN_SETUP_LOCAL}" != "1" ]]; then
+		log "SKIP setup local disabled"
+		return 0
+	fi
+	run "${BIN_DIR}/pssub" --base-dir "${BASE_DIR}" setup local
 }
 
 # maybe_import_bundle 根据参数决定是否导入订阅发布包。
@@ -722,12 +732,16 @@ maybe_import_bundle() {
 	run_as_user "${INSTALL_USER}" "${BIN_DIR}/pssub" --base-dir "${BASE_DIR}" import "${IMPORT_BUNDLE}"
 }
 
-# maybe_install_systemd 根据参数决定是否安装 sub systemd unit。
+# maybe_install_systemd 兼容旧参数；setup local 已默认安装 service 文件。
 maybe_install_systemd() {
 	if [[ "${INSTALL_SYSTEMD}" != "1" ]]; then
 		return 0
 	fi
-	run "${BIN_DIR}/pssub" --base-dir "${BASE_DIR}" service install
+	if [[ "${RUN_SETUP_LOCAL}" != "1" ]]; then
+		run "${BIN_DIR}/pssub" --base-dir "${BASE_DIR}" service install
+		return 0
+	fi
+	log "SKIP systemd install covered by setup local"
 }
 
 # maybe_start_service 根据参数决定是否启动订阅服务。

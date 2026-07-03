@@ -26,13 +26,14 @@ sudo scripts/install-agent.sh --repo OWNER/REPO
 sudo scripts/install-agent.sh --source /path/to/proxystack-go
 ```
 
-如果希望初始化、安装依赖和服务文件后直接启动已启用服务：
+如果希望初始化、安装依赖和服务文件后启动服务：
 
 ```bash
-sudo /usr/local/bin/psctl --base-dir /opt/proxystack setup --start
+sudo /usr/local/bin/psctl --base-dir /opt/proxystack setup
+sudo /usr/local/bin/psctl --base-dir /opt/proxystack start
 ```
 
-脚本会安装 `psctl` 和 `pssub` 到 `/usr/local/bin`，并保留 `ps-agent`、`ps-sub` 兼容软链接。mihomo、xray-core 和 geo 数据由 `psctl setup` 或 `psctl install all` 管理。
+脚本会安装 `psctl` 和 `pssub` 到 `/usr/local/bin`，并保留 `ps-agent`、`ps-sub` 兼容软链接。mihomo、xray-core 和 geo 数据由 `psctl setup deps` 或 `psctl setup` 管理。
 
 ### 从源码构建
 
@@ -57,7 +58,6 @@ make build-linux
 ```bash
 sudo scripts/install-sub-local.sh \
   --import-bundle /opt/proxystack/publish/sub-bundle.zip \
-  --install-systemd \
   --start
 ```
 
@@ -78,7 +78,7 @@ docker compose -f docker-compose.sub.yml up -d --build
 初始化默认目录和配置：
 
 ```bash
-sudo psctl --base-dir /opt/proxystack init --external-host proxy.example.com
+sudo psctl --base-dir /opt/proxystack setup local --external-host proxy.example.com
 ```
 
 主要文件和目录：
@@ -138,7 +138,7 @@ sudo psctl --base-dir /opt/proxystack check
 初始化订阅目录：
 
 ```bash
-sudo pssub --base-dir /opt/proxystack-sub init
+sudo pssub --base-dir /opt/proxystack-sub setup local
 ```
 
 订阅服务配置固定为 `<base-dir>/config.yaml`。不要在该 YAML 中写 `data_dir`，运行数据目录固定由 `--base-dir` 推导为 `<base-dir>`：
@@ -207,7 +207,7 @@ sudo pssub --base-dir /opt/proxystack-sub input clone manual manual-copy
 sudo pssub --base-dir /opt/proxystack-sub serve
 
 # 或安装为系统服务后运行
-sudo pssub --base-dir /opt/proxystack-sub service install
+sudo pssub --base-dir /opt/proxystack-sub setup local
 sudo pssub --base-dir /opt/proxystack-sub start
 sudo pssub --base-dir /opt/proxystack-sub status
 ```

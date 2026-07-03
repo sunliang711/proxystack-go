@@ -129,8 +129,8 @@ func TestNativeBackupImportStopFailurePreventsRestore(t *testing.T) {
 	require.NoFileExists(t, filepath.Join(targetDir, "stacks", "new1.yaml"))
 }
 
-// TestAgentInitUsesGlobalBaseDir 验证全局 --base-dir 决定 config.yaml 和标准安装目录。
-func TestAgentInitUsesGlobalBaseDir(t *testing.T) {
+// TestAgentSetupLocalUsesGlobalBaseDir 验证 setup local 通过全局 --base-dir 决定 config.yaml 和标准安装目录。
+func TestAgentSetupLocalUsesGlobalBaseDir(t *testing.T) {
 	baseDir := t.TempDir()
 	oldRunner := serviceAccountRunner
 	oldOwnerIDs := serviceAccountOwnerIDsFunc
@@ -145,11 +145,13 @@ func TestAgentInitUsesGlobalBaseDir(t *testing.T) {
 		serviceAccountRunner = oldRunner
 		serviceAccountOwnerIDsFunc = oldOwnerIDs
 	})
+	manager := &fakeSetupManager{}
+	withAgentServiceManager(t, manager)
 
-	output := runAgentCommandForTest(t, "--base-dir", baseDir, "init", "--external-host", "proxy.example.com")
+	output := runAgentCommandForTest(t, "--base-dir", baseDir, "setup", "local", "--external-host", "proxy.example.com")
 
 	configPath := filepath.Join(baseDir, "config.yaml")
-	require.Contains(t, output, "Initialized agent config: "+configPath)
+	require.Contains(t, output, "Installed units:")
 	require.FileExists(t, configPath)
 	require.DirExists(t, filepath.Join(baseDir, "bin"))
 	cfg, err := config.LoadConfig(configPath)
@@ -186,7 +188,9 @@ func TestSetupCommandIsRegistered(t *testing.T) {
 	require.Contains(t, output, "setup")
 	require.Contains(t, output, "--base-dir")
 	require.Contains(t, output, "--external-host")
-	require.Contains(t, output, "--start")
+	require.Contains(t, output, "local")
+	require.Contains(t, output, "deps")
+	require.NotContains(t, output, "--start")
 }
 
 // createNativeBackupFixture 创建只包含一个 stack 的原生备份包。

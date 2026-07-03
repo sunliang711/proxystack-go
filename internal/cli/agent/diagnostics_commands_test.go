@@ -116,8 +116,8 @@ func TestDoctorCommandIsRegistered(t *testing.T) {
 	require.Contains(t, output.String(), "doctor")
 }
 
-// TestRunDoctorMissingConfigSuggestsInit 验证未初始化时 doctor 会提示先执行 init。
-func TestRunDoctorMissingConfigSuggestsInit(t *testing.T) {
+// TestRunDoctorMissingConfigSuggestsSetupLocal 验证未初始化时 doctor 会提示先执行 setup local。
+func TestRunDoctorMissingConfigSuggestsSetupLocal(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
 
 	_, err := runDoctor(configPath)
@@ -125,7 +125,7 @@ func TestRunDoctorMissingConfigSuggestsInit(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "agent config is missing")
 	require.Contains(t, err.Error(), "psctl --base-dir")
-	require.Contains(t, err.Error(), "init")
+	require.Contains(t, err.Error(), "setup local")
 }
 
 // TestRunDoctorSkipsLiveSystemPortProbe 验证 doctor 不把运行中服务占用的端口当作配置错误。

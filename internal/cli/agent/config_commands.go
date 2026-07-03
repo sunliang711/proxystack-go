@@ -21,45 +21,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// newInitCommand 创建默认配置初始化命令。
-func newInitCommand() *cobra.Command {
-	var externalHost string
-	var force bool
-	command := &cobra.Command{
-		Use:   "init",
-		Short: "Initialize proxystack agent configuration",
-		RunE: func(command *cobra.Command, args []string) error {
-			baseDir, err := agentBaseDir(command)
-			if err != nil {
-				return err
-			}
-			configPath, err := agentConfigPath(command)
-			if err != nil {
-				return err
-			}
-			printNonRootLinuxInitGroupHint(command.OutOrStdout(), baseDir)
-			if err := ensureServiceAccountForInit(context.Background(), baseDir); err != nil {
-				return err
-			}
-			if err := agentconfig.InitProject(agentconfig.InitOptions{BaseDir: baseDir, ExternalHost: externalHost, Force: force}); err != nil {
-				return err
-			}
-			cfg, err := config.LoadConfig(configPath)
-			if err != nil {
-				return err
-			}
-			if err := repairServiceMetadata(cfg); err != nil {
-				return err
-			}
-			fmt.Fprintf(command.OutOrStdout(), "Initialized agent config: %s\n", configPath)
-			return nil
-		},
-	}
-	command.Flags().StringVar(&externalHost, "external-host", "", "External subscription host")
-	command.Flags().BoolVar(&force, "force", false, "Overwrite existing config")
-	return command
-}
-
 // newAddCommand 创建 stack 模板写入命令。
 func newAddCommand() *cobra.Command {
 	var template string
@@ -436,12 +397,12 @@ type stackListRow struct {
 	Name            string
 	Enabled         string
 	Role            string
-	Xray          string
+	Xray            string
 	Clash           string
 	Generated       string
 	Running         string
-	XrayPorts     string
-	XrayAPIPort   string
+	XrayPorts       string
+	XrayAPIPort     string
 	ClashSocks      string
 	ClashHTTP       string
 	ClashController string
@@ -474,12 +435,12 @@ func listStackRows(configPath string, checkSystemPorts bool, manager servicemana
 			Name:            stack.Name,
 			Enabled:         yesNo(stack.Enabled),
 			Role:            stack.Role,
-			Xray:          yesNo(stack.Xray.Enabled),
+			Xray:            yesNo(stack.Xray.Enabled),
 			Clash:           yesNo(stack.Clash.Enabled),
 			Generated:       formatComponentList(generatedStackComponents(generatedDir, stack)),
 			Running:         formatComponentList(runningStackComponents(stack, manager)),
-			XrayPorts:     formatXrayInbounds(stack.Xray.Inbounds),
-			XrayAPIPort:   formatXrayAPIPort(cfg, stack),
+			XrayPorts:       formatXrayInbounds(stack.Xray.Inbounds),
+			XrayAPIPort:     formatXrayAPIPort(cfg, stack),
 			ClashSocks:      formatSocksListeners(stack.Clash.Listeners.Socks),
 			ClashHTTP:       formatHTTPListeners(stack.Clash.Listeners.HTTP),
 			ClashController: formatListenPort(stack.Clash.Controller.Listen),

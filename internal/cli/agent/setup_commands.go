@@ -15,75 +15,142 @@ var setupInstallTargetFunc = func(ctx context.Context, request install.Request, 
 	return (install.Installer{Progress: progress}).InstallTarget(ctx, request)
 }
 
-var setupRunLifecycleFunc = runLifecycle
-
-// newSetupCommand 创建 init、install all 和 service install 的组合安装命令。
+// newSetupCommand 创建本地初始化、托管依赖安装及组合安装命令。
 func newSetupCommand() *cobra.Command {
 	var externalHost string
 	var force bool
-	var start bool
 	command := &cobra.Command{
 		Use:   "setup",
-		Short: "Initialize config, install managed targets, and install service files",
+		Short: "Initialize local files, install service files, and install managed targets",
+		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, args []string) error {
-			baseDir, err := agentBaseDir(command)
-			if err != nil {
-				return err
-			}
-			configPath, err := agentConfigPath(command)
-			if err != nil {
-				return err
-			}
-			if err := ensureServiceAccountForInit(context.Background(), baseDir); err != nil {
-				return fmt.Errorf("setup service account failed: %w", err)
-			}
-			if err := runSetupInit(baseDir, externalHost, force); err != nil {
-				return fmt.Errorf("setup init failed: %w", err)
-			}
-			cfg, err := config.LoadConfig(configPath)
-			if err != nil {
-				return fmt.Errorf("setup config load failed: %w", err)
-			}
-			if err := repairServiceMetadata(cfg); err != nil {
-				return fmt.Errorf("setup metadata repair failed: %w", err)
-			}
-			progressPrinter := newInstallProgressPrinter(command.ErrOrStderr())
-			defer progressPrinter.Finish()
-			results, err := setupInstallTargetFunc(context.Background(), install.Request{Config: cfg, Target: install.TargetAll}, progressPrinter.Print)
-			if err != nil {
-				return fmt.Errorf("setup install all failed: %w", err)
-			}
-			if err := repairServiceMetadata(cfg); err != nil {
-				return fmt.Errorf("setup install metadata repair failed: %w", err)
-			}
-			for _, result := range results {
-				if result.Skipped {
-					fmt.Fprintf(command.OutOrStdout(), "%s skipped\n", result.Target)
-					continue
-				}
-				fmt.Fprintf(command.OutOrStdout(), "%s installed: %v\n", result.Target, result.Written)
-			}
-			manager, err := agentServiceManager(command)
-			if err != nil {
-				return err
-			}
-			paths, err := manager.InstallUnits(cfg, "")
-			if err != nil {
-				return fmt.Errorf("setup service install failed: %w", err)
-			}
-			fmt.Fprintf(command.OutOrStdout(), "Installed units: %v\n", paths)
-			if start {
-				if err := setupRunLifecycleFunc(command, "start", "", false); err != nil {
-					return fmt.Errorf("setup start failed: %w", err)
-				}
-			}
-			return nil
+			return runSetupAll(command, externalHost, force)
 		},
 	}
-	command.Flags().StringVar(&externalHost, "external-host", "", "External subscription host")
-	command.Flags().BoolVar(&force, "force", false, "Overwrite existing config")
-	command.Flags().BoolVar(&start, "start", false, "Start proxystack services after setup")
+	addSetupLocalFlags(command, &externalHost, &force)
+	command.AddCommand(newSetupLocalCommand(&externalHost, &force))
+	command.AddCommand(newSetupDepsCommand())
+	command.AddCommand(newSetupAllCommand(&externalHost, &force))
 	return command
+}
+
+// newSetupLocalCommand 创建只初始化本地文件和安装 service unit 的 setup 子命令。
+func newSetupLocalCommand(externalHost *string, force *bool) *cobra.Command {
+	command := &cobra.Command{
+		Use:   "local",
+		Short: "Initialize local files and install service files",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, args []string) error {
+			return runSetupLocal(command, *externalHost, *force)
+		},
+	}
+	addSetupLocalFlags(command, externalHost, force)
+	return command
+}
+
+// newSetupDepsCommand 创建只安装托管依赖的 setup 子命令。
+func newSetupDepsCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "deps",
+		Short: "Install managed proxystack binaries and geo data",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, args []string) error {
+			return runSetupDeps(command)
+		},
+	}
+}
+
+// newSetupAllCommand 创建按 local -> deps 顺序执行的 setup 子命令。
+func newSetupAllCommand(externalHost *string, force *bool) *cobra.Command {
+	command := &cobra.Command{
+		Use:   "all",
+		Short: "Run setup local and setup deps",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, args []string) error {
+			return runSetupAll(command, *externalHost, *force)
+		},
+	}
+	addSetupLocalFlags(command, externalHost, force)
+	return command
+}
+
+// addSetupLocalFlags 注册本地初始化相关 flag，兼容 setup、setup local 和 setup all。
+func addSetupLocalFlags(command *cobra.Command, externalHost *string, force *bool) {
+	command.Flags().StringVar(externalHost, "external-host", "", "External subscription host")
+	command.Flags().BoolVar(force, "force", false, "Overwrite existing config")
+}
+
+// runSetupAll 默认按 local -> deps 顺序完成完整 setup。
+func runSetupAll(command *cobra.Command, externalHost string, force bool) error {
+	if err := runSetupLocal(command, externalHost, force); err != nil {
+		return err
+	}
+	return runSetupDeps(command)
+}
+
+// runSetupLocal 初始化本地目录和配置，修复 metadata，并安装 service unit。
+func runSetupLocal(command *cobra.Command, externalHost string, force bool) error {
+	baseDir, err := agentBaseDir(command)
+	if err != nil {
+		return err
+	}
+	configPath, err := agentConfigPath(command)
+	if err != nil {
+		return err
+	}
+	printNonRootLinuxInitGroupHint(command.OutOrStdout(), baseDir)
+	if err := ensureServiceAccountForInit(context.Background(), baseDir); err != nil {
+		return fmt.Errorf("setup service account failed: %w", err)
+	}
+	if err := runSetupInit(baseDir, externalHost, force); err != nil {
+		return fmt.Errorf("setup local init failed: %w", err)
+	}
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("setup config load failed: %w", err)
+	}
+	if err := repairServiceMetadata(cfg); err != nil {
+		return fmt.Errorf("setup metadata repair failed: %w", err)
+	}
+	manager, err := agentServiceManager(command)
+	if err != nil {
+		return err
+	}
+	paths, err := manager.InstallUnits(cfg, "")
+	if err != nil {
+		return fmt.Errorf("setup service install failed: %w", err)
+	}
+	fmt.Fprintf(command.OutOrStdout(), "Installed units: %v\n", paths)
+	return nil
+}
+
+// runSetupDeps 安装 xray、mihomo、geo 等托管依赖，目标固定为 all。
+func runSetupDeps(command *cobra.Command) error {
+	configPath, err := agentConfigPath(command)
+	if err != nil {
+		return err
+	}
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("setup config load failed: %w", err)
+	}
+	progressPrinter := newInstallProgressPrinter(command.ErrOrStderr())
+	defer progressPrinter.Finish()
+	results, err := setupInstallTargetFunc(context.Background(), install.Request{Config: cfg, Target: install.TargetAll}, progressPrinter.Print)
+	if err != nil {
+		return fmt.Errorf("setup deps failed: %w", err)
+	}
+	if err := repairServiceMetadata(cfg); err != nil {
+		return fmt.Errorf("setup install metadata repair failed: %w", err)
+	}
+	for _, result := range results {
+		if result.Skipped {
+			fmt.Fprintf(command.OutOrStdout(), "%s skipped\n", result.Target)
+			continue
+		}
+		fmt.Fprintf(command.OutOrStdout(), "%s installed: %v\n", result.Target, result.Written)
+	}
+	return nil
 }
 
 // runSetupInit 初始化项目；已有 config 时只补齐标准目录并继续后续安装。

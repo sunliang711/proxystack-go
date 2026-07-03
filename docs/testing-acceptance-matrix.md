@@ -101,7 +101,7 @@ tests/fixtures/sub/manual.yaml
 1. 本机临时目录完整流程：
 
 ```bash
-psctl --base-dir ./tmp init
+psctl --base-dir ./tmp setup local
 psctl --base-dir ./tmp add usa1 --no-edit
 psctl --base-dir ./tmp validate
 psctl --base-dir ./tmp check
@@ -149,4 +149,4 @@ sudo psctl --service-manager launchd logs usa1 --follow
 - 生成器、schema、bundle、install 安全逻辑必须有表驱动单测。
 - CLI 只要求关键路径和副作用边界，不追求 help 文案逐字节一致。
 - watcher 需要覆盖 fsnotify 触发和 polling fallback；平台差异可用接口 fake。
-- 端到端测试至少覆盖一次 `init -> add -> validate -> check -> start -> sub export -> pssub import -> pssub serve -> HTTP subscription`。
+- 端到端测试至少覆盖一次 `setup local -> add -> validate -> check -> start -> sub export -> pssub import -> pssub serve -> HTTP subscription`。

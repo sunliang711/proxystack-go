@@ -28,11 +28,11 @@
 | 分类 | 含义 | 命令 |
 | --- | --- | --- |
 | 只读 | 不写文件，不调用服务管理器，不启动 HTTP 服务 | `version`、`list`、`validate`、`check`、`render *`、`doctor`、`sub validate-inputs` |
-| 写 agent 配置 | 写 `config.yaml` 或 `stacks/*.yaml` | `psctl init`、`config`、`add`、`clone`、`member add/remove`、`remove` |
-| 写 sub 配置 | 写 `<sub-base-dir>/config.yaml` | `pssub init` |
+| 写 agent 配置 | 写 `config.yaml` 或 `stacks/*.yaml` | `psctl setup local`、`psctl setup all`、`psctl setup`、`config`、`add`、`clone`、`member add/remove`、`remove` |
+| 写 sub 配置 | 写 `<sub-base-dir>/config.yaml` | `pssub setup local`、`pssub setup all`、`pssub setup` |
 | 写 runtime | 写 `runtime/generated`、`runtime/manifest.json` 或 `publish` | `start`、`restart`、`sub export`、`export`、`import` |
-| 服务管理器 | 调用 `systemctl`/`journalctl` 或 `launchctl`/`log` | `start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`service *` |
-| 下载/安装 | 写 `downloads`、`bin`、`geo` 或 `.venv` | `install`、`update` |
+| 服务管理器 | 调用 `systemctl`/`journalctl` 或 `launchctl`/`log` | `setup local`、`setup all`、`setup`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`service *` |
+| 下载/安装 | 写 `downloads`、`bin`、`geo` 或 `.venv` | `psctl setup deps`、`psctl setup all`、`psctl setup`、`update` |
 | HTTP 运行 | 启动长期运行进程 | `pssub serve` |
 
 `check` 必须只做完整编译和 diff 预览，不能写 `runtime`，不能调用服务管理器。
@@ -41,10 +41,10 @@
 
 ## 3. `psctl` 命令
 
-### 3.1 `init`
+### 3.1 `setup local`
 
 ```bash
-psctl [--base-dir DIR] init [--external-host HOST] [--force]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] setup local [--external-host HOST] [--force]
 ```
 
 职责：
@@ -52,43 +52,49 @@ psctl [--base-dir DIR] init [--external-host HOST] [--force]
 - 创建 base dir、标准目录和带注释说明的默认 `config.yaml`。
 - 使用代码内置默认配置内容。
 - `external_host` 未传时写为空值，后续可编辑。
-- 已存在 `config.yaml` 时默认不覆盖。
+- 已存在 `config.yaml` 时默认不覆盖，只补齐标准目录。
+- 安装或更新 agent stack 服务文件。
+- 不下载 mihomo/xray/geo。
+- 不启动或 enable 服务。
 
 副作用：
 
 - 可写 `config.yaml`。
 - 可创建标准目录。
-- 不下载依赖，不安装系统服务文件。
+- 可写系统服务文件目录；systemd 后端为 `/etc/systemd/system`，launchd 后端为 `/Library/LaunchDaemons`。
 
 验收：
 
 - 不传 `--force` 时不得覆盖既有 `config.yaml`。
 - 创建的目录权限应符合部署规格。
 - 默认配置内容必须可通过 strict 校验。
+- 服务管理器权限不足时不能吞错。
 
 ### 3.2 `setup`
 
 ```bash
-psctl [--base-dir DIR] setup [--external-host HOST] [--force] [--start]
+psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] setup [all] [--external-host HOST] [--force]
+psctl [--base-dir DIR] setup deps
 ```
 
 职责：
 
-- 依次执行幂等 `init`、`install all`、`service install`。
-- 已有 `config.yaml` 且未传 `--force` 时不覆盖配置，只补齐标准目录后继续。
-- 传入 `--start` 时继续执行 `start`。
+- 不带参数时等价于 `setup all`。
+- `setup all` 依次执行幂等 `setup local`、`setup deps`。
+- `setup deps` 只安装 mihomo/xray/geo 等联网依赖，等价于托管依赖目标 `all`。
+- `setup deps` 不安装 `self`，不写 service 文件，不启动或 enable 服务。
 
 副作用：
 
-- 可写配置和标准目录。
-- 可下载安装 mihomo/xray/geo。
-- 可写系统服务文件目录；systemd 后端为 `/etc/systemd/system`，launchd 后端为 `/Library/LaunchDaemons`。
+- `setup all` 和默认 `setup` 具备 `setup local` 与 `setup deps` 的全部副作用。
+- `setup deps` 可下载安装 mihomo/xray/geo。
 
 验收：
 
 - 任一步失败时命令失败，并显示失败步骤。
-- `install all` 不包含 `self`。
-- 服务管理器权限不足时不能吞错。
+- `setup deps` 已安装目标存在时跳过。
+- `setup deps` 不包含 `self`。
+- setup 命令不得隐式启动服务。
 
 ### 3.3 `add`
 
@@ -377,10 +383,10 @@ psctl [--base-dir DIR] [--service-manager auto|systemd|launchd] service logs|log
 - `all` 和 `sub` 不作为保留 target；如存在同名 stack，按普通 stack 名处理。
 - 服务管理器错误必须保留 stdout/stderr 摘要。
 
-### 3.14 `install/update/version`
+### 3.14 `setup deps/update/version`
 
 ```bash
-psctl [--base-dir DIR] install mihomo|xray|geo|all [--version V] [--source SOURCE] [--sha256 HASH] [--archive-member NAME]
+psctl [--base-dir DIR] setup deps
 psctl [--base-dir DIR] update mihomo|xray|geo|all [--version V] [--source SOURCE] [--sha256 HASH] [--archive-member NAME]
 psctl [--base-dir DIR] update self [--wheel FILE|PACKAGE_SPEC] [--sha256 HASH]
 psctl version [mihomo|xray|geo]
@@ -397,8 +403,8 @@ psctl
 
 验收：
 
-- `install all` 和 `update all` 不包含 `self`。
-- `install` 目标已存在时跳过。
+- `setup deps` 和 `update all` 不包含 `self`。
+- `setup deps` 目标已存在时跳过。
 - `update` 强制重新下载或替换。
 - 普通远端 URL 必须提供 sha256。
 - 托管源支持 `auto`、`github`；`r2` 未配置时返回明确错误。
@@ -485,27 +491,34 @@ psctl [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECONDS]
 - 监听地址可通过全局 `--listen HOST:PORT` 覆盖，默认 `0.0.0.0:3003`。
 - 服务管理器通过全局 `--service-manager auto|systemd|launchd` 指定，默认 `auto`。
 
-### 4.1 `init`
+### 4.1 `setup`
 
 ```bash
-pssub [--base-dir DIR] init [--force]
+pssub [--base-dir DIR] [--service-manager auto|systemd|launchd] setup [local|all] [--force]
 ```
 
 职责：
 
+- 不带参数时等价于 `setup all`。
+- `setup all` 当前等价于 `setup local`。
 - 幂等创建 `<base-dir>`、`<base-dir>/inputs`、`<base-dir>/templates` 和 `<base-dir>/config.yaml`。
 - 默认不覆盖既有 `<base-dir>/config.yaml`。
 - `--force` 会重写默认 sub config。
+- 安装或更新 pssub 服务文件。
+- 不下载任何依赖。
+- 不启动或 enable 服务。
 
 副作用：
 
-- 只写 `<base-dir>` 下的 pssub 目录和配置。
+- 可写 `<base-dir>` 下的 pssub 目录和配置。
+- 可写系统服务文件目录；systemd 后端为 `/etc/systemd/system`，launchd 后端为 `/Library/LaunchDaemons`。
 
 验收：
 
 - 不读取 agent `config.yaml`。
 - 不读取或创建 `stacks/`、`runtime/`、`publish/`。
 - 默认配置必须可被 `pssub config check`、`pssub config show` 和 `pssub serve` 加载。
+- setup 命令不得隐式启动服务。
 
 ### 4.2 `version`
 

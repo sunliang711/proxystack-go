@@ -35,7 +35,7 @@ func TestHelpUsesCommandGroupsAndBaseDirOnly(t *testing.T) {
 	require.Contains(t, helpText, "服务控制")
 	require.Contains(t, helpText, "诊断工具")
 	require.Contains(t, helpText, "其它")
-	require.Contains(t, helpText, "  init")
+	require.Contains(t, helpText, "  setup")
 	require.Contains(t, helpText, "  config")
 	require.Contains(t, helpText, "  import")
 	require.Contains(t, helpText, "  input")
@@ -44,23 +44,40 @@ func TestHelpUsesCommandGroupsAndBaseDirOnly(t *testing.T) {
 	require.Contains(t, helpText, "  version")
 	require.Contains(t, helpText, "--base-dir")
 	require.Contains(t, helpText, "/opt/proxystack-sub")
+	require.NotContains(t, helpText, "  init")
 	require.NotContains(t, helpText, "--config")
 	require.NotContains(t, helpText, "--data-dir")
 	require.NotContains(t, helpText, "Available Commands:")
 	require.NotContains(t, helpText, "Additional Commands:")
 }
 
-// TestInitCommandCreatesSubLayout 验证 pssub init 只创建独立运行目录和默认配置。
-func TestInitCommandCreatesSubLayout(t *testing.T) {
+// TestRootRejectsRemovedInitCommand 验证 pssub 顶层旧 init 命令不再注册。
+func TestRootRejectsRemovedInitCommand(t *testing.T) {
+	command := NewRootCommand()
+	command.SetArgs([]string{"init"})
+
+	err := command.Execute()
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unknown command")
+}
+
+// TestSetupLocalCreatesSubLayoutAndInstallsService 验证 pssub setup local 创建独立运行目录、默认配置和 service unit。
+func TestSetupLocalCreatesSubLayoutAndInstallsService(t *testing.T) {
 	baseDir := t.TempDir()
+	manager := &fakeSubManager{installPaths: []string{"/tmp/proxystack-sub.service"}}
+	withSubServiceManager(t, manager)
 	command := NewRootCommand()
 	var output bytes.Buffer
 	command.SetOut(&output)
-	command.SetArgs([]string{"--base-dir", baseDir, "init"})
+	command.SetArgs([]string{"--base-dir", baseDir, "setup", "local"})
 
 	err := command.Execute()
 
 	require.NoError(t, err)
+	require.Equal(t, "sub", manager.installedTarget)
+	require.Equal(t, baseDir, manager.installedConfig.BaseDir)
+	require.Empty(t, manager.action)
 	require.DirExists(t, baseDir)
 	require.DirExists(t, filepath.Join(baseDir, "inputs"))
 	require.DirExists(t, filepath.Join(baseDir, "templates"))
@@ -81,6 +98,7 @@ func TestInitCommandCreatesSubLayout(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "127.0.0.1:3003", subConfig.Listen)
 	require.Equal(t, config.LogFormatJSON, subConfig.Log.Format)
+	require.Contains(t, output.String(), "Installed units:")
 }
 
 // TestConfigureSubLoggerSupportsJSONAndConsole 验证 pssub serve 可按配置切换日志格式。
@@ -127,29 +145,32 @@ func TestConfigureSubLoggerRejectsUnknownFormat(t *testing.T) {
 	require.Contains(t, err.Error(), "log.format must be json or console")
 }
 
-// TestInitCommandKeepsExistingConfig 验证 pssub init 默认不覆盖既有 sub config。
-func TestInitCommandKeepsExistingConfig(t *testing.T) {
+// TestSetupKeepsExistingConfig 验证 pssub setup 默认不覆盖既有 sub config。
+func TestSetupKeepsExistingConfig(t *testing.T) {
 	baseDir := t.TempDir()
 	configPath := filepath.Join(baseDir, "config.yaml")
 	original := []byte("listen: 127.0.0.1:39003\naccess:\n  type: none\n")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
 	require.NoError(t, os.WriteFile(configPath, original, 0o640))
+	manager := &fakeSubManager{}
+	withSubServiceManager(t, manager)
 	command := NewRootCommand()
 	var output bytes.Buffer
 	command.SetOut(&output)
-	command.SetArgs([]string{"--base-dir", baseDir, "init"})
+	command.SetArgs([]string{"--base-dir", baseDir, "setup"})
 
 	err := command.Execute()
 
 	require.NoError(t, err)
+	require.Equal(t, "sub", manager.installedTarget)
 	data, err := os.ReadFile(configPath)
 	require.NoError(t, err)
 	require.Equal(t, original, data)
 	require.Contains(t, output.String(), "created_config=false")
 }
 
-// TestInitCommandForceOverwritesConfig 验证 --force 会重写默认 sub config。
-func TestInitCommandForceOverwritesConfig(t *testing.T) {
+// TestSetupForceOverwritesConfig 验证 --force 会重写默认 sub config。
+func TestSetupForceOverwritesConfig(t *testing.T) {
 	baseDir := t.TempDir()
 	configPath := filepath.Join(baseDir, "config.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o750))
@@ -157,12 +178,15 @@ func TestInitCommandForceOverwritesConfig(t *testing.T) {
 	before, err := os.Stat(configPath)
 	require.NoError(t, err)
 	beforeUID, beforeGID, hasOwner := fileOwnerIDs(before)
+	manager := &fakeSubManager{}
+	withSubServiceManager(t, manager)
 	command := NewRootCommand()
-	command.SetArgs([]string{"--base-dir", baseDir, "init", "--force"})
+	command.SetArgs([]string{"--base-dir", baseDir, "setup", "all", "--force"})
 
 	err = command.Execute()
 
 	require.NoError(t, err)
+	require.Equal(t, "sub", manager.installedTarget)
 	data, err := os.ReadFile(configPath)
 	require.NoError(t, err)
 	require.Equal(t, config.DefaultSubServerConfigYAML(), string(data))

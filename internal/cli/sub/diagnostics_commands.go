@@ -64,7 +64,7 @@ func runSubDoctor(configPath string, managerKind string) (subDoctorReport, error
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			baseDir := filepath.Dir(configPath)
-			return subDoctorReport{}, fmt.Errorf("sub config is missing: %s; run `pssub --base-dir %s init` first", configPath, baseDir)
+			return subDoctorReport{}, fmt.Errorf("sub config is missing: %s; run `pssub --base-dir %s setup local` first", configPath, baseDir)
 		}
 		return subDoctorReport{}, fmt.Errorf("doctor config failed: %w", err)
 	}

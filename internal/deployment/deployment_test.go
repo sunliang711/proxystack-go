@@ -115,7 +115,7 @@ func TestInstallScriptsDryRunDownloadRelease(t *testing.T) {
 			baseDir := filepath.Join(t.TempDir(), "proxystack")
 			binDir := filepath.Join(t.TempDir(), "bin")
 
-			output, err := runScript(t, filepath.Join("scripts", scriptName), "--dry-run", "--base-dir", baseDir, "--bin-dir", binDir, "--version", "1.2.3")
+			output, err := runScript(t, filepath.Join("scripts", scriptName), "--dry-run", "--no-setup-local", "--base-dir", baseDir, "--bin-dir", binDir, "--version", "1.2.3")
 
 			require.NoError(t, err, output)
 			require.Contains(t, output, "[proxystack] Download release: "+defaultReleaseRepo+" v1.2.3 ")
@@ -148,7 +148,7 @@ func TestInstallScriptsDryRunLatestKeepsStableAssetAlias(t *testing.T) {
 			baseDir := filepath.Join(t.TempDir(), "proxystack")
 			binDir := filepath.Join(t.TempDir(), "bin")
 
-			output, err := runScript(t, filepath.Join("scripts", scriptName), "--dry-run", "--base-dir", baseDir, "--bin-dir", binDir)
+			output, err := runScript(t, filepath.Join("scripts", scriptName), "--dry-run", "--no-setup-local", "--base-dir", baseDir, "--bin-dir", binDir)
 
 			require.NoError(t, err, output)
 			require.Contains(t, output, "[proxystack] Download release: "+defaultReleaseRepo+" latest ")
@@ -158,6 +158,28 @@ func TestInstallScriptsDryRunLatestKeepsStableAssetAlias(t *testing.T) {
 			require.Contains(t, output, "https://github.com/"+defaultReleaseRepo+"/releases/latest/download/SHA256SUMS")
 		})
 	}
+}
+
+// TestInstallAgentDryRunSetupLocalAllowsCustomBinDir 验证 agent service unit 不依赖 CLI bin-dir。
+func TestInstallAgentDryRunSetupLocalAllowsCustomBinDir(t *testing.T) {
+	baseDir := filepath.Join(t.TempDir(), "proxystack")
+	binDir := filepath.Join(t.TempDir(), "bin")
+
+	output, err := runScript(t, "scripts/install-agent.sh", "--dry-run", "--base-dir", baseDir, "--bin-dir", binDir)
+
+	require.NoError(t, err, output)
+	require.Contains(t, output, binDir+"/psctl --base-dir "+baseDir+" setup local")
+}
+
+// TestInstallSubDryRunSetupLocalRejectsCustomBinDir 验证 sub service unit 固定使用 /usr/local/bin/pssub。
+func TestInstallSubDryRunSetupLocalRejectsCustomBinDir(t *testing.T) {
+	baseDir := filepath.Join(t.TempDir(), "proxystack-sub")
+	binDir := filepath.Join(t.TempDir(), "bin")
+
+	output, err := runScript(t, "scripts/install-sub-local.sh", "--dry-run", "--base-dir", baseDir, "--bin-dir", binDir)
+
+	require.Error(t, err)
+	require.Contains(t, output, "setup local/start requires --user proxystack --group proxystack --bin-dir /usr/local/bin")
 }
 
 // TestInstallScriptsRejectUnsafeManagedPaths 验证 root bootstrap 脚本拒绝宽泛托管目录。
@@ -186,7 +208,7 @@ func TestInstallScriptsRejectCustomSystemdIdentity(t *testing.T) {
 			output, err := runScript(t, tt.args[0], tt.args[1:]...)
 
 			require.Error(t, err)
-			require.Contains(t, output, "requires --user proxystack --group proxystack --bin-dir /usr/local/bin")
+			require.Contains(t, output, "requires --user proxystack --group proxystack")
 		})
 	}
 }

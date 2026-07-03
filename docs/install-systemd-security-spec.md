@@ -148,7 +148,7 @@ sub：
 ExecStart=/usr/local/bin/pssub --base-dir /opt/proxystack-sub serve
 ```
 
-`psctl` 和 `pssub` 独立部署，订阅服务 unit 由 `pssub service install` 生成，默认 base dir 为 `/opt/proxystack-sub`。
+`psctl` 和 `pssub` 独立部署，订阅服务 unit 可由 `pssub setup local` 或 `pssub service install` 生成，默认 base dir 为 `/opt/proxystack-sub`。
 
 `ReadWritePaths`：
 
@@ -177,7 +177,7 @@ plist 行为：
 - 不固定写入 `UserName` 或 `GroupName`。
 - `sub` 运行命令为 `/usr/local/bin/pssub --base-dir <base-dir> serve`，默认 `<base-dir>` 为 `/opt/proxystack-sub`。
 - xray/mihomo 使用 `<base-dir>/bin`、`runtime/generated` 和 `runtime/mihomo` 中的实际路径。
-- `install all` 会清理目标范围内不再期望的旧 proxystack plist。
+- `setup local` 写入服务文件时会清理目标范围内不再期望的旧 proxystack plist。
 - `uninstall` 删除 plist 前会先对已加载 job 执行 `bootout`。
 
 ## 6. systemctl/journalctl 与 launchctl/log

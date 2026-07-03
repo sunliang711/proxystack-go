@@ -38,7 +38,7 @@ var subServiceManagerFactory = servicemanager.NewManager
 var subRepairServiceMetadataFunc = repairSubServiceMetadata
 
 const (
-	subInitGroup    = "init"
+	subSetupGroup   = "setup"
 	subConfigGroup  = "config"
 	subDataGroup    = "data"
 	subServiceGroup = "service"
@@ -55,7 +55,7 @@ func NewRootCommand() *cobra.Command {
 		SilenceErrors: true,
 	}
 	command.AddGroup(
-		&cobra.Group{ID: subInitGroup, Title: "初始化"},
+		&cobra.Group{ID: subSetupGroup, Title: "初始化"},
 		&cobra.Group{ID: subConfigGroup, Title: "配置管理"},
 		&cobra.Group{ID: subDataGroup, Title: "订阅数据"},
 		&cobra.Group{ID: subServiceGroup, Title: "服务控制"},
@@ -68,7 +68,7 @@ func NewRootCommand() *cobra.Command {
 	command.PersistentFlags().String("listen", defaultListen, "Subscription listen address")
 	command.PersistentFlags().String("service-manager", defaultServiceManager, "Service manager: auto, systemd, launchd")
 	command.AddCommand(groupedCommand(subHelpGroup, newVersionCommand("pssub")))
-	command.AddCommand(groupedCommand(subInitGroup, newInitCommand()))
+	command.AddCommand(groupedCommand(subSetupGroup, newSetupCommand()))
 	command.AddCommand(groupedCommand(subServiceGroup, newServeCommand()))
 	command.AddCommand(groupedCommand(subDataGroup, newImportCommand()))
 	command.AddCommand(groupedCommand(subDataGroup, newInputCommand()))
@@ -80,6 +80,80 @@ func NewRootCommand() *cobra.Command {
 		command.AddCommand(groupedCommand(subServiceGroup, newLifecycleCommand(action)))
 	}
 	return command
+}
+
+// newSetupCommand 创建 pssub 本地初始化和 service unit 安装命令。
+func newSetupCommand() *cobra.Command {
+	var force bool
+	command := &cobra.Command{
+		Use:   "setup",
+		Short: "Initialize subscription files and install service file",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, args []string) error {
+			return runSubSetupAll(command, force)
+		},
+	}
+	addSubSetupFlags(command, &force)
+	command.AddCommand(newSubSetupLocalCommand(&force))
+	command.AddCommand(newSubSetupAllCommand(&force))
+	return command
+}
+
+// newSubSetupLocalCommand 创建只执行 pssub 本地初始化和 service unit 安装的子命令。
+func newSubSetupLocalCommand(force *bool) *cobra.Command {
+	command := &cobra.Command{
+		Use:   "local",
+		Short: "Initialize subscription files and install service file",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, args []string) error {
+			return runSubSetupLocal(command, *force)
+		},
+	}
+	addSubSetupFlags(command, force)
+	return command
+}
+
+// newSubSetupAllCommand 创建当前等价于 setup local 的完整 setup 子命令。
+func newSubSetupAllCommand(force *bool) *cobra.Command {
+	command := &cobra.Command{
+		Use:   "all",
+		Short: "Run setup local",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, args []string) error {
+			return runSubSetupAll(command, *force)
+		},
+	}
+	addSubSetupFlags(command, force)
+	return command
+}
+
+// addSubSetupFlags 注册 pssub 本地初始化相关 flag，兼容 setup、setup local 和 setup all。
+func addSubSetupFlags(command *cobra.Command, force *bool) {
+	command.Flags().BoolVar(force, "force", false, "Overwrite existing sub config")
+}
+
+// runSubSetupAll 当前等价于 runSubSetupLocal，保留 all 入口便于后续扩展。
+func runSubSetupAll(command *cobra.Command, force bool) error {
+	return runSubSetupLocal(command, force)
+}
+
+// runSubSetupLocal 初始化 pssub 目录和配置，并只安装 service unit。
+func runSubSetupLocal(command *cobra.Command, force bool) error {
+	baseDir, err := subBaseDir(command)
+	if err != nil {
+		return err
+	}
+	result, err := initSubLayout(baseDir, force)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(command.OutOrStdout(), "Initialized subscription layout: data_dir=%s input_dir=%s template_dir=%s config=%s created_config=%t\n", result.DataDir, result.InputDir, result.TemplatesDir, result.ConfigPath, result.CreatedConfig)
+	paths, err := installSubServiceUnits(command, baseDir)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(command.OutOrStdout(), "Installed units: %v\n", paths)
+	return nil
 }
 
 // groupedCommand 给根命令子命令设置 usage 分组，保持 pssub help 分块展示。
@@ -97,29 +171,6 @@ func newVersionCommand(binary string) *cobra.Command {
 			fmt.Fprintln(command.OutOrStdout(), version.Info(binary))
 		},
 	}
-}
-
-// newInitCommand 创建 sub-only 初始化命令，用于幂等准备订阅服务目录。
-func newInitCommand() *cobra.Command {
-	var force bool
-	command := &cobra.Command{
-		Use:   "init",
-		Short: "Initialize subscription directory and config",
-		RunE: func(command *cobra.Command, args []string) error {
-			baseDir, err := subBaseDir(command)
-			if err != nil {
-				return err
-			}
-			result, err := initSubLayout(baseDir, force)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(command.OutOrStdout(), "Initialized subscription layout: data_dir=%s input_dir=%s template_dir=%s config=%s created_config=%t\n", result.DataDir, result.InputDir, result.TemplatesDir, result.ConfigPath, result.CreatedConfig)
-			return nil
-		},
-	}
-	command.Flags().BoolVar(&force, "force", false, "Overwrite existing sub config")
-	return command
 }
 
 func newServeCommand() *cobra.Command {
@@ -290,7 +341,7 @@ func editSubConfig(command *cobra.Command, editor string) (string, bool, error) 
 	}
 	if _, err := os.Stat(configPath); err != nil {
 		if os.IsNotExist(err) {
-			return "", false, fmt.Errorf("sub config does not exist: %s; run pssub init first", configPath)
+			return "", false, fmt.Errorf("sub config does not exist: %s; run pssub setup local first", configPath)
 		}
 		return "", false, err
 	}
@@ -493,15 +544,7 @@ func newServiceInstallCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			manager, err := subServiceManager(command)
-			if err != nil {
-				return err
-			}
-			cfg := subOnlyGlobalConfig(baseDir)
-			if err := subRepairServiceMetadataFunc(cfg); err != nil {
-				return err
-			}
-			paths, err := manager.InstallUnits(cfg, "sub")
+			paths, err := installSubServiceUnits(command, baseDir)
 			if err != nil {
 				return err
 			}
@@ -509,6 +552,19 @@ func newServiceInstallCommand() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// installSubServiceUnits 渲染并安装 pssub 自身 service unit，不启动也不 enable 服务。
+func installSubServiceUnits(command *cobra.Command, baseDir string) ([]string, error) {
+	manager, err := subServiceManager(command)
+	if err != nil {
+		return nil, err
+	}
+	cfg := subOnlyGlobalConfig(baseDir)
+	if err := subRepairServiceMetadataFunc(cfg); err != nil {
+		return nil, err
+	}
+	return manager.InstallUnits(cfg, "sub")
 }
 
 // newLifecycleCommand 创建 pssub 顶层生命周期命令。

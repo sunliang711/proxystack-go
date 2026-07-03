@@ -113,7 +113,7 @@
 
 范围：
 
-- `init`
+- `setup local`
 - `add`
 - `config`
 - `clone`

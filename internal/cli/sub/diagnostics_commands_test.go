@@ -25,8 +25,8 @@ func TestDoctorCommandIsRegistered(t *testing.T) {
 	require.Contains(t, output.String(), "doctor")
 }
 
-// TestRunSubDoctorMissingConfigSuggestsInit 验证未初始化时 doctor 会提示先执行 init。
-func TestRunSubDoctorMissingConfigSuggestsInit(t *testing.T) {
+// TestRunSubDoctorMissingConfigSuggestsSetupLocal 验证未初始化时 doctor 会提示先执行 setup local。
+func TestRunSubDoctorMissingConfigSuggestsSetupLocal(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
 
 	_, err := runSubDoctor(configPath, "test")
@@ -34,7 +34,7 @@ func TestRunSubDoctorMissingConfigSuggestsInit(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "sub config is missing")
 	require.Contains(t, err.Error(), "pssub --base-dir")
-	require.Contains(t, err.Error(), "init")
+	require.Contains(t, err.Error(), "setup local")
 }
 
 // TestRunSubDoctorValidatesConfigAndInputs 验证 doctor 会加载 sub 配置并校验 inputs。

@@ -26,16 +26,31 @@ func TestRootHelpUsesCommandGroups(t *testing.T) {
 	require.Contains(t, helpText, "订阅发布")
 	require.Contains(t, helpText, "诊断工具")
 	require.Contains(t, helpText, "其它")
-	require.Contains(t, helpText, "  init")
 	require.Contains(t, helpText, "  setup")
+	require.Contains(t, helpText, "  update")
 	require.Contains(t, helpText, "  example")
 	require.Contains(t, helpText, "  render")
 	require.Contains(t, helpText, "  service")
 	require.Contains(t, helpText, "  sub")
 	require.Contains(t, helpText, "  ipinfo")
 	require.Contains(t, helpText, "--base-dir")
+	require.NotContains(t, helpText, "  init")
+	require.NotContains(t, helpText, "  install")
 	require.NotContains(t, helpText, "--config")
 	require.NotContains(t, helpText, "-c,")
 	require.NotContains(t, helpText, "Available Commands:")
 	require.NotContains(t, helpText, "Additional Commands:")
+}
+
+// TestRootRejectsRemovedInitAndInstallCommands 验证 psctl 顶层旧 init/install 命令不再注册。
+func TestRootRejectsRemovedInitAndInstallCommands(t *testing.T) {
+	for _, name := range []string{"init", "install"} {
+		command := NewRootCommand()
+		command.SetArgs([]string{name})
+
+		err := command.Execute()
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unknown command")
+	}
 }

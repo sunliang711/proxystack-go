@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eagle/proxystack-go/internal/agentconfig"
 	agentcli "github.com/eagle/proxystack-go/internal/cli/agent"
 	subcli "github.com/eagle/proxystack-go/internal/cli/sub"
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,7 @@ import (
 func TestMigrationMainFlowE2E(t *testing.T) {
 	baseDir := t.TempDir()
 	configPath := filepath.Join(baseDir, "config.yaml")
-	runAgentCommand(t, baseDir, "init", "--external-host", "proxy.example.com")
+	require.NoError(t, agentconfig.InitProject(agentconfig.InitOptions{BaseDir: baseDir, ExternalHost: "proxy.example.com"}))
 	runAgentCommand(t, baseDir, "add", "usa1", "--no-edit")
 	runAgentCommand(t, baseDir, "validate")
 	checkOutput := runAgentCommand(t, baseDir, "check")

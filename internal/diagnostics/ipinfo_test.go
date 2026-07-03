@@ -44,6 +44,54 @@ func TestQueryIPInfoUsesStackClashSocksListener(t *testing.T) {
 	require.Contains(t, stringsJoin(FormatIPInfoReport(report)), "IP: 198.51.100.10")
 }
 
+// TestQueryIPInfoChecksCurlCommandBeforeDefaultRunner 验证默认 curl runner 会在查询前检查 curl 命令。
+func TestQueryIPInfoChecksCurlCommandBeforeDefaultRunner(t *testing.T) {
+	originalCurlLookPath := curlLookPath
+	t.Cleanup(func() { curlLookPath = originalCurlLookPath })
+	errMissingCurl := errors.New("curl missing")
+	checked := false
+	curlLookPath = func(command string) (string, error) {
+		checked = true
+		require.Equal(t, "curl", command)
+		return "", errMissingCurl
+	}
+
+	_, err := QueryIPInfo(context.Background(), QueryOptions{
+		ConfigPath: filepath.Join(t.TempDir(), "missing.yaml"),
+		StackName:  "usa1",
+		Family:     "ipv4",
+	})
+
+	require.ErrorIs(t, err, errMissingCurl)
+	require.Contains(t, err.Error(), "curl command not found: please install curl before running ipinfo")
+	require.True(t, checked)
+}
+
+// TestQueryIPInfoSkipsCurlCommandCheckForInjectedRunner 验证测试或调用方注入 runner 时不依赖系统 curl。
+func TestQueryIPInfoSkipsCurlCommandCheckForInjectedRunner(t *testing.T) {
+	originalCurlLookPath := curlLookPath
+	t.Cleanup(func() { curlLookPath = originalCurlLookPath })
+	curlLookPath = func(command string) (string, error) {
+		t.Fatalf("unexpected curl look path check for injected runner: %s", command)
+		return "", nil
+	}
+	configPath := writeIPInfoFixture(t, "127.0.0.1")
+	fakeCurl := func(ctx context.Context, proxyURL string, url string, family string, timeout float64) (CurlResult, error) {
+		return CurlResult{ReturnCode: 0, Stdout: `{"ip": "198.51.100.10"}`}, nil
+	}
+
+	report, err := QueryIPInfo(context.Background(), QueryOptions{
+		ConfigPath: configPath,
+		StackName:  "usa1",
+		Family:     "ipv4",
+		Sources:    []string{"https://ipinfo.example/json"},
+		CurlRunner: fakeCurl,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "198.51.100.10", report.Families[0].IP)
+}
+
 // TestQueryIPInfoUsesFirstClashSocksUserWithEncodedCredentials 验证 Clash socks listener 会使用第一个用户并编码认证信息。
 func TestQueryIPInfoUsesFirstClashSocksUserWithEncodedCredentials(t *testing.T) {
 	configPath := writeIPInfoFixtureWithStack(t, `name: usa1

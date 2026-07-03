@@ -39,6 +39,7 @@ var (
 		familyIPv6: "IPv6",
 	}
 	ipCandidatePattern = regexp.MustCompile(`[0-9A-Fa-f:.]+`)
+	curlLookPath       = exec.LookPath
 )
 
 // CurlResult 保存一次 curl 查询结果，便于单元测试替换外部命令。
@@ -156,6 +157,9 @@ func QueryIPInfo(ctx context.Context, options QueryOptions) (IpInfoReport, error
 	}
 	runner := options.CurlRunner
 	if runner == nil {
+		if err := ensureCurlCommandAvailable(); err != nil {
+			return IpInfoReport{}, err
+		}
 		runner = RunCurl
 	}
 	endpoint, err := resolveProxyEndpoint(options.ConfigPath, options.StackName)
@@ -309,6 +313,14 @@ func BuildProxyURL(scheme string, listen string, port int, username string, pass
 		proxyURL.User = url.UserPassword(username, password)
 	}
 	return proxyURL.String()
+}
+
+// ensureCurlCommandAvailable 在默认 curl runner 启动前检查系统 curl 命令是否可用。
+func ensureCurlCommandAvailable() error {
+	if _, err := curlLookPath("curl"); err != nil {
+		return fmt.Errorf("curl command not found: please install curl before running ipinfo: %w", err)
+	}
+	return nil
 }
 
 // sanitizedRunner 包装 curl 执行器，保留 stdout 原文用于解析，仅脱敏 stderr 和错误。

@@ -21,6 +21,7 @@ import (
 )
 
 var queryIPInfo = diagnostics.QueryIPInfo
+var doctorSystemdUnitDir = systemd.DefaultUnitDir
 
 // newDoctorCommand 创建本机 agent 环境只读诊断命令。
 func newDoctorCommand() *cobra.Command {
@@ -112,7 +113,7 @@ func formatDoctorServiceAccountCheck(uid int, gid int) string {
 
 // addDoctorMetadataIssues 检查标准目录和文件权限、owner 是否符合部署规格。
 func addDoctorMetadataIssues(report *doctorReport, cfg domain.GlobalConfig, uid int, gid int, checkOwner bool) {
-	rules := systemd.StandardMetadataRules(cfg)
+	rules := agentDoctorMetadataRules(cfg)
 	for _, rule := range rules {
 		info, err := os.Stat(rule.Path)
 		if err != nil {
@@ -138,6 +139,19 @@ func addDoctorMetadataIssues(report *doctorReport, cfg domain.GlobalConfig, uid 
 	} else {
 		report.Checks = append(report.Checks, fmt.Sprintf("filesystem metadata checked: mode rules=%d owner check skipped", len(rules)))
 	}
+}
+
+// agentDoctorMetadataRules 返回 psctl doctor 需要检查的 agent 专属路径。
+func agentDoctorMetadataRules(cfg domain.GlobalConfig) []systemd.MetadataRule {
+	subDir := filepath.Clean(cfg.ResolvePath(cfg.Paths.Sub))
+	rules := make([]systemd.MetadataRule, 0)
+	for _, rule := range systemd.StandardMetadataRules(cfg) {
+		if filepath.Clean(rule.Path) == subDir {
+			continue
+		}
+		rules = append(rules, rule)
+	}
+	return rules
 }
 
 // isDoctorOptionalMetadataPath 判断 doctor 中允许尚未生成的按需 runtime 目录。
@@ -219,8 +233,8 @@ func addDoctorBinaryIssues(report *doctorReport, cfg domain.GlobalConfig) {
 
 // addDoctorUnitIssues 检查标准 systemd unit 文件是否存在。
 func addDoctorUnitIssues(report *doctorReport) {
-	for _, name := range []string{systemd.XrayUnitTemplate, systemd.ClashUnitTemplate, systemd.SubUnit} {
-		path := filepath.Join(systemd.DefaultUnitDir, name)
+	for _, name := range []string{systemd.XrayUnitTemplate, systemd.ClashUnitTemplate} {
+		path := filepath.Join(doctorSystemdUnitDir, name)
 		if _, err := os.Stat(path); err != nil {
 			if os.IsNotExist(err) {
 				report.Issues = append(report.Issues, "systemd unit is missing: "+path)

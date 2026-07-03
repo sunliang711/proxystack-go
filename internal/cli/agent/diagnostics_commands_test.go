@@ -16,6 +16,7 @@ import (
 
 	"github.com/eagle/proxystack-go/internal/diagnostics"
 	"github.com/eagle/proxystack-go/internal/domain"
+	"github.com/eagle/proxystack-go/internal/systemd"
 	"github.com/stretchr/testify/require"
 )
 
@@ -176,7 +177,6 @@ func TestDoctorMetadataAllowsMissingGeneratedComponentDirs(t *testing.T) {
 		filepath.Join("runtime", "generated"),
 		"publish",
 		"downloads",
-		"sub",
 	} {
 		require.NoError(t, os.MkdirAll(filepath.Join(baseDir, dir), 0o750))
 	}
@@ -186,6 +186,24 @@ func TestDoctorMetadataAllowsMissingGeneratedComponentDirs(t *testing.T) {
 	addDoctorMetadataIssues(&report, cfg, 0, 0, false)
 
 	require.Empty(t, report.Issues)
+}
+
+// TestDoctorUnitIssuesIgnoreSubService 验证 psctl doctor 不检查 pssub 独立管理的 service。
+func TestDoctorUnitIssuesIgnoreSubService(t *testing.T) {
+	unitDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(unitDir, systemd.XrayUnitTemplate), []byte("xray"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(unitDir, systemd.ClashUnitTemplate), []byte("clash"), 0o644))
+	oldUnitDir := doctorSystemdUnitDir
+	doctorSystemdUnitDir = unitDir
+	t.Cleanup(func() {
+		doctorSystemdUnitDir = oldUnitDir
+	})
+	report := doctorReport{}
+
+	addDoctorUnitIssues(&report)
+
+	require.Empty(t, report.Issues)
+	require.Contains(t, strings.Join(report.Checks, "\n"), "systemd units checked")
 }
 
 // TestAddDoctorOwnerIssueReportsMismatch 验证 doctor 会报告标准路径 owner 不匹配。

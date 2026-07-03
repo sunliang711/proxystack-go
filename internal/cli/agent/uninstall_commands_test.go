@@ -16,6 +16,7 @@ import (
 type fakeUninstallManager struct {
 	serviceFiles []string
 	target       string
+	started      []string
 	stopped      []string
 	calls        []string
 	active       map[string]bool
@@ -35,8 +36,10 @@ func (f *fakeUninstallManager) UninstallUnits(config domain.GlobalConfig, target
 	return f.serviceFiles, nil
 }
 
-// Start 满足 service.Manager 接口，uninstall 测试不会调用。
+// Start 记录生命周期测试中的启动服务请求。
 func (f *fakeUninstallManager) Start(ctx context.Context, services []string) error {
+	f.calls = append(f.calls, "start")
+	f.started = append([]string(nil), services...)
 	return nil
 }
 

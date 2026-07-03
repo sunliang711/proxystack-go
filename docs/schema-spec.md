@@ -234,6 +234,33 @@ user_refs:
 
 同一个 inbound 内 `user_refs` 不能与旧 `user` / `users` 同时配置。
 
+### 4.4.2 `display_template` 模板语法
+
+`display_template` 使用 Go `text/template` 语法，适用于 `xrelay.inbounds[].display_template`、`xrelay.inbounds[].users[].display_template`、`config.yaml users[].display_template` 和 `xrelay.inbounds[].user_refs[].display_template`。
+
+支持变量：
+
+| 变量 | 说明 |
+| --- | --- |
+| `.stack` | stack 名 |
+| `.inbound` | inbound 名 |
+| `.protocol` | inbound 协议 |
+| `.port` | inbound 端口 |
+| `.user` | 订阅用户 |
+| `.profile` | 订阅用户档案名；空值按 `default` 处理 |
+| `.remark` | 基础备注；显式 `remark` 非空时使用 `remark`，否则使用 inbound 名 |
+
+支持函数：
+
+| 函数 | 说明 | 示例 |
+| --- | --- | --- |
+| `toUpper` | 转为大写 | `{{ .stack | toUpper }}` |
+| `toLower` | 转为小写 | `{{ .protocol | toLower }}` |
+| `trim` | 去除首尾空白 | `{{ .remark | trim }}` |
+| `replace` | 替换全部匹配文本，参数为旧值、新值、输入值 | `{{ .remark | replace " " "-" }}` |
+
+模板渲染结果会自动 trim；语法错误、未知变量或渲染后为空时配置校验/订阅生成失败。
+
 ### 4.5 Outbound
 
 | 字段 | 类型 | 必填 | 说明 |

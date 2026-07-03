@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/domain"
@@ -129,9 +130,13 @@ func runLifecycle(command *cobra.Command, action string, target string, follow b
 	if err != nil {
 		return err
 	}
-	services := manager.ServicesForNodes(plan.Scope.Nodes)
+	serviceNodes := plan.Scope.Nodes
+	if len(serviceNodes) == 0 && shouldUseHistoricalServices(action) {
+		serviceNodes = explicitLifecycleServiceNodes(plan.StackSet, target)
+	}
+	services := manager.ServicesForNodes(serviceNodes)
 	if shouldPrintServicePlan(action) {
-		printServicePlan(command, action, target, plan.Scope.Nodes, services)
+		printServicePlan(command, action, target, serviceNodes, services)
 	} else if len(services) == 0 {
 		printNoServicesMatched(command, target)
 	}
@@ -174,7 +179,7 @@ func newServiceActionCommand(action string) *cobra.Command {
 				return err
 			}
 			target := optionalArg(args)
-			scope, services, err := resolveServiceTargets(configPath, target, manager)
+			scope, services, err := resolveServiceTargets(configPath, target, manager, shouldUseHistoricalServices(action))
 			if err != nil {
 				return err
 			}
@@ -197,7 +202,7 @@ func newServiceActionCommand(action string) *cobra.Command {
 }
 
 // resolveServiceTargets 只解析 target 到 stack 服务节点和服务名称，不生成或写入 runtime 文件。
-func resolveServiceTargets(configPath string, target string, manager servicemanager.Manager) (graph.TargetScope, []string, error) {
+func resolveServiceTargets(configPath string, target string, manager servicemanager.Manager, includeHistorical bool) (graph.TargetScope, []string, error) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return graph.TargetScope{}, nil, err
@@ -214,12 +219,15 @@ func resolveServiceTargets(configPath string, target string, manager servicemana
 	if err != nil {
 		return graph.TargetScope{}, nil, err
 	}
+	if len(scope.Nodes) == 0 && includeHistorical {
+		scope.Nodes = explicitLifecycleServiceNodes(stackSet, target)
+	}
 	return scope, manager.ServicesForNodes(scope.Nodes), nil
 }
 
 // resolveServiceNames 只解析 target 到服务名称，不生成或写入 runtime 文件。
 func resolveServiceNames(configPath string, target string, manager servicemanager.Manager) ([]string, error) {
-	_, services, err := resolveServiceTargets(configPath, target, manager)
+	_, services, err := resolveServiceTargets(configPath, target, manager, false)
 	return services, err
 }
 
@@ -282,6 +290,45 @@ func shouldPrintServicePlan(action string) bool {
 	}
 }
 
+// shouldUseHistoricalServices 判断当前动作是否应允许显式 target 操作已从 enabled 图中消失的历史 unit。
+func shouldUseHistoricalServices(action string) bool {
+	switch action {
+	case "stop", "status", "logs", "disable":
+		return true
+	default:
+		return false
+	}
+}
+
+// explicitLifecycleServiceNodes 为显式 target 推导当前配置中仍有意义的历史服务节点。
+func explicitLifecycleServiceNodes(stackSet domain.StackSet, target string) []graph.ServiceNode {
+	if target == "" {
+		return nil
+	}
+	component := ""
+	stackName := target
+	if strings.HasPrefix(target, "xrelay/") || strings.HasPrefix(target, "clash/") {
+		parts := strings.SplitN(target, "/", 2)
+		component = parts[0]
+		stackName = parts[1]
+	}
+	stack, ok := stackSet.ByName()[stackName]
+	if !ok {
+		return nil
+	}
+	if component != "" {
+		return []graph.ServiceNode{{Stack: stackName, Component: component}}
+	}
+	nodes := make([]graph.ServiceNode, 0, 2)
+	if stack.Xrelay.Enabled {
+		nodes = append(nodes, graph.ServiceNode{Stack: stackName, Component: "xrelay"})
+	}
+	if stack.Clash.Enabled {
+		nodes = append(nodes, graph.ServiceNode{Stack: stackName, Component: "clash"})
+	}
+	return nodes
+}
+
 // printServicePlan 输出生命周期动作即将操作的 stack 组件和底层服务名。
 func printServicePlan(command *cobra.Command, action string, target string, nodes []graph.ServiceNode, services []string) {
 	writer := command.OutOrStdout()
@@ -301,7 +348,7 @@ func printServicePlan(command *cobra.Command, action string, target string, node
 
 // printNoServicesMatched 输出 target 未匹配任何启用服务的提示。
 func printNoServicesMatched(command *cobra.Command, target string) {
-	fmt.Fprintf(command.OutOrStdout(), "No services matched target: %s\n", serviceTargetLabel(target))
+	fmt.Fprintf(command.OutOrStdout(), "No enabled services matched target: %s\n", serviceTargetLabel(target))
 }
 
 // serviceTargetLabel 返回适合 CLI 展示的 target 名称。

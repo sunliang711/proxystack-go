@@ -155,6 +155,16 @@ func AddStack(options AddOptions) error {
 
 // BuildAddStackCandidate 基于模板生成 add 的候选 stack 内容，供交互编辑前预览和校验。
 func BuildAddStackCandidate(options AddOptions) (StackCandidate, error) {
+	return buildAddStackCandidate(options, true)
+}
+
+// BuildAddStackDraftCandidate 基于模板生成可编辑草稿，允许初始模板等待用户补齐后再校验。
+func BuildAddStackDraftCandidate(options AddOptions) (StackCandidate, error) {
+	return buildAddStackCandidate(options, false)
+}
+
+// buildAddStackCandidate 统一生成 add 候选内容，并按调用场景决定是否立即执行完整校验。
+func buildAddStackCandidate(options AddOptions, validate bool) (StackCandidate, error) {
 	cfg, stackSet, err := loadConfigAndStacks(options.ConfigPath)
 	if err != nil {
 		return StackCandidate{}, err
@@ -166,10 +176,18 @@ func BuildAddStackCandidate(options AddOptions) (StackCandidate, error) {
 	if err != nil {
 		return StackCandidate{}, err
 	}
+	if options.FromFile == "" {
+		if err := applyConfigUserProfileToTemplateRefs(document.root, cfg.Users); err != nil {
+			return StackCandidate{}, err
+		}
+	}
 	if options.AllocatePorts && !options.KeepTemplatePorts {
 		if err := allocateStackDocumentPorts(document, stackSet); err != nil {
 			return StackCandidate{}, err
 		}
+	}
+	if !validate {
+		return rawStackCandidateFromDocument(cfg, options.Name, document, 0o640)
 	}
 	return stackCandidateFromDocument(cfg, stackSet, options.Name, document, 0o640)
 }

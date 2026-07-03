@@ -60,7 +60,7 @@ func newAddCommand() *cobra.Command {
 					return err
 				}
 			} else {
-				if err := editNewStackCandidate(configPath, agentconfig.BuildAddStackCandidate, options, editor); err != nil {
+				if err := editNewStackCandidate(configPath, agentconfig.BuildAddStackDraftCandidate, options, editor); err != nil {
 					return err
 				}
 			}

@@ -154,6 +154,36 @@ func TestAddStackUsesReferenceTemplateFormat(t *testing.T) {
 	require.NotEqual(t, "11111111-1111-4111-8111-111111111111", globalConfig.Users[0].UUID)
 }
 
+// TestAddStackPrefillsFirstConfigUserProfile 验证 add 模板引用 config.yaml 中的第一个用户档案。
+func TestAddStackPrefillsFirstConfigUserProfile(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "config.yaml")
+	require.NoError(t, InitProject(InitOptions{BaseDir: baseDir, ExternalHost: "proxy.example.com"}))
+	data, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	data = bytes.Replace(data, []byte("- user: user1"), []byte("- user: alice"), 1)
+	data = bytes.Replace(data, []byte("profile: default"), []byte("profile: mobile"), 1)
+	require.NoError(t, os.WriteFile(configPath, data, 0o640))
+
+	require.NoError(t, AddStack(AddOptions{ConfigPath: configPath, Name: "edge1", Template: "pair", KeepTemplatePorts: true}))
+
+	stack, err := config.LoadStack(filepath.Join(baseDir, "stacks", "edge1.yaml"))
+	require.NoError(t, err)
+	require.Equal(t, "alice", stack.Xray.Inbounds[1].UserRefs[0].User)
+	require.Equal(t, "mobile", stack.Xray.Inbounds[1].UserRefs[0].Profile)
+}
+
+// TestAddStackRequiresConfigUsers 验证内置模板不会假设 user1，缺少全局用户时直接提示先配置。
+func TestAddStackRequiresConfigUsers(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := writeConfigWithoutUsers(t, baseDir)
+
+	err := AddStack(AddOptions{ConfigPath: configPath, Name: "edge1", Template: "pair", KeepTemplatePorts: true})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "config users is required")
+}
+
 // TestAddStackUsesSharedSnippetComments 验证 add 模板会展开 example 共用的注释片段。
 func TestAddStackUsesSharedSnippetComments(t *testing.T) {
 	baseDir := t.TempDir()
@@ -241,4 +271,21 @@ func TestRemoveStackArchivesFile(t *testing.T) {
 	_, err := os.Stat(filepath.Join(baseDir, "stacks", "usa1.yaml"))
 	require.True(t, os.IsNotExist(err))
 	require.FileExists(t, filepath.Join(baseDir, "stacks", "usa1.yaml.removed"))
+}
+
+// writeConfigWithoutUsers 写入不包含 users 的最小 agent 配置，用于 add 前置校验测试。
+func writeConfigWithoutUsers(t *testing.T, baseDir string) string {
+	t.Helper()
+	configPath := filepath.Join(baseDir, "config.yaml")
+	require.NoError(t, os.MkdirAll(baseDir, 0o750))
+	require.NoError(t, os.WriteFile(configPath, []byte(`version: 1
+external_host: proxy.example.com
+port_ranges:
+  xray_inbound: 4300-4399
+  clash_socks: 7001-7101
+  clash_http: 7201-7301
+  xray_api_range: 10001-10999
+  clash_controller: 19000-19999
+`), 0o640))
+	return configPath
 }

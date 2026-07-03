@@ -107,6 +107,33 @@ func TestAgentAddDefaultsToEditor(t *testing.T) {
 	require.NoFileExists(t, stackPath+".draft")
 }
 
+// TestAgentAddValidatesDraftAfterEditor 验证 add 先打开预填草稿，再在用户保存后执行完整校验。
+func TestAgentAddValidatesDraftAfterEditor(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "config.yaml")
+	require.NoError(t, agentconfig.InitProject(agentconfig.InitOptions{BaseDir: baseDir, ExternalHost: "proxy.example.com"}))
+	configData, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	configData = bytes.Replace(configData, []byte("    uuid: "), []byte("    # uuid: "), 1)
+	require.NoError(t, os.WriteFile(configPath, configData, 0o640))
+	markerPath := filepath.Join(t.TempDir(), "editor-called.txt")
+	editorPath := writeEditorScript(t, "printf '%s' \"$1\" > \""+markerPath+"\"\n")
+
+	_, err = runAgentCommandForTestError("--base-dir", baseDir, "add", "usa1", "--editor", editorPath)
+
+	stackPath := filepath.Join(baseDir, "stacks", "usa1.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "uuid is required for vmess user_ref")
+	require.Contains(t, err.Error(), "draft preserved: "+stackPath+".draft")
+	editedPathBytes, readErr := os.ReadFile(markerPath)
+	require.NoError(t, readErr)
+	require.Equal(t, stackPath+".draft", string(editedPathBytes))
+	require.NoFileExists(t, stackPath)
+	draft, readErr := os.ReadFile(stackPath + ".draft")
+	require.NoError(t, readErr)
+	require.Contains(t, string(draft), "user: user1")
+}
+
 // TestAgentAddNoEditSkipsEditor 验证 add --no-edit 保持脚本化写入，不打开编辑器。
 func TestAgentAddNoEditSkipsEditor(t *testing.T) {
 	baseDir := t.TempDir()

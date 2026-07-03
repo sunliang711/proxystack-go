@@ -15,6 +15,7 @@ import (
 )
 
 const templateVmessUUIDPlaceholder = "11111111-1111-4111-8111-111111111111"
+const templateDefaultUserRefUser = "user1"
 
 // stackTemplateFiles 保存带片段 include 指令的内置 stack 模板。
 //
@@ -57,6 +58,58 @@ func buildStackDocument(options AddOptions) (*stackDocument, error) {
 		setMappingBool(document.root, "enabled", false)
 	}
 	return document, nil
+}
+
+// applyConfigUserProfileToTemplateRefs 将内置模板中的默认 user_refs 改写为配置中的第一个用户档案。
+func applyConfigUserProfileToTemplateRefs(root *yaml.Node, users []domain.UserProfile) error {
+	if len(users) == 0 {
+		return fmt.Errorf("config users is required before adding a stack; run `psctl config` and add at least one users entry")
+	}
+	xray := mappingValue(root, "xray")
+	if xray == nil || xray.Kind != yaml.MappingNode {
+		return nil
+	}
+	inbounds := mappingValue(xray, "inbounds")
+	if inbounds == nil || inbounds.Kind != yaml.SequenceNode {
+		return nil
+	}
+	userProfile := users[0]
+	for _, inbound := range inbounds.Content {
+		if inbound.Kind != yaml.MappingNode {
+			continue
+		}
+		rewriteTemplateUserRefs(mappingValue(inbound, "user_refs"), userProfile)
+	}
+	return nil
+}
+
+// rewriteTemplateUserRefs 改写单个 user_refs 列表中来自内置模板的默认用户引用。
+func rewriteTemplateUserRefs(userRefs *yaml.Node, userProfile domain.UserProfile) {
+	if userRefs == nil || userRefs.Kind != yaml.SequenceNode {
+		return
+	}
+	profile := domain.NormalizeUserProfile(userProfile.Profile)
+	for index, item := range userRefs.Content {
+		switch item.Kind {
+		case yaml.ScalarNode:
+			if item.Value != templateDefaultUserRefUser {
+				continue
+			}
+			userRefs.Content[index] = mappingNode(
+				"user", scalarNode(userProfile.User),
+				"profile", scalarNode(profile),
+			)
+		case yaml.MappingNode:
+			if scalarValue(mappingValue(item, "user")) != templateDefaultUserRefUser {
+				continue
+			}
+			if domain.NormalizeUserProfile(scalarValue(mappingValue(item, "profile"))) != domain.DefaultUserProfile {
+				continue
+			}
+			setMappingScalar(item, "user", userProfile.User)
+			setMappingScalar(item, "profile", profile)
+		}
+	}
 }
 
 // loadStackDocumentFromFile 读取外部 stack YAML，并按 Python 版规则拒绝隐式改名。
@@ -154,6 +207,16 @@ func stackCandidateFromDocument(cfg domain.GlobalConfig, stackSet domain.StackSe
 	if err := validation.ValidateStackSet(nextStackSet, validation.WithPortChecker(validation.NoopPortChecker{})); err != nil {
 		return StackCandidate{}, err
 	}
+	data, err := stackDocumentData(document)
+	if err != nil {
+		return StackCandidate{}, err
+	}
+	return StackCandidate{Name: name, Path: stackPath, Data: data, Mode: mode}, nil
+}
+
+// rawStackCandidateFromDocument 编码未最终校验的 add 草稿，适用于交互编辑前的初始内容。
+func rawStackCandidateFromDocument(cfg domain.GlobalConfig, name string, document *stackDocument, mode os.FileMode) (StackCandidate, error) {
+	stackPath := filepath.Join(cfg.StacksDir(), name+".yaml")
 	data, err := stackDocumentData(document)
 	if err != nil {
 		return StackCandidate{}, err

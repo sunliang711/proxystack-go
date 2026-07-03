@@ -445,7 +445,7 @@ install_release_binaries() {
 	local repo_name="${1:-}"
 	local version_value="${2:-}"
 	local bin_dir="${3:-}"
-	local os_name arch_name asset_name display_version temp_dir archive_path checksums_path archive_url checksums_url sub_binary
+	local os_name arch_name asset_name display_version download_version temp_dir archive_path checksums_path archive_url checksums_url sub_binary
 
 	validate_release_repo "${repo_name}"
 	version_value="$(normalize_release_version "${version_value}")"
@@ -459,16 +459,18 @@ install_release_binaries() {
 		temp_dir="$(mktemp -d)"
 	fi
 	display_version="${version_value}"
+	download_version="${version_value}"
 	if [[ "${version_value}" == "latest" && "${DRY_RUN}" != "1" ]]; then
 		display_version="$(resolve_latest_release_version "${repo_name}" "${temp_dir}")"
+		download_version="${display_version}"
 	fi
 	asset_name="$(release_asset_name "${version_value}" "${os_name}" "${arch_name}")"
 	log "Download release: ${repo_name} ${display_version} ${os_name}/${arch_name}"
 	log "Download asset: ${asset_name}"
 	archive_path="${temp_dir}/${asset_name}"
 	checksums_path="${temp_dir}/SHA256SUMS"
-	archive_url="$(release_download_url "${repo_name}" "${version_value}" "${asset_name}")"
-	checksums_url="$(release_download_url "${repo_name}" "${version_value}" "SHA256SUMS")"
+	archive_url="$(release_download_url "${repo_name}" "${download_version}" "${asset_name}")"
+	checksums_url="$(release_download_url "${repo_name}" "${download_version}" "SHA256SUMS")"
 	download_file "${archive_url}" "${archive_path}"
 	download_file "${checksums_url}" "${checksums_path}"
 	verify_release_checksum "${temp_dir}" "${checksums_path}" "${asset_name}"

@@ -37,6 +37,7 @@ func newInitCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			printNonRootLinuxInitGroupHint(command.OutOrStdout(), baseDir)
 			if err := ensureServiceAccountForInit(context.Background(), baseDir); err != nil {
 				return err
 			}

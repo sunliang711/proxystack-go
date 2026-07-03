@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"runtime"
@@ -17,10 +18,15 @@ import (
 var serviceAccountRunner systemd.Runner = systemd.CommandRunner{}
 var serviceAccountOwnerIDsFunc = serviceAccountOwnerIDs
 var repairServiceMetadataFunc = repairServiceMetadata
+var serviceAccountGOOSFunc = func() string { return runtime.GOOS }
+var serviceAccountEUIDFunc = os.Geteuid
+var serviceAccountGIDFunc = os.Getgid
+var serviceAccountGroupsFunc = os.Getgroups
+var serviceAccountLookupGroupFunc = user.LookupGroup
 
 // ensureServiceAccountForInit 在 Linux root 初始化时幂等创建 systemd unit 使用的运行用户和组。
 func ensureServiceAccountForInit(ctx context.Context, baseDir string) error {
-	if runtime.GOOS != "linux" || os.Geteuid() != 0 {
+	if serviceAccountGOOSFunc() != "linux" || serviceAccountEUIDFunc() != 0 {
 		return nil
 	}
 	return ensureLinuxServiceAccount(ctx, serviceAccountRunner, baseDir)
@@ -92,7 +98,7 @@ func serviceAccountCommandOutput(result systemd.Result) string {
 
 // repairServiceMetadata 在 Linux root 操作后修复标准路径 owner 和 mode。
 func repairServiceMetadata(config domain.GlobalConfig) error {
-	if runtime.GOOS != "linux" || os.Geteuid() != 0 {
+	if serviceAccountGOOSFunc() != "linux" || serviceAccountEUIDFunc() != 0 {
 		return nil
 	}
 	uid, gid, err := serviceAccountOwnerIDsFunc()
@@ -109,6 +115,47 @@ func repairServiceMetadataForConfigPath(configPath string) error {
 		return err
 	}
 	return repairServiceMetadataFunc(cfg)
+}
+
+// printNonRootLinuxInitGroupHint 在 Linux 非 root 初始化时提示用户加入服务组。
+func printNonRootLinuxInitGroupHint(writer io.Writer, baseDir string) {
+	if serviceAccountGOOSFunc() != "linux" || serviceAccountEUIDFunc() == 0 {
+		return
+	}
+	inGroup, err := currentProcessInServiceGroup()
+	if err == nil && inGroup {
+		return
+	}
+	if err != nil {
+		fmt.Fprintf(writer, "Hint: non-root Linux init cannot create or verify the %s group. Run `sudo psctl init` once, or add your user after the group exists:\n  sudo usermod -aG %s \"$USER\"\nThen log in again, or run `newgrp %s` for the current shell.\n", systemd.DefaultServiceGroup, systemd.DefaultServiceGroup, systemd.DefaultServiceGroup)
+		return
+	}
+	fmt.Fprintf(writer, "Hint: add your user to the %s group so non-root psctl commands can read %s:\n  sudo usermod -aG %s \"$USER\"\nThen log in again, or run `newgrp %s` for the current shell.\n", systemd.DefaultServiceGroup, baseDir, systemd.DefaultServiceGroup, systemd.DefaultServiceGroup)
+}
+
+// currentProcessInServiceGroup 检查当前进程所属组是否包含 proxystack 服务组。
+func currentProcessInServiceGroup() (bool, error) {
+	serviceGroup, err := serviceAccountLookupGroupFunc(systemd.DefaultServiceGroup)
+	if err != nil {
+		return false, err
+	}
+	gid, err := strconv.Atoi(serviceGroup.Gid)
+	if err != nil {
+		return false, fmt.Errorf("service group %s has invalid gid %q: %w", systemd.DefaultServiceGroup, serviceGroup.Gid, err)
+	}
+	if serviceAccountGIDFunc() == gid {
+		return true, nil
+	}
+	groups, err := serviceAccountGroupsFunc()
+	if err != nil {
+		return false, err
+	}
+	for _, groupID := range groups {
+		if groupID == gid {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // serviceAccountOwnerIDs 解析 proxystack 运行用户和组的数字 ID。

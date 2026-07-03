@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/eagle/proxystack-go/internal/diagnostics"
 	"github.com/eagle/proxystack-go/internal/domain"
 	"github.com/stretchr/testify/require"
 )
@@ -31,6 +33,73 @@ func TestIPInfoCommandIsRegistered(t *testing.T) {
 	require.Contains(t, output.String(), "ipinfo STACK")
 	require.Contains(t, output.String(), "--family")
 	require.Contains(t, output.String(), "--timeout")
+}
+
+// TestIPInfoProgressRendererRewritesInteractiveLines 验证交互式 ipinfo 状态会原地替换完成的 family 行。
+func TestIPInfoProgressRendererRewritesInteractiveLines(t *testing.T) {
+	var output bytes.Buffer
+	renderer := newIPInfoStatusRenderer(&output, true)
+
+	renderer.Handle(diagnostics.IPInfoProgress{State: diagnostics.IPInfoProgressDetecting, Family: "ipv4", Label: "IPv4"})
+	renderer.Handle(diagnostics.IPInfoProgress{State: diagnostics.IPInfoProgressDetecting, Family: "ipv6", Label: "IPv6"})
+	renderer.Handle(diagnostics.IPInfoProgress{
+		State:  diagnostics.IPInfoProgressDone,
+		Family: "ipv6",
+		Label:  "IPv6",
+		Result: diagnostics.FamilyResult{Family: "ipv6", Label: "IPv6", IP: "2607:8700:5501:4b6b::2"},
+	})
+	renderer.Handle(diagnostics.IPInfoProgress{
+		State:  diagnostics.IPInfoProgressDone,
+		Family: "ipv4",
+		Label:  "IPv4",
+		Result: diagnostics.FamilyResult{Family: "ipv4", Label: "IPv4", IP: "104.194.66.220", Region: "Los Angeles / California / US / AS25820 IT7 Networks Inc"},
+	})
+
+	text := output.String()
+	require.Contains(t, text, "IPv4  Detecting ...\n\nIPv6  Detecting ...\n\n")
+	require.Contains(t, text, "\x1b[2A\r\x1b[2KIPv6  2607:8700:5501:4b6b::2\n\r\x1b[2K      Region unknown\x1b[1B\r")
+	require.Contains(t, text, "\x1b[4A\r\x1b[2KIPv4  104.194.66.220\n\r\x1b[2K      Los Angeles, California, US · AS25820 IT7 Networks Inc\x1b[3B\r")
+}
+
+// TestIPInfoCommandNonTTYOutputDoesNotContainANSI 验证非 TTY 输出使用普通报告且不包含 ANSI 控制字符。
+func TestIPInfoCommandNonTTYOutputDoesNotContainANSI(t *testing.T) {
+	originalQueryIPInfo := queryIPInfo
+	t.Cleanup(func() { queryIPInfo = originalQueryIPInfo })
+	queryIPInfo = func(ctx context.Context, options diagnostics.QueryOptions) (diagnostics.IpInfoReport, error) {
+		require.Nil(t, options.LineCallback)
+		require.Nil(t, options.ProgressCallback)
+		return diagnostics.IpInfoReport{
+			StackName: options.StackName,
+			ProxyURL:  "socks5://127.0.0.1:17091",
+			Families: []diagnostics.FamilyResult{
+				{Family: "ipv4", Label: "IPv4", IP: "198.51.100.10", Region: "Tokyo / JP"},
+				{Family: "ipv6", Label: "IPv6", IP: "2001:db8::10", Region: "Singapore / SG"},
+			},
+		}, nil
+	}
+	command := NewRootCommand()
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetErr(&output)
+	command.SetArgs([]string{"--base-dir", t.TempDir(), "ipinfo", "usa1", "--family", "all"})
+
+	err := command.Execute()
+
+	require.NoError(t, err)
+	text := output.String()
+	require.NotContains(t, text, "\x1b[")
+	require.Contains(t, text, "Stack: usa1")
+	require.Contains(t, text, "IP: 198.51.100.10")
+	require.Contains(t, text, "IP: 2001:db8::10")
+}
+
+// TestIPInfoInteractiveOutputRejectsDevNull 验证 character device 但非 TTY 的输出不会启用 ANSI 刷新。
+func TestIPInfoInteractiveOutputRejectsDevNull(t *testing.T) {
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	require.NoError(t, err)
+	defer devNull.Close()
+
+	require.False(t, shouldUseIPInfoInteractiveOutput(devNull))
 }
 
 // TestDoctorCommandIsRegistered 验证 psctl 命令树包含 doctor 诊断入口。

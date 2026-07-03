@@ -3,19 +3,24 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/diagnostics"
 	"github.com/eagle/proxystack-go/internal/domain"
 	"github.com/eagle/proxystack-go/internal/systemd"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
+
+var queryIPInfo = diagnostics.QueryIPInfo
 
 // newDoctorCommand 创建本机 agent 环境只读诊断命令。
 func newDoctorCommand() *cobra.Command {
@@ -236,23 +241,156 @@ func newIPInfoCommand() *cobra.Command {
 		Short: "Query outbound IP through a stack mihomo socks listener",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			configPath, err := agentConfigPath(command)
-			if err != nil {
-				return err
-			}
-			_, err = diagnostics.QueryIPInfo(command.Context(), diagnostics.QueryOptions{
-				ConfigPath: configPath,
-				StackName:  args[0],
-				Family:     family,
-				Timeout:    timeout,
-				LineCallback: func(line string) {
-					fmt.Fprintln(command.OutOrStdout(), line)
-				},
-			})
-			return err
+			return runIPInfoCommand(command, args[0], family, timeout)
 		},
 	}
 	command.Flags().StringVar(&family, "family", "all", "IP family: all, ipv4, ipv6")
 	command.Flags().Float64Var(&timeout, "timeout", 8.0, "Per-source curl timeout in seconds")
 	return command
+}
+
+// runIPInfoCommand 执行 ipinfo 查询，并根据输出目标选择交互式状态或普通报告。
+func runIPInfoCommand(command *cobra.Command, stackName string, family string, timeout float64) error {
+	configPath, err := agentConfigPath(command)
+	if err != nil {
+		return err
+	}
+	output := command.OutOrStdout()
+	if shouldUseIPInfoInteractiveOutput(output) {
+		renderer := newIPInfoStatusRenderer(output, true)
+		_, err = queryIPInfo(command.Context(), diagnostics.QueryOptions{
+			ConfigPath:       configPath,
+			StackName:        stackName,
+			Family:           family,
+			Timeout:          timeout,
+			ProgressCallback: renderer.Handle,
+		})
+		return err
+	}
+	report, err := queryIPInfo(command.Context(), diagnostics.QueryOptions{
+		ConfigPath: configPath,
+		StackName:  stackName,
+		Family:     family,
+		Timeout:    timeout,
+	})
+	if err != nil {
+		return err
+	}
+	for _, line := range diagnostics.FormatIPInfoReport(report) {
+		fmt.Fprintln(output, line)
+	}
+	return nil
+}
+
+// shouldUseIPInfoInteractiveOutput 判断输出目标是否支持 ANSI 原地刷新。
+func shouldUseIPInfoInteractiveOutput(writer io.Writer) bool {
+	file, ok := writer.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0 && isatty.IsTerminal(file.Fd())
+}
+
+type ipInfoStatusRenderer struct {
+	writer      io.Writer
+	interactive bool
+	rows        []string
+	rowByFamily map[string]int
+}
+
+// newIPInfoStatusRenderer 创建 ipinfo family 状态渲染器。
+func newIPInfoStatusRenderer(writer io.Writer, interactive bool) *ipInfoStatusRenderer {
+	return &ipInfoStatusRenderer{
+		writer:      writer,
+		interactive: interactive,
+		rows:        make([]string, 0, 2),
+		rowByFamily: map[string]int{},
+	}
+}
+
+// Handle 根据进度事件新增或替换对应 family 的固定两行状态块。
+func (r *ipInfoStatusRenderer) Handle(progress diagnostics.IPInfoProgress) {
+	block := formatIPInfoProgressBlock(progress)
+	rowIndex, exists := r.rowByFamily[progress.Family]
+	if !exists {
+		r.rowByFamily[progress.Family] = len(r.rows)
+		r.rows = append(r.rows, block[0], block[1])
+		fmt.Fprintln(r.writer, block[0])
+		fmt.Fprintln(r.writer, block[1])
+		return
+	}
+	r.rows[rowIndex] = block[0]
+	r.rows[rowIndex+1] = block[1]
+	if !r.interactive {
+		fmt.Fprintln(r.writer, block[0])
+		fmt.Fprintln(r.writer, block[1])
+		return
+	}
+	linesUp := len(r.rows) - rowIndex
+	fmt.Fprintf(r.writer, "\x1b[%dA\r\x1b[2K%s\n\r\x1b[2K%s\x1b[%dB\r", linesUp, block[0], block[1], linesUp-1)
+}
+
+// formatIPInfoProgressBlock 格式化一个 family 的固定两行检测状态。
+func formatIPInfoProgressBlock(progress diagnostics.IPInfoProgress) [2]string {
+	label := progress.Label
+	if label == "" {
+		label = progress.Family
+	}
+	indent := strings.Repeat(" ", len(label)+2)
+	if progress.State == diagnostics.IPInfoProgressDetecting {
+		return [2]string{fmt.Sprintf("%s  Detecting ...", label), ""}
+	}
+	if progress.Err != nil {
+		return [2]string{fmt.Sprintf("%s  Failed", label), indent + progress.Err.Error()}
+	}
+	result := progress.Result
+	if result.Label == "" {
+		result.Label = label
+	}
+	if result.Family == "" {
+		result.Family = progress.Family
+	}
+	return [2]string{
+		fmt.Sprintf("%s  %s", result.Label, firstNonEmptyString(result.IP, "IP not resolved")),
+		indent + formatIPInfoRegionSummary(result.Region),
+	}
+}
+
+// formatIPInfoRegionSummary 将来源解析出的地区字段压缩成适合状态块展示的一行。
+func formatIPInfoRegionSummary(region string) string {
+	parts := make([]string, 0)
+	for _, part := range strings.Split(region, "/") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) == 0 {
+		return "Region unknown"
+	}
+	for index, part := range parts {
+		if strings.HasPrefix(part, "AS") {
+			location := strings.Join(parts[:index], ", ")
+			asn := strings.Join(parts[index:], " / ")
+			if location == "" {
+				return asn
+			}
+			return location + " · " + asn
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// firstNonEmptyString 返回第一段非空字符串。
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

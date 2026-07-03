@@ -2,9 +2,12 @@ package diagnostics
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/eagle/proxystack-go/internal/domain"
 	"github.com/stretchr/testify/require"
@@ -43,8 +46,11 @@ func TestQueryIPInfoUsesStackClashSocksListener(t *testing.T) {
 func TestQueryIPInfoUsesDefaultSourcesByFamily(t *testing.T) {
 	configPath := writeIPInfoFixture(t, "127.0.0.1")
 	calls := make([][]string, 0)
+	var callsMu sync.Mutex
 	fakeCurl := func(ctx context.Context, proxyURL string, url string, family string, timeout float64) (CurlResult, error) {
+		callsMu.Lock()
 		calls = append(calls, []string{family, url})
+		callsMu.Unlock()
 		if family == "ipv4" {
 			return CurlResult{ReturnCode: 0, Stdout: `{"ip": "198.51.100.10"}`}, nil
 		}
@@ -55,12 +61,126 @@ func TestQueryIPInfoUsesDefaultSourcesByFamily(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, []string{"ipv4", "ipv6"}, []string{report.Families[0].Family, report.Families[1].Family})
-	require.Equal(t, [][]string{
+	callsMu.Lock()
+	recordedCalls := append([][]string(nil), calls...)
+	callsMu.Unlock()
+	require.ElementsMatch(t, [][]string{
 		{"ipv4", "https://ipinfo.io/json"},
 		{"ipv6", "https://ifconfig.me/all.json"},
-	}, calls)
+	}, recordedCalls)
 	require.NotContains(t, SourcesForFamily("ipv4", nil), "https://ifconfig.me/all.json")
 	require.NotContains(t, SourcesForFamily("ipv6", nil), "https://ipinfo.io/json")
+}
+
+// TestQueryIPInfoQueriesAllFamiliesConcurrently 验证 all 模式会并发启动 IPv4 和 IPv6 查询。
+func TestQueryIPInfoQueriesAllFamiliesConcurrently(t *testing.T) {
+	configPath := writeIPInfoFixture(t, "127.0.0.1")
+	started := make(chan string, 2)
+	release := make(chan struct{})
+	released := false
+	defer func() {
+		if !released {
+			close(release)
+		}
+	}()
+	fakeCurl := func(ctx context.Context, proxyURL string, url string, family string, timeout float64) (CurlResult, error) {
+		started <- family
+		<-release
+		if family == "ipv4" {
+			return CurlResult{ReturnCode: 0, Stdout: `{"ip": "198.51.100.10"}`}, nil
+		}
+		return CurlResult{ReturnCode: 0, Stdout: `{"ip": "2001:db8::10"}`}, nil
+	}
+	type queryResult struct {
+		report IpInfoReport
+		err    error
+	}
+	done := make(chan queryResult, 1)
+
+	go func() {
+		report, err := QueryIPInfo(context.Background(), QueryOptions{
+			ConfigPath: configPath,
+			StackName:  "usa1",
+			Family:     "all",
+			Sources:    []string{"https://ipinfo.example/json"},
+			CurlRunner: fakeCurl,
+		})
+		done <- queryResult{report: report, err: err}
+	}()
+
+	require.ElementsMatch(t, []string{"ipv4", "ipv6"}, []string{
+		receiveStartedFamily(t, started),
+		receiveStartedFamily(t, started),
+	})
+	released = true
+	close(release)
+
+	select {
+	case result := <-done:
+		require.NoError(t, result.err)
+		require.Equal(t, []string{"ipv4", "ipv6"}, []string{result.report.Families[0].Family, result.report.Families[1].Family})
+		require.Equal(t, "198.51.100.10", result.report.Families[0].IP)
+		require.Equal(t, "2001:db8::10", result.report.Families[1].IP)
+	case <-time.After(time.Second):
+		t.Fatal("ipinfo query did not finish after releasing fake curl")
+	}
+}
+
+// TestQueryIPInfoFamilyErrorDoesNotCancelPeer 验证一个 family 查询错误不会提前取消另一个并发 family。
+func TestQueryIPInfoFamilyErrorDoesNotCancelPeer(t *testing.T) {
+	configPath := writeIPInfoFixture(t, "127.0.0.1")
+	errBoom := errors.New("curl unavailable")
+	started := make(chan string, 2)
+	releaseIPv4 := make(chan struct{})
+	fakeCurl := func(ctx context.Context, proxyURL string, url string, family string, timeout float64) (CurlResult, error) {
+		started <- family
+		if family == "ipv6" {
+			return CurlResult{}, errBoom
+		}
+		select {
+		case <-releaseIPv4:
+			return CurlResult{ReturnCode: 0, Stdout: `{"ip": "198.51.100.10"}`}, nil
+		case <-ctx.Done():
+			return CurlResult{}, ctx.Err()
+		}
+	}
+	type queryResult struct {
+		err error
+	}
+	progresses := make([]IPInfoProgress, 0)
+	done := make(chan queryResult, 1)
+
+	go func() {
+		_, err := QueryIPInfo(context.Background(), QueryOptions{
+			ConfigPath:       configPath,
+			StackName:        "usa1",
+			Family:           "all",
+			Sources:          []string{"https://ipinfo.example/json"},
+			CurlRunner:       fakeCurl,
+			ProgressCallback: func(progress IPInfoProgress) { progresses = append(progresses, progress) },
+		})
+		done <- queryResult{err: err}
+	}()
+
+	require.ElementsMatch(t, []string{"ipv4", "ipv6"}, []string{
+		receiveStartedFamily(t, started),
+		receiveStartedFamily(t, started),
+	})
+	select {
+	case result := <-done:
+		require.Failf(t, "query finished before peer family completed", "err=%v", result.err)
+	default:
+	}
+	close(releaseIPv4)
+
+	select {
+	case result := <-done:
+		require.ErrorIs(t, result.err, errBoom)
+	case <-time.After(time.Second):
+		t.Fatal("ipinfo query did not finish after releasing ipv4")
+	}
+	require.Contains(t, ipInfoDoneProgressSummary(progresses), "ipv4:198.51.100.10")
+	require.Contains(t, ipInfoDoneProgressSummary(progresses), "ipv6:err")
 }
 
 // TestQueryIPInfoTriesNextSourceUntilIPResolved 验证来源失败或 family 不匹配时继续查询，解析到匹配 IP 后停止。
@@ -276,4 +396,32 @@ func stringsHasSuffix(value string, suffix string) bool {
 		return false
 	}
 	return value[len(value)-len(suffix):] == suffix
+}
+
+// receiveStartedFamily 等待 fake curl 启动一个 family 查询。
+func receiveStartedFamily(t *testing.T, started <-chan string) string {
+	t.Helper()
+	select {
+	case family := <-started:
+		return family
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("timed out waiting for concurrent family query")
+		return ""
+	}
+}
+
+// ipInfoDoneProgressSummary 提取完成事件摘要，便于验证并发查询的最终状态。
+func ipInfoDoneProgressSummary(progresses []IPInfoProgress) []string {
+	values := make([]string, 0)
+	for _, progress := range progresses {
+		if progress.State != IPInfoProgressDone {
+			continue
+		}
+		if progress.Err != nil {
+			values = append(values, progress.Family+":err")
+			continue
+		}
+		values = append(values, progress.Family+":"+progress.Result.IP)
+	}
+	return values
 }

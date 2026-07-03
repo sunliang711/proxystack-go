@@ -76,15 +76,36 @@ type CurlRunner func(ctx context.Context, proxyURL string, url string, family st
 // LineCallback 接收渐进式输出的单行文本。
 type LineCallback func(line string)
 
+// IPInfoProgressState 表示单个 IP family 查询的进度状态。
+type IPInfoProgressState string
+
+const (
+	IPInfoProgressDetecting IPInfoProgressState = "detecting"
+	IPInfoProgressDone      IPInfoProgressState = "done"
+)
+
+// IPInfoProgress 保存单个 IP family 的进度事件。
+type IPInfoProgress struct {
+	State  IPInfoProgressState
+	Family string
+	Label  string
+	Result FamilyResult
+	Err    error
+}
+
+// ProgressCallback 接收单个 IP family 查询开始和完成事件。
+type ProgressCallback func(progress IPInfoProgress)
+
 // QueryOptions 保存 ipinfo 查询所需输入。
 type QueryOptions struct {
-	ConfigPath   string
-	StackName    string
-	Family       string
-	Timeout      float64
-	Sources      []string
-	CurlRunner   CurlRunner
-	LineCallback LineCallback
+	ConfigPath       string
+	StackName        string
+	Family           string
+	Timeout          float64
+	Sources          []string
+	CurlRunner       CurlRunner
+	LineCallback     LineCallback
+	ProgressCallback ProgressCallback
 }
 
 // QueryIPInfo 查询指定 stack 的 mihomo 出口 IP，默认同时检查 IPv4 和 IPv6。
@@ -121,23 +142,17 @@ func QueryIPInfo(ctx context.Context, options QueryOptions) (IpInfoReport, error
 	if options.LineCallback != nil {
 		emitLines(options.LineCallback, formatIPInfoHeader(options.StackName, proxyURL))
 	}
-	results := make([]FamilyResult, 0, len(families))
-	for _, queryFamily := range families {
-		if options.LineCallback != nil {
-			options.LineCallback(familyLabels[queryFamily] + ":")
-		}
-		result, err := queryFamilySources(ctx, proxyURL, queryFamily, SourcesForFamily(queryFamily, options.Sources), timeout, runner, options.LineCallback)
-		if err != nil {
-			return IpInfoReport{}, err
-		}
-		results = append(results, result)
-		if options.LineCallback != nil {
-			emitLines(options.LineCallback, formatFamilyFooter(result))
-			options.LineCallback("")
-		}
+	results, err := queryRequestedFamilies(ctx, proxyURL, families, timeout, options.Sources, runner, options.LineCallback, options.ProgressCallback)
+	if err != nil {
+		return IpInfoReport{}, err
 	}
 	report := IpInfoReport{StackName: options.StackName, ProxyURL: proxyURL, Families: results}
 	if options.LineCallback != nil {
+		if len(families) > 1 {
+			for _, result := range results {
+				emitFamilyReportLines(options.LineCallback, result)
+			}
+		}
 		emitLines(options.LineCallback, FormatIPInfoSummary(report))
 	}
 	return report, nil
@@ -262,6 +277,82 @@ func ParseSourceResponse(body string, family string) (string, string, bool) {
 		return "", "", true
 	}
 	return ipValue, extractRegionFromText(strippedBody), false
+}
+
+type familyQueryResponse struct {
+	Index  int
+	Family string
+	Result FamilyResult
+	Err    error
+}
+
+// queryRequestedFamilies 查询请求涉及的 IP family，all 模式下并发查询 IPv4 和 IPv6。
+func queryRequestedFamilies(ctx context.Context, proxyURL string, families []string, timeout float64, overrideSources []string, runner CurlRunner, lineCallback LineCallback, progressCallback ProgressCallback) ([]FamilyResult, error) {
+	if len(families) == 1 {
+		return querySingleFamily(ctx, proxyURL, families[0], timeout, overrideSources, runner, lineCallback, progressCallback)
+	}
+	return queryFamiliesConcurrently(ctx, proxyURL, families, timeout, overrideSources, runner, progressCallback)
+}
+
+// querySingleFamily 保持单 family 内部来源串行 fallback，并保留逐来源流式输出。
+func querySingleFamily(ctx context.Context, proxyURL string, queryFamily string, timeout float64, overrideSources []string, runner CurlRunner, lineCallback LineCallback, progressCallback ProgressCallback) ([]FamilyResult, error) {
+	emitIPInfoProgress(progressCallback, IPInfoProgress{State: IPInfoProgressDetecting, Family: queryFamily, Label: familyLabels[queryFamily]})
+	if lineCallback != nil {
+		lineCallback(familyLabels[queryFamily] + ":")
+	}
+	result, err := queryFamilySources(ctx, proxyURL, queryFamily, SourcesForFamily(queryFamily, overrideSources), timeout, runner, lineCallback)
+	if err != nil {
+		emitIPInfoProgress(progressCallback, IPInfoProgress{State: IPInfoProgressDone, Family: queryFamily, Label: familyLabels[queryFamily], Result: emptyFamilyResult(queryFamily), Err: err})
+		return nil, err
+	}
+	emitIPInfoProgress(progressCallback, IPInfoProgress{State: IPInfoProgressDone, Family: queryFamily, Label: familyLabels[queryFamily], Result: result})
+	if lineCallback != nil {
+		emitLines(lineCallback, formatFamilyFooter(result))
+		lineCallback("")
+	}
+	return []FamilyResult{result}, nil
+}
+
+// queryFamiliesConcurrently 并发查询多个 IP family，并按输入顺序返回结果。
+func queryFamiliesConcurrently(ctx context.Context, proxyURL string, families []string, timeout float64, overrideSources []string, runner CurlRunner, progressCallback ProgressCallback) ([]FamilyResult, error) {
+	results := make([]FamilyResult, len(families))
+	resultCh := make(chan familyQueryResponse, len(families))
+	for index, queryFamily := range families {
+		emitIPInfoProgress(progressCallback, IPInfoProgress{State: IPInfoProgressDetecting, Family: queryFamily, Label: familyLabels[queryFamily]})
+		go func(index int, queryFamily string) {
+			result, err := queryFamilySources(ctx, proxyURL, queryFamily, SourcesForFamily(queryFamily, overrideSources), timeout, runner, nil)
+			resultCh <- familyQueryResponse{Index: index, Family: queryFamily, Result: result, Err: err}
+		}(index, queryFamily)
+	}
+	var firstErr error
+	for range families {
+		response := <-resultCh
+		if response.Err != nil {
+			if firstErr == nil {
+				firstErr = response.Err
+			}
+			emitIPInfoProgress(progressCallback, IPInfoProgress{State: IPInfoProgressDone, Family: response.Family, Label: familyLabels[response.Family], Result: emptyFamilyResult(response.Family), Err: response.Err})
+			continue
+		}
+		results[response.Index] = response.Result
+		emitIPInfoProgress(progressCallback, IPInfoProgress{State: IPInfoProgressDone, Family: response.Family, Label: familyLabels[response.Family], Result: response.Result})
+	}
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	return results, nil
+}
+
+// emitIPInfoProgress 调用进度回调，便于调用方集中控制终端输出。
+func emitIPInfoProgress(progressCallback ProgressCallback, progress IPInfoProgress) {
+	if progressCallback != nil {
+		progressCallback(progress)
+	}
+}
+
+// emptyFamilyResult 生成只包含 family 元信息的空结果，供错误状态输出。
+func emptyFamilyResult(family string) FamilyResult {
+	return FamilyResult{Family: family, Label: familyLabels[family]}
 }
 
 // queryFamilySources 按 IP family 逐个查询来源，拿到匹配 IP 后停止后续来源。
@@ -466,6 +557,11 @@ func formatFamilyFooter(family FamilyResult) []string {
 	return lines
 }
 
+// FormatIPInfoStatusLine 格式化单个 IP family 的一行状态摘要。
+func FormatIPInfoStatusLine(family FamilyResult) string {
+	return fmt.Sprintf("%s: %s Region: %s", family.Label, firstNonEmptyString(family.IP, "IP not resolved"), firstNonEmptyString(family.Region, "not resolved"))
+}
+
 // FormatIPInfoSummary 格式化 ipinfo 最终汇总。
 func FormatIPInfoSummary(report IpInfoReport) []string {
 	lines := []string{"Summary:"}
@@ -477,18 +573,33 @@ func FormatIPInfoSummary(report IpInfoReport) []string {
 	return lines
 }
 
+// emitFamilyReportLines 输出单个 IP family 的完整来源明细。
+func emitFamilyReportLines(lineCallback LineCallback, family FamilyResult) {
+	lineCallback(family.Label + ":")
+	for _, source := range family.Sources {
+		emitLines(lineCallback, formatSourceResult(source))
+	}
+	emitLines(lineCallback, formatFamilyFooter(family))
+	lineCallback("")
+}
+
 // FormatIPInfoReport 把查询报告格式化为 CLI 友好的多行文本。
 func FormatIPInfoReport(report IpInfoReport) []string {
 	lines := formatIPInfoHeader(report.StackName, report.ProxyURL)
 	for _, family := range report.Families {
-		lines = append(lines, family.Label+":")
-		for _, source := range family.Sources {
-			lines = append(lines, formatSourceResult(source)...)
-		}
-		lines = append(lines, formatFamilyFooter(family)...)
-		lines = append(lines, "")
+		lines = append(lines, formatFamilyReportLines(family)...)
 	}
 	return append(lines, FormatIPInfoSummary(report)...)
+}
+
+// formatFamilyReportLines 格式化单个 IP family 的完整来源明细。
+func formatFamilyReportLines(family FamilyResult) []string {
+	lines := []string{family.Label + ":"}
+	for _, source := range family.Sources {
+		lines = append(lines, formatSourceResult(source)...)
+	}
+	lines = append(lines, formatFamilyFooter(family)...)
+	return append(lines, "")
 }
 
 // firstNonEmptyString 返回第一段非空字符串。

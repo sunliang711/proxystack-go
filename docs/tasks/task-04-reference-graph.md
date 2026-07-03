@@ -6,7 +6,7 @@
 
 ## 范围
 
-- xrelay outbound ref。
+- xray outbound ref。
 - clash upstream ref。
 - target scope。
 - 服务依赖排序。
@@ -28,7 +28,7 @@
 ## 实现步骤
 
 1. 定义 ref 语法和解析错误。
-2. 建立 xrelay inbound、clash listener、upstream 和 group 索引。
+2. 建立 xray inbound、clash listener、upstream 和 group 索引。
 3. 实现 disabled stack/组件过滤。
 4. 实现服务 DAG。
 5. 实现循环依赖检测。

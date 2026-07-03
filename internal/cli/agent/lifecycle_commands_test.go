@@ -22,7 +22,7 @@ func TestLifecycleTreatsAllAsStackName(t *testing.T) {
 
 	require.ElementsMatch(t, []string{"proxystack-xray@all.service", "proxystack-clash@all.service"}, manager.stopped)
 	require.Contains(t, output, "Service plan for stop (target: all):")
-	require.Contains(t, output, "all.xrelay -> proxystack-xray@all.service")
+	require.Contains(t, output, "all.xray -> proxystack-xray@all.service")
 	require.Contains(t, output, "all.clash -> proxystack-clash@all.service")
 }
 
@@ -57,7 +57,7 @@ func TestLifecycleStopsDisabledExplicitStackTarget(t *testing.T) {
 
 	require.ElementsMatch(t, []string{"proxystack-xray@usa1.service", "proxystack-clash@usa1.service"}, manager.stopped)
 	require.Contains(t, output, "Service plan for stop (target: usa1):")
-	require.Contains(t, output, "usa1.xrelay -> proxystack-xray@usa1.service")
+	require.Contains(t, output, "usa1.xray -> proxystack-xray@usa1.service")
 	require.Contains(t, output, "usa1.clash -> proxystack-clash@usa1.service")
 }
 

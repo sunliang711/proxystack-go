@@ -189,8 +189,8 @@ func renderProxy(stackSet domain.StackSet, referenceGraph graph.ReferenceGraph, 
 	switch upstream.Type {
 	case "raw":
 		return renderRawProxy(upstream)
-	case "xrelay-socks5":
-		return renderXrelaySocks5Proxy(stackSet, referenceGraph, upstream)
+	case "xray-socks5":
+		return renderXraySocks5Proxy(stackSet, referenceGraph, upstream)
 	default:
 		return nil, GeneratorError{Message: "unsupported mihomo upstream type: " + upstream.Type}
 	}
@@ -232,19 +232,19 @@ func renderRawProxy(upstream domain.ClashUpstream) (*yaml.Node, error) {
 	return mapping(pairs...), nil
 }
 
-func renderXrelaySocks5Proxy(stackSet domain.StackSet, referenceGraph graph.ReferenceGraph, upstream domain.ClashUpstream) (*yaml.Node, error) {
-	endpoint, ok := referenceGraph.Index.ResolveXrelayInbound(upstream.Ref)
+func renderXraySocks5Proxy(stackSet domain.StackSet, referenceGraph graph.ReferenceGraph, upstream domain.ClashUpstream) (*yaml.Node, error) {
+	endpoint, ok := referenceGraph.Index.ResolveXrayInbound(upstream.Ref)
 	if !ok {
-		return nil, GeneratorError{Message: "xrelay inbound ref does not exist: " + upstream.Ref}
+		return nil, GeneratorError{Message: "xray inbound ref does not exist: " + upstream.Ref}
 	}
 	if endpoint.Kind != "socks5" {
-		return nil, GeneratorError{Message: "xrelay-socks5 ref must target socks5 inbound: " + upstream.Ref}
+		return nil, GeneratorError{Message: "xray-socks5 ref must target socks5 inbound: " + upstream.Ref}
 	}
 	targetStack, ok := stackSet.ByName()[endpoint.Stack]
 	if !ok {
-		return nil, GeneratorError{Message: "xrelay inbound stack does not exist: " + endpoint.Stack}
+		return nil, GeneratorError{Message: "xray inbound stack does not exist: " + endpoint.Stack}
 	}
-	for _, inbound := range targetStack.Xrelay.Inbounds {
+	for _, inbound := range targetStack.Xray.Inbounds {
 		if inbound.Name != endpoint.Name {
 			continue
 		}
@@ -263,7 +263,7 @@ func renderXrelaySocks5Proxy(stackSet domain.StackSet, referenceGraph graph.Refe
 		}
 		return mapping(pairs...), nil
 	}
-	return nil, GeneratorError{Message: "xrelay inbound ref does not exist: " + upstream.Ref}
+	return nil, GeneratorError{Message: "xray inbound ref does not exist: " + upstream.Ref}
 }
 
 func renderGroups(groups []domain.ClashGroup) *yaml.Node {

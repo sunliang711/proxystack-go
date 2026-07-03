@@ -1,4 +1,4 @@
-# Clash socks listener：供本机或 xrelay 连接，名称会被 ref 引用。
+# Clash socks listener：供本机或 xray 连接，名称会被 ref 引用。
 - name: local
   listen: 127.0.0.1
   port: {{ .SocksListenerPort }}

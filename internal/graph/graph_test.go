@@ -14,7 +14,7 @@ import (
 func TestReferenceGraphIndexesExamples(t *testing.T) {
 	referenceGraph := loadExampleGraph(t)
 
-	inbound, ok := referenceGraph.Index.ResolveXrelayInbound("usa1.relay")
+	inbound, ok := referenceGraph.Index.ResolveXrayInbound("usa1.relay")
 	require.True(t, ok)
 	require.Equal(t, "socks5", inbound.Kind)
 	require.Equal(t, 24001, inbound.Port)
@@ -31,18 +31,18 @@ func TestReferenceGraphOrdersDependenciesBeforeConsumers(t *testing.T) {
 
 	order := referenceGraph.TopologicalOrder(nil)
 
-	require.Less(t, indexOf(order, graph.ServiceNode{Stack: "usa1", Component: "xrelay"}), indexOf(order, graph.ServiceNode{Stack: "auto", Component: "clash"}))
-	require.Less(t, indexOf(order, graph.ServiceNode{Stack: "usa2", Component: "xrelay"}), indexOf(order, graph.ServiceNode{Stack: "auto", Component: "clash"}))
+	require.Less(t, indexOf(order, graph.ServiceNode{Stack: "usa1", Component: "xray"}), indexOf(order, graph.ServiceNode{Stack: "auto", Component: "clash"}))
+	require.Less(t, indexOf(order, graph.ServiceNode{Stack: "usa2", Component: "xray"}), indexOf(order, graph.ServiceNode{Stack: "auto", Component: "clash"}))
 }
 
 // TestTargetScopeParsesComponentTarget 验证 target scope 支持组件级目标。
 func TestTargetScopeParsesComponentTarget(t *testing.T) {
 	referenceGraph := loadExampleGraph(t)
 
-	scope, err := graph.ResolveTargetScope(referenceGraph, "xrelay/usa1")
+	scope, err := graph.ResolveTargetScope(referenceGraph, "xray/usa1")
 
 	require.NoError(t, err)
-	require.Equal(t, []graph.ServiceNode{{Stack: "usa1", Component: "xrelay"}}, scope.Nodes)
+	require.Equal(t, []graph.ServiceNode{{Stack: "usa1", Component: "xray"}}, scope.Nodes)
 }
 
 // TestBuildPlanUsesEmptyTargetForAllServices 验证空 target 表示全部服务。
@@ -63,10 +63,10 @@ func TestReferenceGraphReportsMissingRef(t *testing.T) {
 	result := graph.CompileReferenceGraph(stackSet)
 
 	require.NotEmpty(t, result.Issues)
-	require.Contains(t, result.Issues[0].Message, "xrelay inbound ref does not exist")
+	require.Contains(t, result.Issues[0].Message, "xray inbound ref does not exist")
 }
 
-// TestReferenceGraphReportsProtocolMismatch 验证 xrelay-socks5 ref 指向非 socks5 inbound 会失败。
+// TestReferenceGraphReportsProtocolMismatch 验证 xray-socks5 ref 指向非 socks5 inbound 会失败。
 func TestReferenceGraphReportsProtocolMismatch(t *testing.T) {
 	stackSet := loadExampleStackSet(t)
 	stackSet.Stacks[0].Clash.Upstreams[0].Ref = "usa1.vmess"
@@ -82,7 +82,7 @@ func TestReferenceGraphReportsCycle(t *testing.T) {
 	stackSet := loadExampleStackSet(t)
 	stackSet.Stacks[1].Clash.Upstreams = append(stackSet.Stacks[1].Clash.Upstreams, domain.ClashUpstream{
 		Name: "auto-relay",
-		Type: "xrelay-socks5",
+		Type: "xray-socks5",
 		Ref:  "auto.relay",
 	})
 

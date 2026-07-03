@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestRenderXrelaySkipsSystemPortProbeByDefault 验证 render 默认不因运行中端口占用而失败。
-func TestRenderXrelaySkipsSystemPortProbeByDefault(t *testing.T) {
+// TestRenderXraySkipsSystemPortProbeByDefault 验证 render 默认不因运行中端口占用而失败。
+func TestRenderXraySkipsSystemPortProbeByDefault(t *testing.T) {
 	baseDir := t.TempDir()
 	configPath := filepath.Join(baseDir, "config.yaml")
 	require.NoError(t, agentconfig.InitProject(agentconfig.InitOptions{BaseDir: baseDir, ExternalHost: "proxy.example.com"}))
@@ -28,7 +28,7 @@ func TestRenderXrelaySkipsSystemPortProbeByDefault(t *testing.T) {
 	require.NotEqual(t, string(data), updated)
 	require.NoError(t, os.WriteFile(stackPath, []byte(updated), 0o640))
 
-	output := runAgentCommandForTest(t, "--base-dir", baseDir, "render", "xrelay", "usa1")
+	output := runAgentCommandForTest(t, "--base-dir", baseDir, "render", "xray", "usa1")
 
 	require.Contains(t, output, `"inbounds"`)
 	require.Contains(t, output, fmt.Sprintf(`"port": %d`, occupiedPort))

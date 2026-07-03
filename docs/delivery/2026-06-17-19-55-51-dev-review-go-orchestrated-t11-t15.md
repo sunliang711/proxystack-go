@@ -26,7 +26,7 @@
 - `status/logs` 输出被吞：已让 systemd 层返回 Result，CLI 转发 stdout/stderr。
 - SSRF DNS rebinding 风险：已补默认受控 `DialContext` 和负面测试。
 - metadata owner 修复不足：已补批量标准路径规则和 fake chown 测试。
-- 组件级 disabled target 无法删除历史文件：已调整 `graph.ResolveTargetScope`，stack 存在但组件 disabled 时返回空 scope，并补 `xrelay/stack`、`clash/stack` delete 测试。
+- 组件级 disabled target 无法删除历史文件：已调整 `graph.ResolveTargetScope`，stack 存在但组件 disabled 时返回空 scope，并补 `xray/stack`、`clash/stack` delete 测试。
 
 最终复审结论：通过，无阻断问题。
 

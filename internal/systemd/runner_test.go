@@ -181,7 +181,7 @@ func TestUninstallUnitsKeepsSharedSystemdTemplates(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(unitDir, XrayUnitTemplate), []byte("xray"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(unitDir, ClashUnitTemplate), []byte("clash"), 0o644))
 
-	removed, err := manager.UninstallUnits(cfg, "xrelay/usa1")
+	removed, err := manager.UninstallUnits(cfg, "xray/usa1")
 
 	require.NoError(t, err)
 	require.Empty(t, removed)
@@ -199,7 +199,7 @@ func TestUninstallUnitsRemovesUnsharedSystemdTemplate(t *testing.T) {
 	require.NoError(t, os.WriteFile(xrayPath, []byte("xray"), 0o644))
 	require.NoError(t, os.WriteFile(clashPath, []byte("clash"), 0o644))
 
-	removed, err := manager.UninstallUnits(cfg, "xrelay/usa1")
+	removed, err := manager.UninstallUnits(cfg, "xray/usa1")
 
 	require.NoError(t, err)
 	require.Equal(t, []string{xrayPath}, removed)
@@ -209,7 +209,7 @@ func TestUninstallUnitsRemovesUnsharedSystemdTemplate(t *testing.T) {
 
 // TestUnitsForNodes 验证服务节点到 unit 名称的映射。
 func TestUnitsForNodes(t *testing.T) {
-	units := UnitsForNodes([]graph.ServiceNode{{Stack: "usa1", Component: "xrelay"}, {Stack: "usa1", Component: "clash"}})
+	units := UnitsForNodes([]graph.ServiceNode{{Stack: "usa1", Component: "xray"}, {Stack: "usa1", Component: "clash"}})
 
 	require.Equal(t, []string{"proxystack-xray@usa1.service", "proxystack-clash@usa1.service"}, units)
 }

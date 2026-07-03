@@ -182,7 +182,7 @@ paths:
 subscription:
   source: local
 port_ranges:
-  xrelay_inbound: 4300-4399
+  xray_inbound: 4300-4399
   clash_socks: 7001-7101
   clash_http: 7201-7301
   xray_api_range: 10001-10999
@@ -191,7 +191,7 @@ defaults:
   clash:
     mode: Rule
     rule_profile: default
-  xrelay:
+  xray:
     loglevel: warning
     api:
       enabled: false
@@ -216,11 +216,11 @@ install:
 }
 
 // doctorTestStack 生成包含指定监听端口的最小 stack 配置。
-func doctorTestStack(xrelayPort int, clashSocksPort int, clashControllerPort int) string {
+func doctorTestStack(xrayPort int, clashSocksPort int, clashControllerPort int) string {
 	return fmt.Sprintf(`name: edge
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false
@@ -255,5 +255,5 @@ clash:
       proxies: [DIRECT]
   rules:
     profile: default
-`, xrelayPort, clashControllerPort, clashSocksPort)
+`, xrayPort, clashControllerPort, clashSocksPort)
 }

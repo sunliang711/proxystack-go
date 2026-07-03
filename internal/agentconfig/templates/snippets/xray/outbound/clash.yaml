@@ -1,4 +1,4 @@
-# xrelay outbound：把入站流量转发到本 stack 的 Clash socks listener。
+# xray outbound：把入站流量转发到本 stack 的 Clash socks listener。
 # type=clash 只使用 ref，不需要 server/port/username/password。
 outbound:
   type: clash

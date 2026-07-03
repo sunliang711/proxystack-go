@@ -193,7 +193,7 @@ func TestXrayAPIListenRejectsPublicHost(t *testing.T) {
 	_, err := parseStack(`name: public-api
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: true
@@ -234,7 +234,7 @@ func TestXrayPrivateDirectRejectsClashOutbound(t *testing.T) {
 	_, err := parseStack(`name: clash-private
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false
@@ -305,7 +305,7 @@ func makeStack(t *testing.T, name string, outboundYAML string, inboundsYAML stri
 enabled: true
 role: edge
 labels: [test]
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false

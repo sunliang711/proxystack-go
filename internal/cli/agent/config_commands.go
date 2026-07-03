@@ -435,12 +435,12 @@ type stackListRow struct {
 	Name            string
 	Enabled         string
 	Role            string
-	Xrelay          string
+	Xray          string
 	Clash           string
 	Generated       string
 	Running         string
-	XrelayPorts     string
-	XrelayAPIPort   string
+	XrayPorts     string
+	XrayAPIPort   string
 	ClashSocks      string
 	ClashHTTP       string
 	ClashController string
@@ -473,12 +473,12 @@ func listStackRows(configPath string, checkSystemPorts bool, manager servicemana
 			Name:            stack.Name,
 			Enabled:         yesNo(stack.Enabled),
 			Role:            stack.Role,
-			Xrelay:          yesNo(stack.Xrelay.Enabled),
+			Xray:          yesNo(stack.Xray.Enabled),
 			Clash:           yesNo(stack.Clash.Enabled),
 			Generated:       formatComponentList(generatedStackComponents(generatedDir, stack)),
 			Running:         formatComponentList(runningStackComponents(stack, manager)),
-			XrelayPorts:     formatXrelayInbounds(stack.Xrelay.Inbounds),
-			XrelayAPIPort:   formatXrelayAPIPort(cfg, stack),
+			XrayPorts:     formatXrayInbounds(stack.Xray.Inbounds),
+			XrayAPIPort:   formatXrayAPIPort(cfg, stack),
 			ClashSocks:      formatSocksListeners(stack.Clash.Listeners.Socks),
 			ClashHTTP:       formatHTTPListeners(stack.Clash.Listeners.HTTP),
 			ClashController: formatListenPort(stack.Clash.Controller.Listen),
@@ -572,10 +572,10 @@ func formatStackComponentRows(row stackListRow, verbose bool) []stackDisplayRow 
 			Name:      row.Name,
 			Role:      row.Role,
 			Enabled:   row.Enabled,
-			Component: "xrelay",
-			Running:   formatStackComponentStatus(row, "xrelay", "running"),
-			Generated: formatStackComponentStatus(row, "xrelay", "generated"),
-			Endpoints: formatStackXrelayEndpoints(row, verbose),
+			Component: "xray",
+			Running:   formatStackComponentStatus(row, "xray", "running"),
+			Generated: formatStackComponentStatus(row, "xray", "generated"),
+			Endpoints: formatStackXrayEndpoints(row, verbose),
 		},
 		{
 			Component: "clash",
@@ -587,7 +587,7 @@ func formatStackComponentRows(row stackListRow, verbose bool) []stackDisplayRow 
 }
 
 func formatStackComponentStatus(row stackListRow, component string, field string) string {
-	if component == "xrelay" && row.Xrelay != "yes" {
+	if component == "xray" && row.Xray != "yes" {
 		return "disabled"
 	}
 	if component == "clash" && row.Clash != "yes" {
@@ -605,9 +605,9 @@ func formatStackComponentStatus(row stackListRow, component string, field string
 	return "no"
 }
 
-func formatStackXrelayEndpoints(row stackListRow, verbose bool) string {
-	inbounds := firstNonEmpty(row.XrelayPorts, "-")
-	api := firstNonEmpty(row.XrelayAPIPort, "-")
+func formatStackXrayEndpoints(row stackListRow, verbose bool) string {
+	inbounds := firstNonEmpty(row.XrayPorts, "-")
+	api := firstNonEmpty(row.XrayAPIPort, "-")
 	if !verbose {
 		return inbounds
 	}
@@ -635,8 +635,8 @@ func formatStackClashEndpoints(row stackListRow, verbose bool) string {
 
 func generatedStackComponents(generatedDir string, stack domain.Stack) []string {
 	components := make([]string, 0, 2)
-	if stack.Xrelay.Enabled && fileExists(filepath.Join(generatedDir, "xray", stack.Name+".json")) {
-		components = append(components, "xrelay")
+	if stack.Xray.Enabled && fileExists(filepath.Join(generatedDir, "xray", stack.Name+".json")) {
+		components = append(components, "xray")
 	}
 	if stack.Clash.Enabled && fileExists(filepath.Join(generatedDir, "mihomo", stack.Name+".yaml")) {
 		components = append(components, "clash")
@@ -648,8 +648,8 @@ func generatedStackComponents(generatedDir string, stack domain.Stack) []string 
 func runningStackComponents(stack domain.Stack, manager servicemanager.Manager) []string {
 	components := make([]string, 0, 2)
 	ctx := context.Background()
-	if stack.Xrelay.Enabled && isServiceActive(ctx, manager, manager.ServiceForNode(graph.ServiceNode{Stack: stack.Name, Component: "xrelay"})) {
-		components = append(components, "xrelay")
+	if stack.Xray.Enabled && isServiceActive(ctx, manager, manager.ServiceForNode(graph.ServiceNode{Stack: stack.Name, Component: "xray"})) {
+		components = append(components, "xray")
 	}
 	if stack.Clash.Enabled && isServiceActive(ctx, manager, manager.ServiceForNode(graph.ServiceNode{Stack: stack.Name, Component: "clash"})) {
 		components = append(components, "clash")
@@ -670,7 +670,7 @@ func formatComponentList(components []string) string {
 	return strings.Join(components, ",")
 }
 
-func formatXrelayInbounds(inbounds []domain.Inbound) string {
+func formatXrayInbounds(inbounds []domain.Inbound) string {
 	items := make([]string, 0, len(inbounds))
 	for _, inbound := range inbounds {
 		items = append(items, inbound.Protocol+":"+formatListenerPort(inbound.Listen, inbound.Port))
@@ -681,11 +681,11 @@ func formatXrelayInbounds(inbounds []domain.Inbound) string {
 	return strings.Join(items, ",")
 }
 
-func formatXrelayAPIPort(cfg domain.GlobalConfig, stack domain.Stack) string {
-	if !stack.Xrelay.Enabled {
+func formatXrayAPIPort(cfg domain.GlobalConfig, stack domain.Stack) string {
+	if !stack.Xray.Enabled {
 		return "-"
 	}
-	apiConfig := domain.ResolveXrelayAPIConfig(cfg.Defaults.Xrelay, stack.Xrelay)
+	apiConfig := domain.ResolveXrayAPIConfig(cfg.Defaults.Xray, stack.Xray)
 	if !apiConfig.Enabled {
 		return "-"
 	}

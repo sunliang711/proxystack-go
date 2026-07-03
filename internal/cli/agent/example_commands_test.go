@@ -19,7 +19,7 @@ func TestAgentExampleHelpListsAllSnippets(t *testing.T) {
 	require.Contains(t, output, "role:")
 	require.Contains(t, output, "edge")
 	require.Contains(t, output, "auto")
-	require.Contains(t, output, "xrelay:")
+	require.Contains(t, output, "xray:")
 	require.Contains(t, output, "loglevel:")
 	require.Contains(t, output, "inbound:")
 	require.Contains(t, output, "vmess")
@@ -38,7 +38,7 @@ func TestAgentExampleHelpListsAllSnippets(t *testing.T) {
 	require.Contains(t, output, "global")
 	require.Contains(t, output, "silent")
 	require.Contains(t, output, "upstream:")
-	require.Contains(t, output, "xrelay-socks5")
+	require.Contains(t, output, "xray-socks5")
 	require.Contains(t, output, "raw")
 	require.Contains(t, output, "raw-shadowsocks")
 	require.Contains(t, output, "raw-socks5")
@@ -55,7 +55,7 @@ func TestAgentExampleHelpListsAllSnippets(t *testing.T) {
 func TestAgentExampleNoArgsPrintsUsage(t *testing.T) {
 	output := runAgentCommandForTest(t, "example")
 
-	require.Contains(t, output, "psctl example [config|stack|xrelay|clash] [SECTION] [TYPE]")
+	require.Contains(t, output, "psctl example [config|stack|xray|clash] [SECTION] [TYPE]")
 	require.Contains(t, output, "psctl example config users default")
 	require.Contains(t, output, "psctl example stack role edge")
 	require.Contains(t, output, "psctl example clash upstream raw")
@@ -63,7 +63,7 @@ func TestAgentExampleNoArgsPrintsUsage(t *testing.T) {
 
 // TestAgentExampleSingleSnippetPrintsPlainYAML 验证精确片段输出带片段内注释的纯 YAML。
 func TestAgentExampleSingleSnippetPrintsPlainYAML(t *testing.T) {
-	output := runAgentCommandForTest(t, "example", "xrelay", "inbound", "vmess")
+	output := runAgentCommandForTest(t, "example", "xray", "inbound", "vmess")
 
 	require.True(t, strings.HasPrefix(output, "# vmess raw inbound"))
 	require.Contains(t, output, "- name: vmess")
@@ -74,7 +74,7 @@ func TestAgentExampleSingleSnippetPrintsPlainYAML(t *testing.T) {
 	require.NotContains(t, output, "uuid: 11111111-1111-4111-8111-111111111111")
 	require.Contains(t, output, "# display_template: '{{ .stack }} {{ .inbound }} {{ .protocol }} {{ .user }}'")
 	require.Contains(t, output, "# display_template: '{{ .stack }} {{ .user }} {{ .profile }} {{ .remark }}'")
-	require.NotContains(t, output, "# xrelay inbound vmess")
+	require.NotContains(t, output, "# xray inbound vmess")
 }
 
 // TestAgentExampleConfigUsersSnippet 验证 example 子命令提供 config.yaml 用户档案模板。
@@ -90,19 +90,19 @@ func TestAgentExampleConfigUsersSnippet(t *testing.T) {
 
 // TestAgentExampleSectionPrintsAllTypes 验证分类输出包含该分类下所有类型。
 func TestAgentExampleSectionPrintsAllTypes(t *testing.T) {
-	output := runAgentCommandForTest(t, "example", "xrelay", "outbound")
+	output := runAgentCommandForTest(t, "example", "xray", "outbound")
 
 	require.Contains(t, output, "选择其中一个")
 	require.Contains(t, output, "如需纯 YAML 输出")
-	require.Contains(t, output, "# psctl example xrelay outbound clash")
-	require.Contains(t, output, "# psctl example xrelay outbound socks5")
-	require.Contains(t, output, "# psctl example xrelay outbound http")
-	require.Contains(t, output, "# psctl example xrelay outbound direct")
+	require.Contains(t, output, "# psctl example xray outbound clash")
+	require.Contains(t, output, "# psctl example xray outbound socks5")
+	require.Contains(t, output, "# psctl example xray outbound http")
+	require.Contains(t, output, "# psctl example xray outbound direct")
 }
 
 // TestAgentExampleAcceptsCommonTypos 验证命令兼容用户常见拼写错误。
 func TestAgentExampleAcceptsCommonTypos(t *testing.T) {
-	output := runAgentCommandForTest(t, "example", "xrelay", "inboud", "socks5")
+	output := runAgentCommandForTest(t, "example", "xray", "inboud", "socks5")
 
 	require.Contains(t, output, "protocol: socks5")
 	require.Contains(t, output, "auth 是 socks5 的实际连接账号")

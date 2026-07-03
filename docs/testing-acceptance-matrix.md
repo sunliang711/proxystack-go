@@ -50,7 +50,7 @@ tests/fixtures/sub/manual.yaml
 | `internal/domain/validation` | `domain/validation.py` 相关用例 | 端口唯一、公开 noauth、系统端口 fake、日志级别、规则目标 |
 | `internal/graph` | `test_config_loader.py`、`test_mihomo_generator.py` | ref 解析、endpoint index、循环依赖、disabled 过滤、内部地址归一化 |
 | `internal/generator/xray` | `test_xray_generator.py` | golden、api/stats/policy、vmess 多用户、SS2022、outbound |
-| `internal/generator/mihomo` | `test_mihomo_generator.py` | golden、listeners、raw/xrelay-socks5 upstream、groups/rules、mixed 拒绝 |
+| `internal/generator/mihomo` | `test_mihomo_generator.py` | golden、listeners、raw/xray-socks5 upstream、groups/rules、mixed 拒绝 |
 | `internal/generator/sub` | `test_sub_generator.py`、`test_subscription_golden.py` | input/index、模板渲染、重复节点、bundle 安全、Surge 地区组 |
 | `internal/subserver` | `test_subserver.py` | `/health`、订阅路由、token、503/404、reload 保留旧索引、watcher |
 | `internal/cli/agent` | `test_cli.py`、`test_task11_cli_matrix.py` | 命令参数、target scope、只读命令不落盘、错误摘要 |

@@ -22,7 +22,7 @@ type ServiceNode struct {
 
 // ServiceName 返回当前节点对应的 systemd 服务名。
 func (s ServiceNode) ServiceName() string {
-	if s.Component == "xrelay" {
+	if s.Component == "xray" {
 		return "proxystack-xray@" + s.Stack + ".service"
 	}
 	return "proxystack-" + s.Component + "@" + s.Stack + ".service"
@@ -79,7 +79,7 @@ func CompileReferenceGraph(stackSet domain.StackSet) CompileResult {
 	}
 	issues := make([]Issue, 0)
 	for _, stack := range stackSet.Stacks {
-		issues = append(issues, addXrelayDependencies(stack, index, dependencies)...)
+		issues = append(issues, addXrayDependencies(stack, index, dependencies)...)
 		issues = append(issues, addClashDependencies(stack, index, dependencies)...)
 	}
 	stackNames := make(map[string]bool, len(stackSet.Stacks))
@@ -114,8 +114,8 @@ func CollectServiceNodes(stacks []domain.Stack) map[ServiceNode]bool {
 		if !stack.Enabled {
 			continue
 		}
-		if stack.Xrelay.Enabled {
-			nodes[ServiceNode{Stack: stack.Name, Component: "xrelay"}] = true
+		if stack.Xray.Enabled {
+			nodes[ServiceNode{Stack: stack.Name, Component: "xray"}] = true
 		}
 		if stack.Clash.Enabled {
 			nodes[ServiceNode{Stack: stack.Name, Component: "clash"}] = true
@@ -241,12 +241,12 @@ type TargetScope struct {
 	Nodes []ServiceNode
 }
 
-// ResolveTargetScope 解析空、stack、xrelay/name 和 clash/name 四种 target 形态。
+// ResolveTargetScope 解析空、stack、xray/name 和 clash/name 四种 target 形态。
 func ResolveTargetScope(graph ReferenceGraph, target string) (TargetScope, error) {
 	if target == "" {
 		return TargetScope{Raw: target, Nodes: graph.TopologicalOrder(nil)}, nil
 	}
-	if strings.HasPrefix(target, "xrelay/") || strings.HasPrefix(target, "clash/") {
+	if strings.HasPrefix(target, "xray/") || strings.HasPrefix(target, "clash/") {
 		parts := strings.SplitN(target, "/", 2)
 		if !graph.StackNames[parts[1]] {
 			return TargetScope{}, fmt.Errorf("stack does not exist: %s", parts[1])
@@ -273,26 +273,26 @@ func FormatCycle(cycle []ServiceNode) string {
 	return strings.Join(labels, " -> ")
 }
 
-func addXrelayDependencies(stack domain.Stack, index ReferenceIndex, dependencies map[ServiceNode]map[ServiceNode]bool) []Issue {
-	if !stack.Enabled || !stack.Xrelay.Enabled || stack.Xrelay.Outbound.Type != "clash" {
+func addXrayDependencies(stack domain.Stack, index ReferenceIndex, dependencies map[ServiceNode]map[ServiceNode]bool) []Issue {
+	if !stack.Enabled || !stack.Xray.Enabled || stack.Xray.Outbound.Type != "clash" {
 		return nil
 	}
-	path := fmt.Sprintf("stacks.%s.xrelay.outbound.ref", stack.Name)
-	parsed, err := ParseComponentRef(stack.Xrelay.Outbound.Ref, path)
+	path := fmt.Sprintf("stacks.%s.xray.outbound.ref", stack.Name)
+	parsed, err := ParseComponentRef(stack.Xray.Outbound.Ref, path)
 	if err != nil {
 		return []Issue{{Path: path, Message: errMessage(err)}}
 	}
 	if parsed.Component != "clash" {
-		return []Issue{{Path: path, Message: "xrelay clash outbound ref must target clash component"}}
+		return []Issue{{Path: path, Message: "xray clash outbound ref must target clash component"}}
 	}
 	if parsed.Kind != "socks" {
-		return []Issue{{Path: path, Message: "xrelay clash outbound ref must target socks listener"}}
+		return []Issue{{Path: path, Message: "xray clash outbound ref must target socks listener"}}
 	}
 	endpoint, ok := index.ResolveClashListener(parsed.Raw)
 	if !ok {
 		return []Issue{{Path: path, Message: "clash listener ref does not exist: " + parsed.Raw}}
 	}
-	sourceNode := ServiceNode{Stack: stack.Name, Component: "xrelay"}
+	sourceNode := ServiceNode{Stack: stack.Name, Component: "xray"}
 	targetNode := ServiceNode{Stack: endpoint.Stack, Component: "clash"}
 	ensureDependencyNode(dependencies, sourceNode)
 	ensureDependencyNode(dependencies, targetNode)
@@ -307,25 +307,25 @@ func addClashDependencies(stack domain.Stack, index ReferenceIndex, dependencies
 	issues := make([]Issue, 0)
 	sourceNode := ServiceNode{Stack: stack.Name, Component: "clash"}
 	for upstreamIndex, upstream := range stack.Clash.Upstreams {
-		if upstream.Type != "xrelay-socks5" {
+		if upstream.Type != "xray-socks5" {
 			continue
 		}
 		path := fmt.Sprintf("stacks.%s.clash.upstreams[%d].ref", stack.Name, upstreamIndex)
-		parsed, err := ParseXrelayInboundRef(upstream.Ref, path)
+		parsed, err := ParseXrayInboundRef(upstream.Ref, path)
 		if err != nil {
 			issues = append(issues, Issue{Path: path, Message: errMessage(err)})
 			continue
 		}
-		endpoint, ok := index.ResolveXrelayInbound(parsed.Raw)
+		endpoint, ok := index.ResolveXrayInbound(parsed.Raw)
 		if !ok {
-			issues = append(issues, Issue{Path: path, Message: "xrelay inbound ref does not exist: " + parsed.Raw})
+			issues = append(issues, Issue{Path: path, Message: "xray inbound ref does not exist: " + parsed.Raw})
 			continue
 		}
 		if endpoint.Kind != "socks5" {
-			issues = append(issues, Issue{Path: path, Message: fmt.Sprintf("xrelay-socks5 ref must target socks5 inbound, got %s: %s", endpoint.Kind, parsed.Raw)})
+			issues = append(issues, Issue{Path: path, Message: fmt.Sprintf("xray-socks5 ref must target socks5 inbound, got %s: %s", endpoint.Kind, parsed.Raw)})
 			continue
 		}
-		targetNode := ServiceNode{Stack: endpoint.Stack, Component: "xrelay"}
+		targetNode := ServiceNode{Stack: endpoint.Stack, Component: "xray"}
 		ensureDependencyNode(dependencies, sourceNode)
 		ensureDependencyNode(dependencies, targetNode)
 		dependencies[sourceNode][targetNode] = true

@@ -103,7 +103,7 @@ FileChange action：
 
 ## 4. Xray 生成器
 
-每个 enabled 且 `xrelay.enabled=true` 的 stack 生成一个 JSON。
+每个 enabled 且 `xray.enabled=true` 的 stack 生成一个 JSON。
 
 输出顺序建议：
 
@@ -118,8 +118,8 @@ FileChange action：
 
 `log.loglevel` 来源：
 
-1. `stack.xrelay.loglevel`
-2. `defaults.xrelay.loglevel`
+1. `stack.xray.loglevel`
+2. `defaults.xray.loglevel`
 3. `warning`
 
 ### 4.2 api/stats/policy
@@ -166,7 +166,7 @@ socks5/http：
 
 ### 4.4 outbound
 
-所有 xrelay outbound tag 固定为：
+所有 xray outbound tag 固定为：
 
 ```text
 egress-<stack>
@@ -221,9 +221,9 @@ P0 必须使用高级 `listeners`。
 - `config` 原样写入 `proxies`。
 - `name` 以 upstream name 为准，覆盖 config 内 name。
 
-`xrelay-socks5`：
+`xray-socks5`：
 
-- ref 解析到目标 xrelay socks5 inbound。
+- ref 解析到目标 xray socks5 inbound。
 - server 使用 `127.0.0.1`，即使 inbound listen 是 `0.0.0.0`。
 - port 使用 inbound port。
 - username/password 来自 inbound auth。
@@ -267,7 +267,7 @@ MATCH,<rules.final>
 
 ## 6. 订阅生成器
 
-订阅只来自 enabled stack 的 `xrelay.inbounds[] where sub == true`。
+订阅只来自 enabled stack 的 `xray.inbounds[] where sub == true`。
 
 不读取：
 

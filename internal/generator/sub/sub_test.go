@@ -109,7 +109,7 @@ external_host: proxy.example.com
 paths:
   stacks: stacks
 port_ranges:
-  xrelay_inbound: 4300-4399
+  xray_inbound: 4300-4399
   clash_socks: 7001-7101
   clash_http: 7201-7301
   xray_api_range: 10001-10999
@@ -118,7 +118,7 @@ port_ranges:
 	require.NoError(t, os.WriteFile(filepath.Join(stacksDir, "edge.yaml"), []byte(`name: edge
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false
@@ -185,7 +185,7 @@ external_host: proxy.example.com
 paths:
   stacks: stacks
 port_ranges:
-  xrelay_inbound: 4300-4399
+  xray_inbound: 4300-4399
   clash_socks: 7001-7101
   clash_http: 7201-7301
   xray_api_range: 10001-10999
@@ -194,7 +194,7 @@ port_ranges:
 	require.NoError(t, os.WriteFile(filepath.Join(stacksDir, "edge.yaml"), []byte(`name: edge
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false
@@ -282,7 +282,7 @@ func TestRenderStackInputRejectsBadDisplayTemplate(t *testing.T) {
 			{
 				Name:    "edge",
 				Enabled: true,
-				Xrelay: domain.XrelayConfig{
+				Xray: domain.XrayConfig{
 					Enabled: true,
 					Inbounds: []domain.Inbound{
 						{
@@ -315,7 +315,7 @@ func TestRenderStackInputUsesGenericUserRefs(t *testing.T) {
 			{
 				Name:    "edge",
 				Enabled: true,
-				Xrelay: domain.XrelayConfig{
+				Xray: domain.XrayConfig{
 					Enabled: true,
 					Inbounds: []domain.Inbound{
 						{
@@ -357,7 +357,7 @@ func TestRenderStackInputRejectsDuplicateProxyName(t *testing.T) {
 			{
 				Name:    "edge",
 				Enabled: true,
-				Xrelay: domain.XrelayConfig{
+				Xray: domain.XrayConfig{
 					Enabled: true,
 					Inbounds: []domain.Inbound{
 						{
@@ -402,7 +402,7 @@ external_host: proxy.example.com
 paths:
   stacks: stacks
 port_ranges:
-  xrelay_inbound: 4300-4399
+  xray_inbound: 4300-4399
   clash_socks: 7001-7101
   clash_http: 7201-7301
   xray_api_range: 10001-10999
@@ -411,7 +411,7 @@ port_ranges:
 	require.NoError(t, os.WriteFile(filepath.Join(stacksDir, "edge.yaml"), []byte(`name: edge
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false

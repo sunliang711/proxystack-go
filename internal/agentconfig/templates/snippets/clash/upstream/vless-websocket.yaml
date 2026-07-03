@@ -1,5 +1,5 @@
 # raw vless WebSocket upstream：mihomo 原生 VLESS WS 节点。
-# 当前作为 Clash raw upstream 使用，不是 xrelay inbound。
+# 当前作为 Clash raw upstream 使用，不是 xray inbound。
 - name: server-vless-ws
   type: raw
   config:

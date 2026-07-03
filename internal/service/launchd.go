@@ -199,7 +199,7 @@ func (m LaunchdManager) Logs(ctx context.Context, services []string, follow bool
 
 // ServiceForNode 返回服务节点对应的 launchd label。
 func (m LaunchdManager) ServiceForNode(node graph.ServiceNode) string {
-	if node.Component == "xrelay" {
+	if node.Component == "xray" {
 		return LaunchdXrayLabel(node.Stack)
 	}
 	return LaunchdMihomoLabel(node.Stack)
@@ -266,7 +266,7 @@ func LaunchdMihomoLabel(stack string) string {
 // addLaunchdNodePlist 按单个 stack 组件追加 xray/mihomo plist。
 func addLaunchdNodePlist(selected map[string]string, config domain.GlobalConfig, node graph.ServiceNode) {
 	switch node.Component {
-	case "xrelay":
+	case "xray":
 		label := LaunchdXrayLabel(node.Stack)
 		selected[label+".plist"] = renderLaunchdPlist(label, []string{
 			filepath.Join(launchdBinDir(config), "xray"),
@@ -398,7 +398,7 @@ func managedLaunchdPatterns(config domain.GlobalConfig, target string) ([]string
 	patterns := make([]string, 0, len(nodes))
 	for _, node := range nodes {
 		switch node.Component {
-		case "xrelay":
+		case "xray":
 			patterns = append(patterns, LaunchdXrayLabel(node.Stack)+".plist")
 		case "clash":
 			patterns = append(patterns, LaunchdMihomoLabel(node.Stack)+".plist")

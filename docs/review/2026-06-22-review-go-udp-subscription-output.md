@@ -2,7 +2,7 @@
 
 ## 审查范围
 
-- `ps-agent` `xrelay.inbounds[].udp` 显式 `true/false` 导出链路。
+- `ps-agent` `xray.inbounds[].udp` 显式 `true/false` 导出链路。
 - `ps-sub` Clash/Premium Clash proxy 的 `udp` 输出与协议校验。
 - UDP 相关配置模板、CLI 示例、fixture 和文档同步。
 - 当前工作区未提交 diff 中与 UDP 订阅字段相关的测试。

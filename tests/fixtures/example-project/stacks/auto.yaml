@@ -3,7 +3,7 @@ enabled: true
 role: auto
 labels: [auto]
 
-xrelay:
+xray:
   enabled: true
   api:
     enabled: true
@@ -46,10 +46,10 @@ clash:
         port: 18093
   upstreams:
     - name: usa1-local
-      type: xrelay-socks5
+      type: xray-socks5
       ref: usa1.relay
     - name: usa2-local
-      type: xrelay-socks5
+      type: xray-socks5
       ref: usa2.relay
   groups:
     - name: AutoProxy

@@ -44,8 +44,8 @@
 
 原实现会递归改写所有形如 ref 的 scalar，容易误改普通字符串。现改为路径感知：
 
-- 只改写 `xrelay.outbound.ref`，且 outbound type 为 `clash`。
-- 只改写 `clash.upstreams[].ref`，且 upstream type 为 `xrelay-socks5`。
+- 只改写 `xray.outbound.ref`，且 outbound type 为 `clash`。
+- 只改写 `clash.upstreams[].ref`，且 upstream type 为 `xray-socks5`。
 - 不进入 raw upstream `config` 区域，不改 `server`、`Host` 或普通 `ref` 字段。
 
 ## 文件变更

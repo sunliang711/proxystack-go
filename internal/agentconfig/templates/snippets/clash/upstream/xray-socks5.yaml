@@ -1,5 +1,5 @@
-# xrelay-socks5 upstream：引用其他 stack 的 socks5 inbound。
+# xray-socks5 upstream：引用其他 stack 的 socks5 inbound。
 # ref 格式为 <stack>.<inbound-name>。
 - name: {{ .MemberName }}-local
-  type: xrelay-socks5
+  type: xray-socks5
   ref: {{ .MemberName }}.{{ .MemberInboundName }}

@@ -83,7 +83,7 @@ func TestNativeBackupImportStopsRunningOldServices(t *testing.T) {
 	output := runAgentCommandForTest(t, "--base-dir", targetDir, "import", backupPath, "--force")
 
 	require.Contains(t, output, "Stopping running services before import:")
-	require.Contains(t, output, "- usa1.xrelay -> proxystack-xray@usa1.service")
+	require.Contains(t, output, "- usa1.xray -> proxystack-xray@usa1.service")
 	require.NotContains(t, output, "- usa1.clash -> proxystack-clash@usa1.service")
 	require.ElementsMatch(t, []string{"proxystack-xray@usa1.service", "proxystack-clash@usa1.service"}, manager.activeChecks)
 	require.Equal(t, []string{"proxystack-xray@usa1.service"}, manager.stopped)

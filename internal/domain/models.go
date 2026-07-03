@@ -19,8 +19,8 @@ const (
 	defaultClashLogLevel     = "info"
 	defaultClashMode         = "Rule"
 	defaultRuleProfile       = "default"
-	defaultXrelayAPITag      = "api"
-	defaultXrelayAPIListen   = "127.0.0.1:10085"
+	defaultXrayAPITag      = "api"
+	defaultXrayAPIListen   = "127.0.0.1:10085"
 	defaultInstallVersion    = "latest"
 	defaultInstallSource     = "auto"
 	defaultStackRole         = "edge"
@@ -143,7 +143,7 @@ func (p PortRange) Allocate(usedPorts map[int]bool, count int) ([]int, error) {
 
 // PortRanges 保存所有自动分配端口池。
 type PortRanges struct {
-	XrelayInbound  PortRange `json:"xrelay_inbound" yaml:"xrelay_inbound" mapstructure:"xrelay_inbound"`
+	XrayInbound  PortRange `json:"xray_inbound" yaml:"xray_inbound" mapstructure:"xray_inbound"`
 	ClashSocks     PortRange `json:"clash_socks" yaml:"clash_socks" mapstructure:"clash_socks"`
 	ClashHTTP      PortRange `json:"clash_http" yaml:"clash_http" mapstructure:"clash_http"`
 	XrayAPIRange   PortRange `json:"xray_api_range" yaml:"xray_api_range" mapstructure:"xray_api_range"`
@@ -153,7 +153,7 @@ type PortRanges struct {
 // Validate 校验所有端口池均为合法范围。
 func (p PortRanges) Validate() error {
 	ranges := map[string]PortRange{
-		"xrelay_inbound":   p.XrelayInbound,
+		"xray_inbound":   p.XrayInbound,
 		"clash_socks":      p.ClashSocks,
 		"clash_http":       p.ClashHTTP,
 		"xray_api_range":   p.XrayAPIRange,
@@ -181,8 +181,8 @@ func (d *DefaultClashConfig) UnmarshalYAML(value *yaml.Node) error {
 	return value.Decode((*raw)(d))
 }
 
-// XrelayAPIConfig 保存 Xray API 配置，并记录 YAML 中显式写入的字段。
-type XrelayAPIConfig struct {
+// XrayAPIConfig 保存 Xray API 配置，并记录 YAML 中显式写入的字段。
+type XrayAPIConfig struct {
 	Enabled  bool     `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
 	Tag      string   `json:"tag" yaml:"tag" mapstructure:"tag"`
 	Listen   string   `json:"listen" yaml:"listen" mapstructure:"listen"`
@@ -191,40 +191,40 @@ type XrelayAPIConfig struct {
 	fields map[string]bool `json:"-" yaml:"-"`
 }
 
-// DefaultXrelayAPIConfig 返回 Xray API 默认配置。
-func DefaultXrelayAPIConfig() XrelayAPIConfig {
-	return XrelayAPIConfig{
+// DefaultXrayAPIConfig 返回 Xray API 默认配置。
+func DefaultXrayAPIConfig() XrayAPIConfig {
+	return XrayAPIConfig{
 		Enabled:  true,
-		Tag:      defaultXrelayAPITag,
-		Listen:   defaultXrelayAPIListen,
+		Tag:      defaultXrayAPITag,
+		Listen:   defaultXrayAPIListen,
 		Services: []string{"StatsService"},
 	}
 }
 
 // UnmarshalYAML 在加载 API 配置时补齐默认值并保留显式字段集合。
-func (x *XrelayAPIConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = DefaultXrelayAPIConfig()
+func (x *XrayAPIConfig) UnmarshalYAML(value *yaml.Node) error {
+	*x = DefaultXrayAPIConfig()
 	x.fields = yamlFields(value)
-	type raw XrelayAPIConfig
+	type raw XrayAPIConfig
 	return value.Decode((*raw)(x))
 }
 
-// XrelayStatsConfig 保存 Xray stats 开关。
-type XrelayStatsConfig struct {
+// XrayStatsConfig 保存 Xray stats 开关。
+type XrayStatsConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
 
 	fields map[string]bool `json:"-" yaml:"-"`
 }
 
 // UnmarshalYAML 在加载 stats 配置时补齐默认启用值。
-func (x *XrelayStatsConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = XrelayStatsConfig{Enabled: true, fields: yamlFields(value)}
-	type raw XrelayStatsConfig
+func (x *XrayStatsConfig) UnmarshalYAML(value *yaml.Node) error {
+	*x = XrayStatsConfig{Enabled: true, fields: yamlFields(value)}
+	type raw XrayStatsConfig
 	return value.Decode((*raw)(x))
 }
 
-// XrelayPolicySystemConfig 保存 Xray system policy 统计开关。
-type XrelayPolicySystemConfig struct {
+// XrayPolicySystemConfig 保存 Xray system policy 统计开关。
+type XrayPolicySystemConfig struct {
 	StatsInboundUplink    *bool `json:"statsInboundUplink" yaml:"statsInboundUplink" mapstructure:"statsInboundUplink"`
 	StatsInboundDownlink  *bool `json:"statsInboundDownlink" yaml:"statsInboundDownlink" mapstructure:"statsInboundDownlink"`
 	StatsOutboundUplink   *bool `json:"statsOutboundUplink" yaml:"statsOutboundUplink" mapstructure:"statsOutboundUplink"`
@@ -234,14 +234,14 @@ type XrelayPolicySystemConfig struct {
 }
 
 // UnmarshalYAML 记录 system policy 中显式写入的统计字段。
-func (x *XrelayPolicySystemConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = XrelayPolicySystemConfig{fields: yamlFields(value)}
-	type raw XrelayPolicySystemConfig
+func (x *XrayPolicySystemConfig) UnmarshalYAML(value *yaml.Node) error {
+	*x = XrayPolicySystemConfig{fields: yamlFields(value)}
+	type raw XrayPolicySystemConfig
 	return value.Decode((*raw)(x))
 }
 
-// XrelayPolicyLevelConfig 保存 Xray level policy 用户统计开关。
-type XrelayPolicyLevelConfig struct {
+// XrayPolicyLevelConfig 保存 Xray level policy 用户统计开关。
+type XrayPolicyLevelConfig struct {
 	StatsUserUplink   *bool `json:"statsUserUplink" yaml:"statsUserUplink" mapstructure:"statsUserUplink"`
 	StatsUserDownlink *bool `json:"statsUserDownlink" yaml:"statsUserDownlink" mapstructure:"statsUserDownlink"`
 
@@ -249,68 +249,68 @@ type XrelayPolicyLevelConfig struct {
 }
 
 // UnmarshalYAML 记录 level policy 中显式写入的统计字段。
-func (x *XrelayPolicyLevelConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = XrelayPolicyLevelConfig{fields: yamlFields(value)}
-	type raw XrelayPolicyLevelConfig
+func (x *XrayPolicyLevelConfig) UnmarshalYAML(value *yaml.Node) error {
+	*x = XrayPolicyLevelConfig{fields: yamlFields(value)}
+	type raw XrayPolicyLevelConfig
 	return value.Decode((*raw)(x))
 }
 
-// XrelayPolicyConfig 保存 Xray policy 配置。
-type XrelayPolicyConfig struct {
+// XrayPolicyConfig 保存 Xray policy 配置。
+type XrayPolicyConfig struct {
 	Enabled bool                               `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
-	Levels  map[string]XrelayPolicyLevelConfig `json:"levels" yaml:"levels" mapstructure:"levels"`
-	System  XrelayPolicySystemConfig           `json:"system" yaml:"system" mapstructure:"system"`
+	Levels  map[string]XrayPolicyLevelConfig `json:"levels" yaml:"levels" mapstructure:"levels"`
+	System  XrayPolicySystemConfig           `json:"system" yaml:"system" mapstructure:"system"`
 
 	fields map[string]bool `json:"-" yaml:"-"`
 }
 
-// DefaultXrelayPolicyConfig 返回默认 Xray policy 配置。
-func DefaultXrelayPolicyConfig() XrelayPolicyConfig {
+// DefaultXrayPolicyConfig 返回默认 Xray policy 配置。
+func DefaultXrayPolicyConfig() XrayPolicyConfig {
 	yes := true
-	return XrelayPolicyConfig{
+	return XrayPolicyConfig{
 		Enabled: true,
-		Levels: map[string]XrelayPolicyLevelConfig{
+		Levels: map[string]XrayPolicyLevelConfig{
 			"0": {
 				StatsUserUplink:   &yes,
 				StatsUserDownlink: &yes,
 			},
 		},
-		System: XrelayPolicySystemConfig{},
+		System: XrayPolicySystemConfig{},
 	}
 }
 
 // UnmarshalYAML 在加载 policy 配置时补齐默认 levels 并记录显式字段。
-func (x *XrelayPolicyConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = DefaultXrelayPolicyConfig()
+func (x *XrayPolicyConfig) UnmarshalYAML(value *yaml.Node) error {
+	*x = DefaultXrayPolicyConfig()
 	x.fields = yamlFields(value)
-	type raw XrelayPolicyConfig
+	type raw XrayPolicyConfig
 	return value.Decode((*raw)(x))
 }
 
-// DefaultXrelayConfig 保存 xrelay 默认值。
-type DefaultXrelayConfig struct {
+// DefaultXrayConfig 保存 xray 默认值。
+type DefaultXrayConfig struct {
 	LogLevel string             `json:"loglevel" yaml:"loglevel" mapstructure:"loglevel"`
-	API      XrelayAPIConfig    `json:"api" yaml:"api" mapstructure:"api"`
-	Stats    XrelayStatsConfig  `json:"stats" yaml:"stats" mapstructure:"stats"`
-	Policy   XrelayPolicyConfig `json:"policy" yaml:"policy" mapstructure:"policy"`
+	API      XrayAPIConfig    `json:"api" yaml:"api" mapstructure:"api"`
+	Stats    XrayStatsConfig  `json:"stats" yaml:"stats" mapstructure:"stats"`
+	Policy   XrayPolicyConfig `json:"policy" yaml:"policy" mapstructure:"policy"`
 }
 
-// UnmarshalYAML 在加载 xrelay 默认配置时补齐默认值。
-func (d *DefaultXrelayConfig) UnmarshalYAML(value *yaml.Node) error {
-	*d = DefaultXrelayConfig{
+// UnmarshalYAML 在加载 xray 默认配置时补齐默认值。
+func (d *DefaultXrayConfig) UnmarshalYAML(value *yaml.Node) error {
+	*d = DefaultXrayConfig{
 		LogLevel: defaultXrayLogLevel,
-		API:      DefaultXrelayAPIConfig(),
-		Stats:    XrelayStatsConfig{Enabled: true},
-		Policy:   DefaultXrelayPolicyConfig(),
+		API:      DefaultXrayAPIConfig(),
+		Stats:    XrayStatsConfig{Enabled: true},
+		Policy:   DefaultXrayPolicyConfig(),
 	}
-	type raw DefaultXrelayConfig
+	type raw DefaultXrayConfig
 	return value.Decode((*raw)(d))
 }
 
 // DefaultsConfig 保存全局默认值配置。
 type DefaultsConfig struct {
 	Clash  DefaultClashConfig  `json:"clash" yaml:"clash" mapstructure:"clash"`
-	Xrelay DefaultXrelayConfig `json:"xrelay" yaml:"xrelay" mapstructure:"xrelay"`
+	Xray DefaultXrayConfig `json:"xray" yaml:"xray" mapstructure:"xray"`
 }
 
 // UnmarshalYAML 在加载全局默认值时补齐旧配置兼容默认。
@@ -328,11 +328,11 @@ func DefaultDefaultsConfig() DefaultsConfig {
 			LogLevel:    defaultClashLogLevel,
 			RuleProfile: defaultRuleProfile,
 		},
-		Xrelay: DefaultXrelayConfig{
+		Xray: DefaultXrayConfig{
 			LogLevel: defaultXrayLogLevel,
-			API:      DefaultXrelayAPIConfig(),
-			Stats:    XrelayStatsConfig{Enabled: true},
-			Policy:   DefaultXrelayPolicyConfig(),
+			API:      DefaultXrayAPIConfig(),
+			Stats:    XrayStatsConfig{Enabled: true},
+			Policy:   DefaultXrayPolicyConfig(),
 		},
 	}
 }
@@ -462,7 +462,7 @@ func (g *GlobalConfig) Validate() error {
 	if err := validateDefaultClash(g.Defaults.Clash); err != nil {
 		return err
 	}
-	if err := validateDefaultXrelay(g.Defaults.Xrelay); err != nil {
+	if err := validateDefaultXray(g.Defaults.Xray); err != nil {
 		return err
 	}
 	return nil
@@ -660,7 +660,7 @@ func (o *GRPCOptions) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-// Inbound 保存 xrelay inbound 配置。
+// Inbound 保存 xray inbound 配置。
 type Inbound struct {
 	Name            string            `json:"name" yaml:"name" mapstructure:"name"`
 	Protocol        string            `json:"protocol" yaml:"protocol" mapstructure:"protocol"`
@@ -904,8 +904,8 @@ func (i Inbound) validateShadowsocks2022Passwords(method string) error {
 	return nil
 }
 
-// XrelayOutbound 保存 xrelay egress 配置。
-type XrelayOutbound struct {
+// XrayOutbound 保存 xray egress 配置。
+type XrayOutbound struct {
 	Type          string `json:"type" yaml:"type" mapstructure:"type"`
 	Ref           string `json:"ref" yaml:"ref" mapstructure:"ref"`
 	Server        string `json:"server" yaml:"server" mapstructure:"server"`
@@ -916,7 +916,7 @@ type XrelayOutbound struct {
 }
 
 // Validate 校验 outbound 类型和对应目标字段。
-func (x XrelayOutbound) Validate() error {
+func (x XrayOutbound) Validate() error {
 	if x.PrivateDirect && x.Type != "socks5" && x.Type != "http" {
 		return fmt.Errorf("private_direct is only supported for socks5/http outbound")
 	}
@@ -935,28 +935,28 @@ func (x XrelayOutbound) Validate() error {
 	}
 }
 
-// XrelayConfig 保存单个 stack 的 xrelay 配置。
-type XrelayConfig struct {
+// XrayConfig 保存单个 stack 的 xray 配置。
+type XrayConfig struct {
 	Enabled  bool                `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
 	LogLevel string              `json:"loglevel" yaml:"loglevel" mapstructure:"loglevel"`
-	Outbound XrelayOutbound      `json:"outbound" yaml:"outbound" mapstructure:"outbound"`
+	Outbound XrayOutbound      `json:"outbound" yaml:"outbound" mapstructure:"outbound"`
 	Inbounds []Inbound           `json:"inbounds" yaml:"inbounds" mapstructure:"inbounds"`
-	API      *XrelayAPIConfig    `json:"api" yaml:"api" mapstructure:"api"`
-	Stats    *XrelayStatsConfig  `json:"stats" yaml:"stats" mapstructure:"stats"`
-	Policy   *XrelayPolicyConfig `json:"policy" yaml:"policy" mapstructure:"policy"`
+	API      *XrayAPIConfig    `json:"api" yaml:"api" mapstructure:"api"`
+	Stats    *XrayStatsConfig  `json:"stats" yaml:"stats" mapstructure:"stats"`
+	Policy   *XrayPolicyConfig `json:"policy" yaml:"policy" mapstructure:"policy"`
 }
 
-// UnmarshalYAML 在加载 xrelay 时补齐 enabled 默认值。
-func (x *XrelayConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = XrelayConfig{Enabled: true}
-	type raw XrelayConfig
+// UnmarshalYAML 在加载 xray 时补齐 enabled 默认值。
+func (x *XrayConfig) UnmarshalYAML(value *yaml.Node) error {
+	*x = XrayConfig{Enabled: true}
+	type raw XrayConfig
 	return value.Decode((*raw)(x))
 }
 
-// Validate 校验 xrelay 配置和 inbound 唯一性。
-func (x XrelayConfig) Validate() error {
+// Validate 校验 xray 配置和 inbound 唯一性。
+func (x XrayConfig) Validate() error {
 	if x.LogLevel != "" && !validXrayLogLevel(x.LogLevel) {
-		return fmt.Errorf("xrelay loglevel is invalid: %s", x.LogLevel)
+		return fmt.Errorf("xray loglevel is invalid: %s", x.LogLevel)
 	}
 	if x.API != nil {
 		if err := validateAPIConfig(*x.API); err != nil {
@@ -967,7 +967,7 @@ func (x XrelayConfig) Validate() error {
 		return err
 	}
 	if len(x.Inbounds) == 0 {
-		return fmt.Errorf("inbounds is required for xrelay")
+		return fmt.Errorf("inbounds is required for xray")
 	}
 	names := make([]string, 0, len(x.Inbounds))
 	for _, inbound := range x.Inbounds {
@@ -1157,8 +1157,8 @@ func (c ClashUpstream) Validate() error {
 		return err
 	}
 	switch c.Type {
-	case "xrelay-socks5":
-		return ValidateRef(c.Ref, 2, "xrelay-socks5 ref is required")
+	case "xray-socks5":
+		return ValidateRef(c.Ref, 2, "xray-socks5 ref is required")
 	case "raw":
 		return ValidateRawProxyConfig(c.Config)
 	default:
@@ -1309,7 +1309,7 @@ type Stack struct {
 	Enabled    bool         `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
 	Role       string       `json:"role" yaml:"role" mapstructure:"role"`
 	Labels     []string     `json:"labels" yaml:"labels" mapstructure:"labels"`
-	Xrelay     XrelayConfig `json:"xrelay" yaml:"xrelay" mapstructure:"xrelay"`
+	Xray     XrayConfig `json:"xray" yaml:"xray" mapstructure:"xray"`
 	Clash      ClashConfig  `json:"clash" yaml:"clash" mapstructure:"clash"`
 	SourcePath string       `json:"-" yaml:"-"`
 }
@@ -1337,7 +1337,7 @@ func (s *Stack) Validate() error {
 			return err
 		}
 	}
-	if err := s.Xrelay.Validate(); err != nil {
+	if err := s.Xray.Validate(); err != nil {
 		return err
 	}
 	return s.Clash.Validate()
@@ -1367,10 +1367,10 @@ func (s StackSet) ByName() map[string]*Stack {
 	return stacks
 }
 
-// ResolveXrelayLogLevel 读取 stack 级 Xray 日志级别覆盖，未配置时使用全局默认。
-func ResolveXrelayLogLevel(defaults DefaultXrelayConfig, xrelay XrelayConfig) string {
-	if xrelay.LogLevel != "" {
-		return xrelay.LogLevel
+// ResolveXrayLogLevel 读取 stack 级 Xray 日志级别覆盖，未配置时使用全局默认。
+func ResolveXrayLogLevel(defaults DefaultXrayConfig, xray XrayConfig) string {
+	if xray.LogLevel != "" {
+		return xray.LogLevel
 	}
 	if defaults.LogLevel != "" {
 		return defaults.LogLevel
@@ -1389,12 +1389,12 @@ func ResolveClashLogLevel(defaults DefaultClashConfig, clash ClashConfig) string
 	return defaultClashLogLevel
 }
 
-// ResolveXrelayAPIConfig 合并全局 defaults.xrelay.api 和 stack 级覆盖。
-func ResolveXrelayAPIConfig(defaults DefaultXrelayConfig, xrelay XrelayConfig) XrelayAPIConfig {
-	if xrelay.API == nil {
+// ResolveXrayAPIConfig 合并全局 defaults.xray.api 和 stack 级覆盖。
+func ResolveXrayAPIConfig(defaults DefaultXrayConfig, xray XrayConfig) XrayAPIConfig {
+	if xray.API == nil {
 		return defaults.API
 	}
-	override := *xrelay.API
+	override := *xray.API
 	if override.fields == nil {
 		return override
 	}
@@ -1414,12 +1414,12 @@ func ResolveXrelayAPIConfig(defaults DefaultXrelayConfig, xrelay XrelayConfig) X
 	return merged
 }
 
-// ResolveXrelayStatsConfig 合并全局 defaults.xrelay.stats 和 stack 级覆盖。
-func ResolveXrelayStatsConfig(defaults DefaultXrelayConfig, xrelay XrelayConfig) XrelayStatsConfig {
-	if xrelay.Stats == nil {
+// ResolveXrayStatsConfig 合并全局 defaults.xray.stats 和 stack 级覆盖。
+func ResolveXrayStatsConfig(defaults DefaultXrayConfig, xray XrayConfig) XrayStatsConfig {
+	if xray.Stats == nil {
 		return defaults.Stats
 	}
-	override := *xrelay.Stats
+	override := *xray.Stats
 	if override.fields == nil {
 		return override
 	}
@@ -1430,12 +1430,12 @@ func ResolveXrelayStatsConfig(defaults DefaultXrelayConfig, xrelay XrelayConfig)
 	return merged
 }
 
-// ResolveXrelayPolicyConfig 合并全局 defaults.xrelay.policy 和 stack 级覆盖。
-func ResolveXrelayPolicyConfig(defaults DefaultXrelayConfig, xrelay XrelayConfig) XrelayPolicyConfig {
-	if xrelay.Policy == nil {
+// ResolveXrayPolicyConfig 合并全局 defaults.xray.policy 和 stack 级覆盖。
+func ResolveXrayPolicyConfig(defaults DefaultXrayConfig, xray XrayConfig) XrayPolicyConfig {
+	if xray.Policy == nil {
 		return defaults.Policy
 	}
-	override := *xrelay.Policy
+	override := *xray.Policy
 	if override.fields == nil {
 		return override
 	}
@@ -1634,9 +1634,9 @@ func validateDefaultClash(config DefaultClashConfig) error {
 	return nil
 }
 
-func validateDefaultXrelay(config DefaultXrelayConfig) error {
+func validateDefaultXray(config DefaultXrayConfig) error {
 	if !validXrayLogLevel(config.LogLevel) {
-		return fmt.Errorf("defaults.xrelay.loglevel is invalid: %s", config.LogLevel)
+		return fmt.Errorf("defaults.xray.loglevel is invalid: %s", config.LogLevel)
 	}
 	if err := validateAPIConfig(config.API); err != nil {
 		return err
@@ -1644,7 +1644,7 @@ func validateDefaultXrelay(config DefaultXrelayConfig) error {
 	return nil
 }
 
-func validateAPIConfig(config XrelayAPIConfig) error {
+func validateAPIConfig(config XrayAPIConfig) error {
 	if err := ValidateIdentifier(config.Tag, "xray api tag"); err != nil {
 		return err
 	}
@@ -1666,8 +1666,8 @@ func validateAPIConfig(config XrelayAPIConfig) error {
 	return nil
 }
 
-func mergePolicyLevels(defaults map[string]XrelayPolicyLevelConfig, overrides map[string]XrelayPolicyLevelConfig) map[string]XrelayPolicyLevelConfig {
-	merged := make(map[string]XrelayPolicyLevelConfig, len(defaults)+len(overrides))
+func mergePolicyLevels(defaults map[string]XrayPolicyLevelConfig, overrides map[string]XrayPolicyLevelConfig) map[string]XrayPolicyLevelConfig {
+	merged := make(map[string]XrayPolicyLevelConfig, len(defaults)+len(overrides))
 	for level, config := range defaults {
 		merged[level] = config
 	}
@@ -1688,7 +1688,7 @@ func mergePolicyLevels(defaults map[string]XrelayPolicyLevelConfig, overrides ma
 	return merged
 }
 
-func mergePolicySystem(defaults XrelayPolicySystemConfig, override XrelayPolicySystemConfig) XrelayPolicySystemConfig {
+func mergePolicySystem(defaults XrayPolicySystemConfig, override XrayPolicySystemConfig) XrayPolicySystemConfig {
 	if override.fields == nil {
 		return override
 	}

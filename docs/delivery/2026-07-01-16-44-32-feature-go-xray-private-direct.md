@@ -6,7 +6,7 @@
 
 ## 实现方案
 
-- 新增 `xrelay.outbound.private_direct` 可选配置项。
+- 新增 `xray.outbound.private_direct` 可选配置项。
 - 仅允许 `type: socks5` 和 `type: http` 使用 `private_direct`。
 - 保持 `type: clash` 默认由 Clash/mihomo 负责规则分流，不在 Xray 层重复生成私网直连规则。
 - 开启后 Xray 追加一个 `freedom` outbound，并生成 `routing.rules` 将本机、私网、CGNAT、IPv6 ULA 和链路本地地址转到该 outbound。
@@ -17,12 +17,12 @@
 - `internal/generator/xray/config.go`：新增 routing 结构、私网直连 outbound 和路由生成逻辑。
 - `internal/generator/xray/config_test.go`：补充开启场景 golden 测试和误用校验测试。
 - `tests/golden/xray/socks-private-direct.json`：新增 Xray 私网直连 golden。
-- `internal/agentconfig/templates/snippets/xrelay/outbound/*.yaml`：补充示例注释。
+- `internal/agentconfig/templates/snippets/xray/outbound/*.yaml`：补充示例注释。
 - `docs/schema-spec.md`、`docs/generator-spec.md`：补充配置和生成行为说明。
 
 ## 配置与依赖变更
 
-- 新增可选配置：`xrelay.outbound.private_direct`。
+- 新增可选配置：`xray.outbound.private_direct`。
 - 无数据库、缓存、外部服务和 `go.mod` 依赖变更。
 
 ## 测试结果

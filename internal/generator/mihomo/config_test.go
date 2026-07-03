@@ -39,7 +39,7 @@ func TestRenderMihomoLogLevelOverrideMatchGolden(t *testing.T) {
 	stack := parseStack(t, `name: loglevel
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false
@@ -90,7 +90,7 @@ func TestRenderMihomoPreservesEmptyListenerUsers(t *testing.T) {
 	stack := parseStack(t, `name: empty-users
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false

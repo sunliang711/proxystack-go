@@ -217,7 +217,7 @@ func applyAutoMembersToDocument(root *yaml.Node, members []string) error {
 		upstreamNames = append(upstreamNames, upstreamName)
 		upstreams.Content = append(upstreams.Content, mappingNode(
 			"name", scalarNode(upstreamName),
-			"type", scalarNode("xrelay-socks5"),
+			"type", scalarNode("xray-socks5"),
 			"ref", scalarNode(member+".relay"),
 		))
 	}
@@ -269,13 +269,13 @@ func addMemberToDocument(root *yaml.Node, memberName string) error {
 		if scalarValue(mappingValue(upstream, "name")) == upstreamName {
 			return fmt.Errorf("upstream already exists: %s", upstreamName)
 		}
-		if scalarValue(mappingValue(upstream, "type")) == "xrelay-socks5" && scalarValue(mappingValue(upstream, "ref")) == ref {
+		if scalarValue(mappingValue(upstream, "type")) == "xray-socks5" && scalarValue(mappingValue(upstream, "ref")) == ref {
 			return fmt.Errorf("member already exists: %s", memberName)
 		}
 	}
 	upstreams.Content = append(upstreams.Content, mappingNode(
 		"name", scalarNode(upstreamName),
-		"type", scalarNode("xrelay-socks5"),
+		"type", scalarNode("xray-socks5"),
 		"ref", scalarNode(ref),
 	))
 	return syncMemberProxyAdd(clash, upstreamName)
@@ -297,7 +297,7 @@ func removeMemberFromDocument(root *yaml.Node, memberName string) error {
 	next := make([]*yaml.Node, 0, len(upstreams.Content))
 	for _, upstream := range upstreams.Content {
 		if upstream.Kind == yaml.MappingNode &&
-			scalarValue(mappingValue(upstream, "type")) == "xrelay-socks5" &&
+			scalarValue(mappingValue(upstream, "type")) == "xray-socks5" &&
 			(scalarValue(mappingValue(upstream, "name")) == upstreamName || scalarValue(mappingValue(upstream, "ref")) == ref) {
 			removed[scalarValue(mappingValue(upstream, "name"))] = true
 			continue
@@ -373,17 +373,17 @@ func syncMemberProxyRemove(clash *yaml.Node, upstreamNames map[string]bool) erro
 // allocateStackDocumentPorts 按全局端口池修改 stack 文档中的监听端口。
 func allocateStackDocumentPorts(document *stackDocument, stackSet domain.StackSet) error {
 	used := usedPorts(stackSet)
-	xrelay := ensureMappingValue(document.root, "xrelay")
-	inbounds := ensureSequenceValue(xrelay, "inbounds")
-	xrelayPorts, err := stackSet.Config.PortRanges.XrelayInbound.Allocate(used, len(inbounds.Content))
+	xray := ensureMappingValue(document.root, "xray")
+	inbounds := ensureSequenceValue(xray, "inbounds")
+	xrayPorts, err := stackSet.Config.PortRanges.XrayInbound.Allocate(used, len(inbounds.Content))
 	if err != nil {
 		return err
 	}
 	for index, inbound := range inbounds.Content {
-		setMappingInt(inbound, "port", xrelayPorts[index])
-		used[xrelayPorts[index]] = true
+		setMappingInt(inbound, "port", xrayPorts[index])
+		used[xrayPorts[index]] = true
 	}
-	api := mappingValue(xrelay, "api")
+	api := mappingValue(xray, "api")
 	if api != nil && api.Kind == yaml.MappingNode && boolValue(mappingValue(api, "enabled")) {
 		host := "127.0.0.1"
 		if listen := scalarValue(mappingValue(api, "listen")); listen != "" {
@@ -441,11 +441,11 @@ func allocateListenerPorts(listeners *yaml.Node, portRange domain.PortRange, use
 
 // replaceTemplateVmessUUIDs 替换内置模板中的 vmess UUID 占位符。
 func replaceTemplateVmessUUIDs(root *yaml.Node) error {
-	xrelay := mappingValue(root, "xrelay")
-	if xrelay == nil || xrelay.Kind != yaml.MappingNode {
+	xray := mappingValue(root, "xray")
+	if xray == nil || xray.Kind != yaml.MappingNode {
 		return nil
 	}
-	inbounds := mappingValue(xrelay, "inbounds")
+	inbounds := mappingValue(xray, "inbounds")
 	if inbounds == nil || inbounds.Kind != yaml.SequenceNode {
 		return nil
 	}
@@ -481,16 +481,16 @@ func rewriteSelfRefsInNode(node *yaml.Node, source string, target string) {
 	if len(rewrites) == 0 {
 		return
 	}
-	rewriteXrelayOutboundRef(node, rewrites)
+	rewriteXrayOutboundRef(node, rewrites)
 	rewriteClashUpstreamRefs(node, rewrites)
 }
 
 // selfRefRewrites 收集当前文档内可被自身 ref 指向的资源名称。
 func selfRefRewrites(root *yaml.Node, source string, target string) map[string]string {
 	rewrites := map[string]string{}
-	xrelay := mappingValue(root, "xrelay")
-	if xrelay != nil && xrelay.Kind == yaml.MappingNode {
-		inbounds := mappingValue(xrelay, "inbounds")
+	xray := mappingValue(root, "xray")
+	if xray != nil && xray.Kind == yaml.MappingNode {
+		inbounds := mappingValue(xray, "inbounds")
 		if inbounds != nil && inbounds.Kind == yaml.SequenceNode {
 			for _, inbound := range inbounds.Content {
 				if inbound.Kind != yaml.MappingNode {
@@ -518,13 +518,13 @@ func selfRefRewrites(root *yaml.Node, source string, target string) map[string]s
 	return rewrites
 }
 
-// rewriteXrelayOutboundRef 只改写 xrelay.outbound.ref 中指向本 stack 的 clash 监听引用。
-func rewriteXrelayOutboundRef(root *yaml.Node, rewrites map[string]string) {
-	xrelay := mappingValue(root, "xrelay")
-	if xrelay == nil || xrelay.Kind != yaml.MappingNode {
+// rewriteXrayOutboundRef 只改写 xray.outbound.ref 中指向本 stack 的 clash 监听引用。
+func rewriteXrayOutboundRef(root *yaml.Node, rewrites map[string]string) {
+	xray := mappingValue(root, "xray")
+	if xray == nil || xray.Kind != yaml.MappingNode {
 		return
 	}
-	outbound := mappingValue(xrelay, "outbound")
+	outbound := mappingValue(xray, "outbound")
 	if outbound == nil || outbound.Kind != yaml.MappingNode {
 		return
 	}
@@ -540,7 +540,7 @@ func rewriteXrelayOutboundRef(root *yaml.Node, rewrites map[string]string) {
 	}
 }
 
-// rewriteClashUpstreamRefs 只改写 xrelay-socks5 upstream 的 schema ref 字段。
+// rewriteClashUpstreamRefs 只改写 xray-socks5 upstream 的 schema ref 字段。
 func rewriteClashUpstreamRefs(root *yaml.Node, rewrites map[string]string) {
 	clash := mappingValue(root, "clash")
 	if clash == nil || clash.Kind != yaml.MappingNode {
@@ -551,7 +551,7 @@ func rewriteClashUpstreamRefs(root *yaml.Node, rewrites map[string]string) {
 		return
 	}
 	for _, upstream := range upstreams.Content {
-		if upstream.Kind != yaml.MappingNode || scalarValue(mappingValue(upstream, "type")) != "xrelay-socks5" {
+		if upstream.Kind != yaml.MappingNode || scalarValue(mappingValue(upstream, "type")) != "xray-socks5" {
 			continue
 		}
 		ref := mappingValue(upstream, "ref")
@@ -569,11 +569,11 @@ func rewriteSubscriptionRemarksInNode(root *yaml.Node, source string, target str
 	if source == "" || source == target {
 		return
 	}
-	xrelay := mappingValue(root, "xrelay")
-	if xrelay == nil || xrelay.Kind != yaml.MappingNode {
+	xray := mappingValue(root, "xray")
+	if xray == nil || xray.Kind != yaml.MappingNode {
 		return
 	}
-	inbounds := mappingValue(xrelay, "inbounds")
+	inbounds := mappingValue(xray, "inbounds")
 	if inbounds == nil || inbounds.Kind != yaml.SequenceNode {
 		return
 	}
@@ -682,7 +682,7 @@ func membersFromDocument(root *yaml.Node) []string {
 	}
 	members := make([]string, 0)
 	for _, upstream := range upstreams.Content {
-		if upstream.Kind != yaml.MappingNode || scalarValue(mappingValue(upstream, "type")) != "xrelay-socks5" {
+		if upstream.Kind != yaml.MappingNode || scalarValue(mappingValue(upstream, "type")) != "xray-socks5" {
 			continue
 		}
 		ref := scalarValue(mappingValue(upstream, "ref"))

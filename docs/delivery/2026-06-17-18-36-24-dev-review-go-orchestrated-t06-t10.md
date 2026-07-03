@@ -18,7 +18,7 @@
 
 ## 实现摘要
 
-- 新增 `internal/generator/mihomo`，支持 listener、raw upstream、xrelay-socks5 upstream、proxy-groups 和 rules profile。
+- 新增 `internal/generator/mihomo`，支持 listener、raw upstream、xray-socks5 upstream、proxy-groups 和 rules profile。
 - 新增 `internal/generator/sub`，支持 input/index、Clash/Premium/Surge 模板渲染、bundle 写入与导入。
 - 新增 `internal/generator/backup`，支持 native backup 写出、读取和恢复。
 - 新增 `internal/subserver`，实现 `/health`、`/sub`、`/premium_sub`、`/surge_sub`、token 鉴权、reload 失败保留旧 index 和 watcher。

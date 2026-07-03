@@ -27,7 +27,7 @@
 ## 实现步骤
 
 1. 定义 SubscriptionInput、Node、Index、Access。
-2. 从 `sub: true` 的 xrelay inbound 生成节点。
+2. 从 `sub: true` 的 xray inbound 生成节点。
 3. 实现 vmess 多用户节点。
 4. 实现 shadowsocks/SS2022 多用户节点。
 5. 实现 input 文件合并。

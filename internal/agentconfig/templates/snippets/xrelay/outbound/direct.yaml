@@ -1,3 +1,0 @@
-# xrelay outbound：直连出站，不使用 ref/server/port/username/password。
-outbound:
-  type: direct

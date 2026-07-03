@@ -6,7 +6,7 @@ import "testing"
 func TestResolveStackUserRefsPreservesProgrammaticUserRefSource(t *testing.T) {
 	stack := Stack{
 		Name: "edge",
-		Xrelay: XrelayConfig{
+		Xray: XrayConfig{
 			Inbounds: []Inbound{{
 				Name:     "vmess",
 				Protocol: "vmess",
@@ -30,7 +30,7 @@ func TestResolveStackUserRefsPreservesProgrammaticUserRefSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveStackUserRefs() error = %v", err)
 	}
-	inbound := resolved.Xrelay.Inbounds[0]
+	inbound := resolved.Xray.Inbounds[0]
 	if !inbound.UsesUserRefs() {
 		t.Fatal("expected resolved inbound to preserve user_refs source")
 	}

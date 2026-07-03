@@ -100,7 +100,7 @@ psctl [--base-dir DIR] add NAME [--template pair|auto-url-test|load-balance] [--
 
 - 创建 `stacks/<name>.yaml`。
 - 默认模板为 `pair`。
-- 默认自动分配 xrelay inbound、Xray API、clash socks、clash HTTP、clash controller 端口。
+- 默认自动分配 xray inbound、Xray API、clash socks、clash HTTP、clash controller 端口。
 - 内置模板中的 vmess 占位 UUID 必须替换成随机 UUID。
 - `--from-file` 保留输入文件中的凭据和 UUID。
 - 默认打开编辑器，初始内容为已完成改名、UUID 替换和端口分配的候选 YAML；`--no-edit` 用于脚本化场景，直接校验并写入。
@@ -121,7 +121,7 @@ psctl [--base-dir DIR] add NAME [--template pair|auto-url-test|load-balance] [--
 ### 3.3.1 `example`
 
 ```bash
-psctl example [stack|xrelay|clash] [SECTION] [TYPE]
+psctl example [stack|xray|clash] [SECTION] [TYPE]
 ```
 
 职责：
@@ -129,7 +129,7 @@ psctl example [stack|xrelay|clash] [SECTION] [TYPE]
 - 输出可复制的 stack YAML 配置片段到 stdout。
 - 不带参数时输出 usage 和当前支持的全部片段说明。
 - 支持按 area、section 或具体 type 逐级筛选片段。
-- 当前覆盖 stack role，xrelay api/stats/policy/loglevel/auth/inbound/outbound，以及 clash mode/loglevel/controller/listener/upstream/group/rules。
+- 当前覆盖 stack role，xray api/stats/policy/loglevel/auth/inbound/outbound，以及 clash mode/loglevel/controller/listener/upstream/group/rules。
 - 精确到 `TYPE` 时输出纯 YAML；只筛选到 area 或 section 时输出带注释的候选片段清单。
 
 副作用：只读。
@@ -174,7 +174,7 @@ psctl [--base-dir DIR] list [--verbose] [--check-system-ports]
 
 职责：
 
-- 列出 stack 文件、enabled、role、生成状态、运行状态、xrelay endpoint 和 clash endpoint。
+- 列出 stack 文件、enabled、role、生成状态、运行状态、xray endpoint 和 clash endpoint。
 - 端口后缀 `(L)` 表示 loopback，`(*)` 表示非 loopback。
 
 副作用：
@@ -224,7 +224,7 @@ psctl [--base-dir DIR] member remove STACK MEMBER
 
 职责：
 
-- 维护 auto/load-balance stack 的 `xrelay-socks5` 成员。
+- 维护 auto/load-balance stack 的 `xray-socks5` 成员。
 
 副作用：
 
@@ -273,7 +273,7 @@ psctl [--base-dir DIR] validate [TARGET] [--skip-system-ports]
 
 验收：
 
-- target 可为全部、stack、`xrelay/name`、`clash/name`。
+- target 可为全部、stack、`xray/name`、`clash/name`。
 - 错误需要聚合输出，不能只报第一条。
 
 ### 3.10 `check`
@@ -298,7 +298,7 @@ psctl [--base-dir DIR] check [TARGET] [--skip-system-ports]
 
 ```bash
 psctl [--base-dir DIR] render model [--skip-system-ports]
-psctl [--base-dir DIR] render xrelay STACK [--skip-system-ports]
+psctl [--base-dir DIR] render xray STACK [--skip-system-ports]
 psctl [--base-dir DIR] render clash STACK [--skip-system-ports]
 psctl [--base-dir DIR] render sub [--input-dir DIR] [--skip-system-ports]
 psctl [--base-dir DIR] export-config sub|premium_sub|surge_sub USER
@@ -307,7 +307,7 @@ psctl [--base-dir DIR] export-config sub|premium_sub|surge_sub USER
 职责：
 
 - `model` 输出解析后的中间模型。
-- `xrelay` 输出指定 stack 的 Xray JSON。
+- `xray` 输出指定 stack 的 Xray JSON。
 - `clash` 输出指定 stack 的 mihomo YAML。
 - `sub` 输出订阅 index；传 `--input-dir` 时读取外部 inputs 合并。
 - `export-config` 输出指定用户的订阅文本。
@@ -336,7 +336,7 @@ target 规则：
 
 - 空：全部 enabled stack。
 - `NAME`：该 stack 的 xray + clash。
-- `xrelay/NAME`：只操作 xray。
+- `xray/NAME`：只操作 xray。
 - `clash/NAME`：只操作 mihomo。
 
 副作用：

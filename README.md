@@ -97,7 +97,7 @@ version: 1
 external_host: proxy.example.com
 
 port_ranges:
-  xrelay_inbound: 24000-24999
+  xray_inbound: 24000-24999
   clash_socks: 7001-7101
   clash_http: 7201-7301
   xray_api_range: 10001-10999

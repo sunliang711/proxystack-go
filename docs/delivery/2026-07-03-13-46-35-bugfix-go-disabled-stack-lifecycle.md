@@ -11,7 +11,7 @@
 ## 修复方案
 
 - 默认空 target 行为不变，仍只作用于 enabled stack。
-- 显式 target 的 `stop/status/logs/disable` 在 enabled 服务节点为空时，按 `NAME`、`xrelay/NAME`、`clash/NAME` 推导历史 unit 名。
+- 显式 target 的 `stop/status/logs/disable` 在 enabled 服务节点为空时，按 `NAME`、`xray/NAME`、`clash/NAME` 推导历史 unit 名。
 - `start/restart` 不使用历史 unit 推导，避免启动 disabled stack。
 - 未匹配服务提示改为 `No enabled services matched target`，避免误导为 stack 不存在。
 

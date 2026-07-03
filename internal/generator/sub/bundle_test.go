@@ -214,7 +214,7 @@ func validNativeConfigYAML(baseDir string) string {
 paths:
   stacks: stacks
 port_ranges:
-  xrelay_inbound: 4300-4399
+  xray_inbound: 4300-4399
   clash_socks: 7001-7101
   clash_http: 7201-7301
   xray_api_range: 10001-10999
@@ -226,7 +226,7 @@ func validNativeStackYAML(name string) string {
 	return `name: ` + name + `
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false

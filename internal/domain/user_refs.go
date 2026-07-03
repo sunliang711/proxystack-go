@@ -20,15 +20,15 @@ func ResolveStackSetUserRefs(stackSet StackSet) (StackSet, error) {
 func ResolveStackUserRefs(config GlobalConfig, stack Stack) (Stack, error) {
 	profiles := userProfileIndex(config.Users)
 	resolved := stack
-	resolved.Xrelay.Inbounds = append([]Inbound(nil), stack.Xrelay.Inbounds...)
-	for inboundIndex := range resolved.Xrelay.Inbounds {
-		inbound := resolved.Xrelay.Inbounds[inboundIndex]
+	resolved.Xray.Inbounds = append([]Inbound(nil), stack.Xray.Inbounds...)
+	for inboundIndex := range resolved.Xray.Inbounds {
+		inbound := resolved.Xray.Inbounds[inboundIndex]
 		if len(inbound.UserRefs) == 0 {
 			continue
 		}
 		users, err := resolveInboundUserRefs(profiles, inbound)
 		if err != nil {
-			return Stack{}, fmt.Errorf("stacks.%s.xrelay.inbounds[%d].user_refs: %w", stack.Name, inboundIndex, err)
+			return Stack{}, fmt.Errorf("stacks.%s.xray.inbounds[%d].user_refs: %w", stack.Name, inboundIndex, err)
 		}
 		inbound.Users = users
 		inbound.UserRefs = nil
@@ -41,9 +41,9 @@ func ResolveStackUserRefs(config GlobalConfig, stack Stack) (Stack, error) {
 		}
 		inbound.fields["user_refs"] = true
 		if err := inbound.Validate(); err != nil {
-			return Stack{}, fmt.Errorf("stacks.%s.xrelay.inbounds[%d]: %w", stack.Name, inboundIndex, err)
+			return Stack{}, fmt.Errorf("stacks.%s.xray.inbounds[%d]: %w", stack.Name, inboundIndex, err)
 		}
-		resolved.Xrelay.Inbounds[inboundIndex] = inbound
+		resolved.Xray.Inbounds[inboundIndex] = inbound
 	}
 	return resolved, nil
 }

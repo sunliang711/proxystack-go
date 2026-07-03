@@ -27,13 +27,13 @@ type ParsedRef struct {
 	Name      string
 }
 
-// ParseXrelayInboundRef 解析 <stack>.<inbound_name> 形式的 xrelay inbound ref。
-func ParseXrelayInboundRef(value string, path string) (ParsedRef, error) {
+// ParseXrayInboundRef 解析 <stack>.<inbound_name> 形式的 xray inbound ref。
+func ParseXrayInboundRef(value string, path string) (ParsedRef, error) {
 	parts, err := splitRef(value, 2, path)
 	if err != nil {
 		return ParsedRef{}, err
 	}
-	return ParsedRef{Raw: value, Stack: parts[0], Component: "xrelay", Name: parts[1]}, nil
+	return ParsedRef{Raw: value, Stack: parts[0], Component: "xray", Name: parts[1]}, nil
 }
 
 // ParseComponentRef 解析 <stack>.<component>.<kind> 形式的组件 ref。
@@ -66,23 +66,23 @@ type EndpointUser struct {
 
 // ReferenceIndex 是跨 stack endpoint 索引，供校验、生成器和 check 复用。
 type ReferenceIndex struct {
-	XrelayInbounds map[string]Endpoint
+	XrayInbounds map[string]Endpoint
 	ClashListeners map[string]Endpoint
 }
 
 // NewReferenceIndex 从所有启用的 stack 组件中建立 endpoint 索引。
 func NewReferenceIndex(stacks []domain.Stack) ReferenceIndex {
 	index := ReferenceIndex{
-		XrelayInbounds: make(map[string]Endpoint),
+		XrayInbounds: make(map[string]Endpoint),
 		ClashListeners: make(map[string]Endpoint),
 	}
 	for _, stack := range stacks {
 		if !stack.Enabled {
 			continue
 		}
-		if stack.Xrelay.Enabled {
-			for ref, endpoint := range IndexXrelayInbounds(stack) {
-				index.XrelayInbounds[ref] = endpoint
+		if stack.Xray.Enabled {
+			for ref, endpoint := range IndexXrayInbounds(stack) {
+				index.XrayInbounds[ref] = endpoint
 			}
 		}
 		if stack.Clash.Enabled {
@@ -94,9 +94,9 @@ func NewReferenceIndex(stacks []domain.Stack) ReferenceIndex {
 	return index
 }
 
-// ResolveXrelayInbound 按两段 ref 查询 xrelay inbound endpoint。
-func (r ReferenceIndex) ResolveXrelayInbound(ref string) (Endpoint, bool) {
-	endpoint, ok := r.XrelayInbounds[ref]
+// ResolveXrayInbound 按两段 ref 查询 xray inbound endpoint。
+func (r ReferenceIndex) ResolveXrayInbound(ref string) (Endpoint, bool) {
+	endpoint, ok := r.XrayInbounds[ref]
 	return endpoint, ok
 }
 
@@ -106,20 +106,20 @@ func (r ReferenceIndex) ResolveClashListener(ref string) (Endpoint, bool) {
 	return endpoint, ok
 }
 
-// IndexXrelayInbounds 建立单个 stack 的 xrelay inbound 两段 ref 索引。
-func IndexXrelayInbounds(stack domain.Stack) map[string]Endpoint {
-	endpoints := make(map[string]Endpoint, len(stack.Xrelay.Inbounds))
-	for index, inbound := range stack.Xrelay.Inbounds {
+// IndexXrayInbounds 建立单个 stack 的 xray inbound 两段 ref 索引。
+func IndexXrayInbounds(stack domain.Stack) map[string]Endpoint {
+	endpoints := make(map[string]Endpoint, len(stack.Xray.Inbounds))
+	for index, inbound := range stack.Xray.Inbounds {
 		ref := stack.Name + "." + inbound.Name
 		endpoints[ref] = Endpoint{
 			Ref:       ref,
 			Stack:     stack.Name,
-			Component: "xrelay",
+			Component: "xray",
 			Kind:      inbound.Protocol,
 			Name:      inbound.Name,
 			Listen:    inbound.Listen,
 			Port:      inbound.Port,
-			Path:      fmt.Sprintf("stacks.%s.xrelay.inbounds[%d]", stack.Name, index),
+			Path:      fmt.Sprintf("stacks.%s.xray.inbounds[%d]", stack.Name, index),
 		}
 	}
 	return endpoints

@@ -76,7 +76,7 @@ type StackSummary struct {
 	Name           string
 	Enabled        bool
 	Role           string
-	XrelayEndpoint string
+	XrayEndpoint string
 	ClashEndpoint  string
 }
 
@@ -219,7 +219,7 @@ func ListStacks(configPath string) ([]StackSummary, error) {
 			Name:           stack.Name,
 			Enabled:        stack.Enabled,
 			Role:           stack.Role,
-			XrelayEndpoint: firstXrelayEndpoint(stack),
+			XrayEndpoint: firstXrayEndpoint(stack),
 			ClashEndpoint:  firstClashEndpoint(stack),
 		})
 	}
@@ -227,7 +227,7 @@ func ListStacks(configPath string) ([]StackSummary, error) {
 	return summaries, nil
 }
 
-// ListMembers 返回 auto stack 当前 xrelay-socks5 成员列表。
+// ListMembers 返回 auto stack 当前 xray-socks5 成员列表。
 func ListMembers(options MemberOptions) ([]string, error) {
 	_, _, document, _, err := loadAutoStackDocument(options.ConfigPath, options.Stack)
 	if err != nil {
@@ -320,12 +320,12 @@ func ensureRelayMember(stackSet domain.StackSet, member string) error {
 	if !ok {
 		return fmt.Errorf("member stack does not exist: %s", member)
 	}
-	for _, inbound := range stack.Xrelay.Inbounds {
+	for _, inbound := range stack.Xray.Inbounds {
 		if inbound.Name == "relay" && inbound.Protocol == "socks5" {
 			return nil
 		}
 	}
-	return fmt.Errorf("xrelay socks5 inbound ref does not exist: %s.relay", member)
+	return fmt.Errorf("xray socks5 inbound ref does not exist: %s.relay", member)
 }
 
 func purgeManifestFiles(cfg domain.GlobalConfig, stackName string) error {
@@ -352,11 +352,11 @@ func purgeManifestFiles(cfg domain.GlobalConfig, stackName string) error {
 	return writeFileAtomic(manifestPath, append(data, '\n'), 0o640)
 }
 
-func firstXrelayEndpoint(stack domain.Stack) string {
-	if len(stack.Xrelay.Inbounds) == 0 {
+func firstXrayEndpoint(stack domain.Stack) string {
+	if len(stack.Xray.Inbounds) == 0 {
 		return "-"
 	}
-	inbound := stack.Xrelay.Inbounds[0]
+	inbound := stack.Xray.Inbounds[0]
 	return fmt.Sprintf("%s:%d", inbound.Listen, inbound.Port)
 }
 
@@ -411,7 +411,7 @@ subscription:
   # source 标识导出来源；local 表示本机 agent 生成。
   source: local
 
-# 全局订阅用户档案。stack 的 xrelay.inbounds[].user_refs 会引用这里的 user/profile。
+# 全局订阅用户档案。stack 的 xray.inbounds[].user_refs 会引用这里的 user/profile。
 # VMess/Shadowsocks 会使用这里的 uuid/password；socks5/http 的实际连接账号仍配置在 inbound.auth。
 users:
   # user 是订阅入口用户；profile 用来区分同一 user 的不同凭据档案，默认 default。
@@ -428,8 +428,8 @@ users:
 
 # 自动分配端口范围。仅 add/clone --allocate-ports 使用；手工配置端口可在范围外。
 port_ranges:
-  # xrelay inbound 端口分配范围。
-  xrelay_inbound: 4300-4399
+  # xray inbound 端口分配范围。
+  xray_inbound: 4300-4399
   # mihomo socks listener 端口分配范围。
   clash_socks: 7001-7101
   # mihomo http listener 端口分配范围。
@@ -447,8 +447,8 @@ defaults:
     mode: Rule
     # 内置规则模板名称。
     rule_profile: default
-  # Xray/xrelay 默认配置。
-  xrelay:
+  # Xray/xray 默认配置。
+  xray:
     # Xray 日志级别，支持 debug、info、warning、error、none。
     loglevel: warning
     # Xray API 默认配置，用于 stats 查询等内部能力。

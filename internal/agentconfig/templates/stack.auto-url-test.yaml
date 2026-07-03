@@ -1,5 +1,5 @@
 # auto 实例模板
-# 需要把 usa1/usa2 改成实际已有实例名，把 relay 改成目标 xrelay inbound name。
+# 需要把 usa1/usa2 改成实际已有实例名，把 relay 改成目标 xray inbound name。
 # 快速定位：
 # - 搜索【必改】：部署前必须替换的 ref、password、secret 等占位值。
 # - 搜索【按需改】：端口、监听地址、user、remark、测速参数等常见部署参数。
@@ -15,33 +15,33 @@ role: auto
 # 【按需改】自定义标签列表；这里标记为自动代理类实例。
 labels: [auto]
 
-# Xray/xrelay 侧配置，用于暴露聚合后的入站入口。
-xrelay:
-  # 【一般不改】是否为该 stack 启用 xrelay 服务。
+# Xray/xray 侧配置，用于暴露聚合后的入站入口。
+xray:
+  # 【一般不改】是否为该 stack 启用 xray 服务。
   enabled: true
-  # 【按需改】stack 级 Xray 日志级别；不填继承 defaults.xrelay.loglevel。支持全集：debug、info、warning、error、none。
+  # 【按需改】stack 级 Xray 日志级别；不填继承 defaults.xray.loglevel。支持全集：debug、info、warning、error、none。
   # loglevel: warning
 
-{{ stackSnippet "xrelay.api.default" 2 }}
+{{ stackSnippet "xray.api.default" 2 }}
 
-{{ stackSnippet "xrelay.stats.enabled" 2 }}
+{{ stackSnippet "xray.stats.enabled" 2 }}
 
-{{ stackSnippet "xrelay.policy.enabled" 2 }}
+{{ stackSnippet "xray.policy.enabled" 2 }}
 
-  # xrelay 入站列表，会生成对应 Xray inbound。
+  # xray 入站列表，会生成对应 Xray inbound。
   inbounds:
-{{ stackSnippet "xrelay.inbound.socks5" 4 }}
+{{ stackSnippet "xray.inbound.socks5" 4 }}
 
-{{ stackSnippet "xrelay.inbound.vmess-raw" 4 }}
+{{ stackSnippet "xray.inbound.vmess-raw" 4 }}
 
-  # 【一般不改】xrelay 出站配置，决定入站流量转发到哪里。
+  # 【一般不改】xray 出站配置，决定入站流量转发到哪里。
   # 下方方案只保留一种：默认方案 A 走本 stack 的 Clash；改用其他方案时同步删除或注释不适用字段。
-{{ stackSnippet "xrelay.outbound.clash" 2 }}
+{{ stackSnippet "xray.outbound.clash" 2 }}
 
 # Clash/mihomo 侧配置，用于自动探测并选择可用上游。
 clash:
   # 【一般不改】是否为该 stack 启用 Clash 服务。
-  # 如果 xrelay.outbound.type 不使用 clash，可以设为 false，不生成或管理 Clash 服务；但当前 stack 模型仍要求保留合法 clash 配置段。
+  # 如果 xray.outbound.type 不使用 clash，可以设为 false，不生成或管理 Clash 服务；但当前 stack 模型仍要求保留合法 clash 配置段。
   enabled: true
   # 【按需改】Clash 运行模式；支持全集：Rule、Global、Direct；Rule 表示按规则分流。
   mode: Rule
@@ -52,7 +52,7 @@ clash:
 
   # Clash 本地监听器配置。
   listeners:
-    # socks 监听器列表，供 xrelay 或本机连接。
+    # socks 监听器列表，供 xray 或本机连接。
     socks:
 {{ stackSnippet "clash.listener.socks" 6 }}
     # HTTP 监听器列表，供本机 HTTP 代理客户端连接。
@@ -61,9 +61,9 @@ clash:
 
   # Clash 上游代理列表。
   upstreams:
-{{ stackMemberSnippet "clash.upstream.xrelay-socks5" "usa1" 4 }}
+{{ stackMemberSnippet "clash.upstream.xray-socks5" "usa1" 4 }}
 
-{{ stackMemberSnippet "clash.upstream.xrelay-socks5" "usa2" 4 }}
+{{ stackMemberSnippet "clash.upstream.xray-socks5" "usa2" 4 }}
 
   # Clash 代理组列表。
   groups:

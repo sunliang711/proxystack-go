@@ -36,7 +36,7 @@ func RenderStackInputAt(stackSet domain.StackSet, source string, generatedAt str
 	}
 	nodes := make([]Node, 0)
 	for _, stack := range stackSet.Stacks {
-		if !stack.Enabled || !stack.Xrelay.Enabled {
+		if !stack.Enabled || !stack.Xray.Enabled {
 			continue
 		}
 		stackNodes, err := renderStackNodes(stackSet, stack)
@@ -83,11 +83,11 @@ func RenderSingleStackInputAt(stackSet domain.StackSet, stackName string, genera
 }
 
 func renderStackNodes(stackSet domain.StackSet, stack domain.Stack) ([]Node, error) {
-	if !stack.Enabled || !stack.Xrelay.Enabled {
+	if !stack.Enabled || !stack.Xray.Enabled {
 		return nil, nil
 	}
 	nodes := make([]Node, 0)
-	for _, inbound := range stack.Xrelay.Inbounds {
+	for _, inbound := range stack.Xray.Inbounds {
 		if !inbound.Sub {
 			continue
 		}

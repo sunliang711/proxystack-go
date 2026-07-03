@@ -75,7 +75,7 @@ func newRenderCommand() *cobra.Command {
 		Short: "Render model or generated config to stdout",
 	}
 	command.AddCommand(newRenderModelCommand())
-	command.AddCommand(newRenderXrelayCommand())
+	command.AddCommand(newRenderXrayCommand())
 	command.AddCommand(newRenderClashCommand())
 	command.AddCommand(newRenderSubCommand())
 	return command
@@ -104,11 +104,11 @@ func newRenderModelCommand() *cobra.Command {
 	return command
 }
 
-// newRenderXrelayCommand 创建 render xrelay 子命令。
-func newRenderXrelayCommand() *cobra.Command {
+// newRenderXrayCommand 创建 render xray 子命令。
+func newRenderXrayCommand() *cobra.Command {
 	skipSystemPorts := true
 	command := &cobra.Command{
-		Use:   "xrelay STACK",
+		Use:   "xray STACK",
 		Short: "Render Xray config for a stack",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {

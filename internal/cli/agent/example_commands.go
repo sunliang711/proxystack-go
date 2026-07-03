@@ -13,7 +13,7 @@ func newExampleCommand() *cobra.Command {
 	snippets := agentconfig.StackExampleSnippets()
 	long := "Print stack configuration snippets to stdout.\n\nSupported snippets:\n" + exampleCatalog(snippets)
 	return &cobra.Command{
-		Use:     "example [config|stack|xrelay|clash] [SECTION] [TYPE]",
+		Use:     "example [config|stack|xray|clash] [SECTION] [TYPE]",
 		Short:   "Print stack configuration examples",
 		Long:    long,
 		Example: exampleCommandExamples(),
@@ -87,7 +87,7 @@ func formatExampleSnippets(snippets []agentconfig.StackExampleSnippet) string {
 // exampleUsage 返回包含全部片段说明的 usage 文本。
 func exampleUsage(snippets []agentconfig.StackExampleSnippet) string {
 	return "Usage:\n" +
-		"  psctl example [config|stack|xrelay|clash] [SECTION] [TYPE]\n\n" +
+		"  psctl example [config|stack|xray|clash] [SECTION] [TYPE]\n\n" +
 		"Supported snippets:\n" +
 		exampleCatalog(snippets) +
 		"\nExamples:\n" +
@@ -132,9 +132,9 @@ func exampleCommandExamples() string {
 	return "  psctl example\n" +
 		"  psctl example config users default\n" +
 		"  psctl example stack role edge\n" +
-		"  psctl example xrelay inbound\n" +
-		"  psctl example xrelay inbound vmess\n" +
-		"  psctl example xrelay outbound direct\n" +
+		"  psctl example xray inbound\n" +
+		"  psctl example xray inbound vmess\n" +
+		"  psctl example xray outbound direct\n" +
 		"  psctl example clash listener socks\n" +
 		"  psctl example clash upstream raw\n" +
 		"  psctl example clash group url-test"

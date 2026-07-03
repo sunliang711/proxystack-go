@@ -6,7 +6,7 @@
 
 ## 实现方案
 
-- 新增 `ps-agent example [stack|xrelay|clash] [SECTION] [TYPE]`。
+- 新增 `ps-agent example [stack|xray|clash] [SECTION] [TYPE]`。
 - 不带参数时输出 usage 和全部支持片段说明。
 - 精确到 `TYPE` 时输出纯 YAML。
 - 只筛选到 area 或 section 时输出带注释的候选片段，并提示用户选择其中一个。
@@ -23,14 +23,14 @@
 ## 覆盖范围
 
 - `stack role`：`edge`、`auto`
-- `xrelay loglevel`：`debug`、`info`、`warning`、`error`、`none`
-- `xrelay auth`：`noauth`、`password`
-- `xrelay inbound`：`vmess`、`shadowsocks`、`socks5`、`http`
-- `xrelay outbound`：`clash`、`socks5`、`http`、`direct`
+- `xray loglevel`：`debug`、`info`、`warning`、`error`、`none`
+- `xray auth`：`noauth`、`password`
+- `xray inbound`：`vmess`、`shadowsocks`、`socks5`、`http`
+- `xray outbound`：`clash`、`socks5`、`http`、`direct`
 - `clash mode`：`rule`、`global`、`direct`
 - `clash loglevel`：`debug`、`info`、`warning`、`error`、`silent`
 - `clash listener`：`socks`、`http`
-- `clash upstream`：`xrelay-socks5`、`raw`、`raw-shadowsocks`、`raw-socks5`、`raw-http`
+- `clash upstream`：`xray-socks5`、`raw`、`raw-shadowsocks`、`raw-socks5`、`raw-http`
 - `clash group`：`select`、`url-test`、`load-balance`、`fallback`
 - `clash rules`：`default`
 
@@ -40,9 +40,9 @@
 - `go test ./...`：通过
 - 手工验证：
   - `go run ./cmd/ps-agent example --help`
-  - `go run ./cmd/ps-agent example xrelay inbound vmess`
-  - `go run ./cmd/ps-agent example xrelay outbound`
-  - `go run ./cmd/ps-agent example xrelay outbound direct`
+  - `go run ./cmd/ps-agent example xray inbound vmess`
+  - `go run ./cmd/ps-agent example xray outbound`
+  - `go run ./cmd/ps-agent example xray outbound direct`
   - `go run ./cmd/ps-agent example clash upstream raw-http`
 
 ## 独立评审

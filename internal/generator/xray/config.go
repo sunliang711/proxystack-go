@@ -209,20 +209,20 @@ func RenderConfig(stackSet domain.StackSet, stackName string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	stack, err := enabledXrelayStack(stackSet, stackName)
+	stack, err := enabledXrayStack(stackSet, stackName)
 	if err != nil {
 		return Config{}, err
 	}
-	defaults := stackSet.Config.Defaults.Xrelay
-	apiConfig := domain.ResolveXrelayAPIConfig(defaults, stack.Xrelay)
-	statsConfig := domain.ResolveXrelayStatsConfig(defaults, stack.Xrelay)
-	policyConfig := domain.ResolveXrelayPolicyConfig(defaults, stack.Xrelay)
+	defaults := stackSet.Config.Defaults.Xray
+	apiConfig := domain.ResolveXrayAPIConfig(defaults, stack.Xray)
+	statsConfig := domain.ResolveXrayStatsConfig(defaults, stack.Xray)
+	policyConfig := domain.ResolveXrayPolicyConfig(defaults, stack.Xray)
 	referenceGraph, err := graph.BuildReferenceGraph(stackSet)
 	if err != nil {
 		return Config{}, err
 	}
 	config := Config{
-		Log: LogConfig{LogLevel: domain.ResolveXrelayLogLevel(defaults, stack.Xrelay)},
+		Log: LogConfig{LogLevel: domain.ResolveXrayLogLevel(defaults, stack.Xray)},
 	}
 	if apiConfig.Enabled {
 		config.API = RenderAPI(apiConfig)
@@ -233,15 +233,15 @@ func RenderConfig(stackSet domain.StackSet, stackName string) (Config, error) {
 	if policyConfig.Enabled || statsConfig.Enabled {
 		config.Policy = RenderPolicy(policyConfig, statsConfig.Enabled)
 	}
-	config.Inbounds = make([]any, 0, len(stack.Xrelay.Inbounds))
-	for _, inbound := range stack.Xrelay.Inbounds {
+	config.Inbounds = make([]any, 0, len(stack.Xray.Inbounds))
+	for _, inbound := range stack.Xray.Inbounds {
 		rendered, err := RenderInbound(inbound)
 		if err != nil {
 			return Config{}, err
 		}
 		config.Inbounds = append(config.Inbounds, rendered)
 	}
-	outbounds, routing, err := RenderOutbounds(stack.Xrelay.Outbound, referenceGraph, stack.Name)
+	outbounds, routing, err := RenderOutbounds(stack.Xray.Outbound, referenceGraph, stack.Name)
 	if err != nil {
 		return Config{}, err
 	}
@@ -264,7 +264,7 @@ func DumpsConfig(stackSet domain.StackSet, stackName string) (string, error) {
 }
 
 // RenderAPI 生成 Xray API 配置。
-func RenderAPI(apiConfig domain.XrelayAPIConfig) *APIConfig {
+func RenderAPI(apiConfig domain.XrayAPIConfig) *APIConfig {
 	return &APIConfig{
 		Tag:      apiConfig.Tag,
 		Listen:   apiConfig.Listen,
@@ -273,7 +273,7 @@ func RenderAPI(apiConfig domain.XrelayAPIConfig) *APIConfig {
 }
 
 // RenderPolicy 生成 Xray policy 配置，stats 开启时默认启用全局统计项。
-func RenderPolicy(policyConfig domain.XrelayPolicyConfig, statsEnabled bool) *PolicyConfig {
+func RenderPolicy(policyConfig domain.XrayPolicyConfig, statsEnabled bool) *PolicyConfig {
 	policy := &PolicyConfig{
 		Levels: RenderPolicyLevels(policyConfig.Levels),
 		System: RenderPolicySystem(policyConfig.System, statsEnabled),
@@ -282,7 +282,7 @@ func RenderPolicy(policyConfig domain.XrelayPolicyConfig, statsEnabled bool) *Po
 }
 
 // RenderPolicyLevels 生成 policy levels 的用户流量统计开关。
-func RenderPolicyLevels(levelsConfig map[string]domain.XrelayPolicyLevelConfig) map[string]PolicyLevel {
+func RenderPolicyLevels(levelsConfig map[string]domain.XrayPolicyLevelConfig) map[string]PolicyLevel {
 	levels := make(map[string]PolicyLevel)
 	for level, levelConfig := range levelsConfig {
 		rendered := PolicyLevel{
@@ -300,7 +300,7 @@ func RenderPolicyLevels(levelsConfig map[string]domain.XrelayPolicyLevelConfig) 
 }
 
 // RenderPolicySystem 生成 system policy 的四个全局流量统计开关。
-func RenderPolicySystem(systemConfig domain.XrelayPolicySystemConfig, statsEnabled bool) PolicySystem {
+func RenderPolicySystem(systemConfig domain.XrayPolicySystemConfig, statsEnabled bool) PolicySystem {
 	return PolicySystem{
 		StatsInboundUplink:    boolOrDefault(systemConfig.StatsInboundUplink, statsEnabled),
 		StatsInboundDownlink:  boolOrDefault(systemConfig.StatsInboundDownlink, statsEnabled),
@@ -325,8 +325,8 @@ func RenderInbound(inbound domain.Inbound) (any, error) {
 	}
 }
 
-// RenderOutbound 按 xrelay outbound 类型生成 Xray outbound 配置。
-func RenderOutbound(outbound domain.XrelayOutbound, referenceGraph graph.ReferenceGraph, stackName string) (any, error) {
+// RenderOutbound 按 xray outbound 类型生成 Xray outbound 配置。
+func RenderOutbound(outbound domain.XrayOutbound, referenceGraph graph.ReferenceGraph, stackName string) (any, error) {
 	outboundTag := OutboundTag(stackName)
 	switch outbound.Type {
 	case "clash":
@@ -343,7 +343,7 @@ func RenderOutbound(outbound domain.XrelayOutbound, referenceGraph graph.Referen
 }
 
 // RenderOutbounds 生成 Xray outbound 列表，并在 Xray-only 代理出口启用私网直连时追加 routing。
-func RenderOutbounds(outbound domain.XrelayOutbound, referenceGraph graph.ReferenceGraph, stackName string) ([]any, *RoutingConfig, error) {
+func RenderOutbounds(outbound domain.XrayOutbound, referenceGraph graph.ReferenceGraph, stackName string) ([]any, *RoutingConfig, error) {
 	rendered, err := RenderOutbound(outbound, referenceGraph, stackName)
 	if err != nil {
 		return nil, nil, err
@@ -391,7 +391,7 @@ func NormalizeInternalEndpointAddress(address string) string {
 	return domain.NormalizeInternalEndpointAddress(address)
 }
 
-func enabledXrelayStack(stackSet domain.StackSet, stackName string) (domain.Stack, error) {
+func enabledXrayStack(stackSet domain.StackSet, stackName string) (domain.Stack, error) {
 	stack, ok := stackSet.ByName()[stackName]
 	if !ok {
 		return domain.Stack{}, GeneratorError{Message: "stack does not exist: " + stackName}
@@ -399,8 +399,8 @@ func enabledXrelayStack(stackSet domain.StackSet, stackName string) (domain.Stac
 	if !stack.Enabled {
 		return domain.Stack{}, GeneratorError{Message: "stack is disabled: " + stackName}
 	}
-	if !stack.Xrelay.Enabled {
-		return domain.Stack{}, GeneratorError{Message: "xrelay is disabled: " + stackName}
+	if !stack.Xray.Enabled {
+		return domain.Stack{}, GeneratorError{Message: "xray is disabled: " + stackName}
 	}
 	return *stack, nil
 }
@@ -501,7 +501,7 @@ func renderHTTPInbound(inbound domain.Inbound) (httpInbound, error) {
 	}, nil
 }
 
-func renderClashOutbound(outbound domain.XrelayOutbound, referenceGraph graph.ReferenceGraph, outboundTag string) (proxyOutbound, error) {
+func renderClashOutbound(outbound domain.XrayOutbound, referenceGraph graph.ReferenceGraph, outboundTag string) (proxyOutbound, error) {
 	endpoint, ok := referenceGraph.Index.ResolveClashListener(outbound.Ref)
 	if !ok {
 		return proxyOutbound{}, GeneratorError{Message: "clash listener ref does not exist: " + outbound.Ref}

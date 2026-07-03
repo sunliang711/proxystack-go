@@ -194,7 +194,7 @@ external_host: proxy.example.com
 subscription:
   source: local
 port_ranges:
-  xrelay_inbound: 4300-4399
+  xray_inbound: 4300-4399
   clash_socks: 7001-7101
   clash_http: 7201-7301
   xray_api_range: 10001-10999
@@ -216,7 +216,7 @@ install:
 	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stacks", "usa1.yaml"), []byte(`name: usa1
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   outbound:
     type: clash

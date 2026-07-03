@@ -503,7 +503,7 @@ func selectUnitFiles(config domain.GlobalConfig, units map[string]string, target
 	}
 	for _, node := range nodes {
 		switch node.Component {
-		case "xrelay":
+		case "xray":
 			selected[XrayUnitTemplate] = units[XrayUnitTemplate]
 		case "clash":
 			selected[ClashUnitTemplate] = units[ClashUnitTemplate]
@@ -528,7 +528,7 @@ func selectUnitFilesForUninstall(config domain.GlobalConfig, units map[string]st
 			continue
 		}
 		switch node.Component {
-		case "xrelay":
+		case "xray":
 			selected[XrayUnitTemplate] = units[XrayUnitTemplate]
 		case "clash":
 			selected[ClashUnitTemplate] = units[ClashUnitTemplate]

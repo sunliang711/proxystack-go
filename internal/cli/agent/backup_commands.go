@@ -172,7 +172,7 @@ func importServiceCandidates(configPath string, manager servicemanager.Manager) 
 			return nil, err
 		}
 		nodes = append(nodes,
-			graph.ServiceNode{Stack: stack.Name, Component: "xrelay"},
+			graph.ServiceNode{Stack: stack.Name, Component: "xray"},
 			graph.ServiceNode{Stack: stack.Name, Component: "clash"},
 		)
 	}

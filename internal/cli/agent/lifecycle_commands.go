@@ -24,7 +24,7 @@ func newLifecycleCommand(action string) *cobra.Command {
 		Long:  lifecycleCommandLong(action),
 		Example: "  psctl " + action + "\n" +
 			"  psctl " + action + " usa1\n" +
-			"  psctl " + action + " xrelay/usa1\n" +
+			"  psctl " + action + " xray/usa1\n" +
 			"  psctl " + action + " clash/usa1",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -64,7 +64,7 @@ func newServiceInstallCommand(uninstall bool) *cobra.Command {
 		Short: name + " stack service files",
 		Long:  serviceInstallCommandLong(name),
 		Example: "  psctl service " + name + "\n" +
-			"  psctl service " + name + " xrelay/usa1\n" +
+			"  psctl service " + name + " xray/usa1\n" +
 			"  psctl service " + name + " clash/usa1",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -166,7 +166,7 @@ func newServiceActionCommand(action string) *cobra.Command {
 		Long:  lifecycleCommandLong(action),
 		Example: "  psctl service " + action + "\n" +
 			"  psctl service " + action + " usa1\n" +
-			"  psctl service " + action + " xrelay/usa1\n" +
+			"  psctl service " + action + " xray/usa1\n" +
 			"  psctl service " + action + " clash/usa1",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -265,8 +265,8 @@ func lifecycleCommandLong(action string) string {
 	return "Run service manager " + action + " for stack services.\n\n" +
 		"TARGET rules:\n" +
 		"  omitted       all enabled stack services\n" +
-		"  NAME          xrelay and clash services for one stack\n" +
-		"  xrelay/NAME   xray service for one stack\n" +
+		"  NAME          xray and clash services for one stack\n" +
+		"  xray/NAME   xray service for one stack\n" +
 		"  clash/NAME    mihomo service for one stack"
 }
 
@@ -275,8 +275,8 @@ func serviceInstallCommandLong(action string) string {
 	return "Run service file " + action + " for stack services.\n\n" +
 		"TARGET rules:\n" +
 		"  omitted       all enabled stack services\n" +
-		"  NAME          xrelay and clash services for one stack\n" +
-		"  xrelay/NAME   xray service for one stack\n" +
+		"  NAME          xray and clash services for one stack\n" +
+		"  xray/NAME   xray service for one stack\n" +
 		"  clash/NAME    mihomo service for one stack"
 }
 
@@ -307,7 +307,7 @@ func explicitLifecycleServiceNodes(stackSet domain.StackSet, target string) []gr
 	}
 	component := ""
 	stackName := target
-	if strings.HasPrefix(target, "xrelay/") || strings.HasPrefix(target, "clash/") {
+	if strings.HasPrefix(target, "xray/") || strings.HasPrefix(target, "clash/") {
 		parts := strings.SplitN(target, "/", 2)
 		component = parts[0]
 		stackName = parts[1]
@@ -320,8 +320,8 @@ func explicitLifecycleServiceNodes(stackSet domain.StackSet, target string) []gr
 		return []graph.ServiceNode{{Stack: stackName, Component: component}}
 	}
 	nodes := make([]graph.ServiceNode, 0, 2)
-	if stack.Xrelay.Enabled {
-		nodes = append(nodes, graph.ServiceNode{Stack: stackName, Component: "xrelay"})
+	if stack.Xray.Enabled {
+		nodes = append(nodes, graph.ServiceNode{Stack: stackName, Component: "xray"})
 	}
 	if stack.Clash.Enabled {
 		nodes = append(nodes, graph.ServiceNode{Stack: stackName, Component: "clash"})
@@ -379,7 +379,7 @@ func checkRequiredBinariesForNodes(plan agentruntime.Plan, nodes []graph.Service
 	required := map[string]string{}
 	for _, node := range nodes {
 		switch node.Component {
-		case "xrelay":
+		case "xray":
 			required["xray"] = filepath.Join(plan.Config.ResolvePath(plan.Config.Paths.Bin), "xray")
 		case "clash":
 			required["mihomo"] = filepath.Join(plan.Config.ResolvePath(plan.Config.Paths.Bin), "mihomo")

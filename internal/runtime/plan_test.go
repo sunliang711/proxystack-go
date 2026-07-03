@@ -33,7 +33,7 @@ func TestBuildPlanApplyAndReuseGeneratedAt(t *testing.T) {
 	require.Equal(t, "2026-06-17T10:00:00+08:00", nextPlan.Manifest.GeneratedAt)
 	require.FileExists(t, filepath.Join(baseDir, "runtime", "manifest.json"))
 
-	scopedPlan, err := BuildPlan(BuildOptions{ConfigPath: configPath, Target: "xrelay/usa1", SkipSystemPorts: true, Now: secondNow})
+	scopedPlan, err := BuildPlan(BuildOptions{ConfigPath: configPath, Target: "xray/usa1", SkipSystemPorts: true, Now: secondNow})
 	require.NoError(t, err)
 	require.Len(t, scopedPlan.GeneratedFiles, 1)
 	require.NoError(t, ApplyPlan(scopedPlan))
@@ -60,9 +60,9 @@ func TestBuildPlanDeletesDisabledComponentTarget(t *testing.T) {
 		want     string
 	}{
 		{
-			name:     "xrelay",
-			replaces: map[string]string{"xrelay:\n  enabled: true": "xrelay:\n  enabled: false"},
-			target:   "xrelay/usa1",
+			name:     "xray",
+			replaces: map[string]string{"xray:\n  enabled: true": "xray:\n  enabled: false"},
+			target:   "xray/usa1",
 			want:     "generated/xray/usa1.json",
 		},
 		{
@@ -123,7 +123,7 @@ external_host: proxy.example.com
 subscription:
   source: local
 port_ranges:
-  xrelay_inbound: 4300-4399
+  xray_inbound: 4300-4399
   clash_socks: 7001-7101
   clash_http: 7201-7301
   xray_api_range: 10001-10999
@@ -132,7 +132,7 @@ defaults:
   clash:
     mode: Rule
     rule_profile: default
-  xrelay:
+  xray:
     loglevel: warning
     api:
       enabled: true
@@ -160,7 +160,7 @@ install:
 	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stacks", "usa1.yaml"), []byte(`name: usa1
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: true

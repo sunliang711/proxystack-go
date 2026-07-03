@@ -29,7 +29,7 @@
 
 ## 实现步骤
 
-1. 定义 `GlobalConfig`、`Stack`、`Xrelay`、`Clash`、`SubServerConfig` 等结构。
+1. 定义 `GlobalConfig`、`Stack`、`Xray`、`Clash`、`SubServerConfig` 等结构。
 2. 实现端口范围、路径和监听地址解析。
 3. 实现默认值补齐。
 4. 实现领域模型允许 unknown fields，传输模型 strict decode。

@@ -139,10 +139,10 @@ func ValidateSubscriptionProxyNames(stacks []domain.Stack) []Issue {
 	issues := make([]Issue, 0)
 	seen := map[string]subscriptionProxyName{}
 	for _, stack := range stacks {
-		if !stack.Enabled || !stack.Xrelay.Enabled {
+		if !stack.Enabled || !stack.Xray.Enabled {
 			continue
 		}
-		for inboundIndex, inbound := range stack.Xrelay.Inbounds {
+		for inboundIndex, inbound := range stack.Xray.Inbounds {
 			if !inbound.Sub {
 				continue
 			}
@@ -166,7 +166,7 @@ func ValidateSubscriptionProxyNames(stacks []domain.Stack) []Issue {
 
 // collectSubscriptionProxyNames 渲染一个 inbound 会贡献的订阅 user/name 对。
 func collectSubscriptionProxyNames(stackName string, inboundIndex int, inbound domain.Inbound) ([]subscriptionProxyName, []Issue) {
-	path := fmt.Sprintf("stacks.%s.xrelay.inbounds[%d]", stackName, inboundIndex)
+	path := fmt.Sprintf("stacks.%s.xray.inbounds[%d]", stackName, inboundIndex)
 	users := subscriptionInboundUsers(inbound)
 	if len(users) > 0 {
 		names := make([]subscriptionProxyName, 0, len(users))
@@ -295,10 +295,10 @@ func ValidatePublicInboundAuth(config domain.GlobalConfig, stacks []domain.Stack
 	}
 	issues := make([]Issue, 0)
 	for _, stack := range stacks {
-		if !stack.Enabled || !stack.Xrelay.Enabled {
+		if !stack.Enabled || !stack.Xray.Enabled {
 			continue
 		}
-		for inboundIndex, inbound := range stack.Xrelay.Inbounds {
+		for inboundIndex, inbound := range stack.Xray.Inbounds {
 			if inbound.Protocol != "socks5" && inbound.Protocol != "http" {
 				continue
 			}
@@ -309,7 +309,7 @@ func ValidatePublicInboundAuth(config domain.GlobalConfig, stacks []domain.Stack
 				continue
 			}
 			issues = append(issues, Issue{
-				Path:    fmt.Sprintf("stacks.%s.xrelay.inbounds[%d].auth", stack.Name, inboundIndex),
+				Path:    fmt.Sprintf("stacks.%s.xray.inbounds[%d].auth", stack.Name, inboundIndex),
 				Message: "public socks/http inbound requires password auth",
 			})
 		}
@@ -324,22 +324,22 @@ func CollectPortBindings(stackSet domain.StackSet) []PortBinding {
 		if !stack.Enabled {
 			continue
 		}
-		if stack.Xrelay.Enabled {
-			for inboundIndex, inbound := range stack.Xrelay.Inbounds {
+		if stack.Xray.Enabled {
+			for inboundIndex, inbound := range stack.Xray.Inbounds {
 				bindings = append(bindings, PortBinding{
 					Host: inbound.Listen,
 					Port: inbound.Port,
-					Path: fmt.Sprintf("stacks.%s.xrelay.inbounds[%d].port", stack.Name, inboundIndex),
+					Path: fmt.Sprintf("stacks.%s.xray.inbounds[%d].port", stack.Name, inboundIndex),
 				})
 			}
-			apiConfig := domain.ResolveXrelayAPIConfig(stackSet.Config.Defaults.Xrelay, stack.Xrelay)
+			apiConfig := domain.ResolveXrayAPIConfig(stackSet.Config.Defaults.Xray, stack.Xray)
 			if apiConfig.Enabled {
 				apiHost, apiPort, err := domain.ParseListen(apiConfig.Listen)
 				if err == nil {
 					bindings = append(bindings, PortBinding{
 						Host: apiHost,
 						Port: apiPort,
-						Path: fmt.Sprintf("stacks.%s.xrelay.api.listen", stack.Name),
+						Path: fmt.Sprintf("stacks.%s.xray.api.listen", stack.Name),
 					})
 				}
 			}

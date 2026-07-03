@@ -9,7 +9,7 @@
 | Schema | 是否允许未知字段 | 原因 |
 | --- | --- | --- |
 | `GlobalConfig` | 允许 | 当前 Python 领域模型允许扩展字段，避免破坏用户配置 |
-| `Stack`、`Xrelay`、`Clash`、`Inbound`、`Outbound`、`Upstream`、`Group` | 允许 | 保留未来扩展和用户附加字段 |
+| `Stack`、`Xray`、`Clash`、`Inbound`、`Outbound`、`Upstream`、`Group` | 允许 | 保留未来扩展和用户附加字段 |
 | `SubServerConfig`、`ManagedConfig` | 禁止 | 订阅服务自身配置，误写字段应 fail fast |
 | `SubscriptionInput`、`SubscriptionNode`、`SubscriptionAuth` | 禁止 | agent/sub 之间的传输契约 |
 | `SubscriptionIndex`、`SubscriptionAccess` | 禁止 | HTTP 鉴权和内存索引契约 |
@@ -61,7 +61,7 @@ Go 实现建议：
 
 | 字段 | 用途 |
 | --- | --- |
-| `xrelay_inbound` | `add` 自动分配 xrelay inbound 端口 |
+| `xray_inbound` | `add` 自动分配 xray inbound 端口 |
 | `clash_socks` | `add` 自动分配 mihomo socks listener 端口 |
 | `clash_http` | `add` 自动分配 mihomo HTTP listener 端口 |
 | `xray_api_range` | `add` 自动分配 Xray API 端口 |
@@ -70,13 +70,13 @@ Go 实现建议：
 端口范围支持 YAML 字符串：
 
 ```yaml
-xrelay_inbound: 24000-24999
+xray_inbound: 24000-24999
 ```
 
 或结构化对象：
 
 ```yaml
-xrelay_inbound:
+xray_inbound:
   start: 24000
   end: 24999
 ```
@@ -90,13 +90,13 @@ xrelay_inbound:
 | `defaults.clash.mode` | `Rule` | `Rule`、`Global`、`Direct` |
 | `defaults.clash.loglevel` | `info` | `debug`、`info`、`warning`、`error`、`silent` |
 | `defaults.clash.rule_profile` | `default` | 首期只支持 `default` |
-| `defaults.xrelay.loglevel` | `warning` | `debug`、`info`、`warning`、`error`、`none` |
-| `defaults.xrelay.api.enabled` | `true` | bool |
-| `defaults.xrelay.api.tag` | `api` | 标识符 |
-| `defaults.xrelay.api.listen` | `127.0.0.1:10085` | 只能 loopback |
-| `defaults.xrelay.api.services` | `[StatsService]` | 非空字符串列表 |
-| `defaults.xrelay.stats.enabled` | `true` | bool |
-| `defaults.xrelay.policy.enabled` | `true` | bool |
+| `defaults.xray.loglevel` | `warning` | `debug`、`info`、`warning`、`error`、`none` |
+| `defaults.xray.api.enabled` | `true` | bool |
+| `defaults.xray.api.tag` | `api` | 标识符 |
+| `defaults.xray.api.listen` | `127.0.0.1:10085` | 只能 loopback |
+| `defaults.xray.api.services` | `[StatsService]` | 非空字符串列表 |
+| `defaults.xray.stats.enabled` | `true` | bool |
+| `defaults.xray.policy.enabled` | `true` | bool |
 
 ### 2.4 `security`
 
@@ -132,12 +132,12 @@ xrelay_inbound:
 | `enabled` | bool | 否 | `true` | disabled stack 不参与默认生命周期 |
 | `role` | string | 否 | `edge` | `edge`、`auto` |
 | `labels` | string list | 否 | `[]` | 用于展示 |
-| `xrelay` | object | 是 | 无 | 见下文 |
+| `xray` | object | 是 | 无 | 见下文 |
 | `clash` | object | 是 | 无 | 见下文 |
 
-## 4. Xrelay Schema
+## 4. Xray Schema
 
-### 4.1 `xrelay`
+### 4.1 `xray`
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -200,7 +200,7 @@ xrelay_inbound:
 | `tag` | string | 否 | 订阅 tag 覆盖 |
 | `email` | string | 否 | Xray 用户统计 |
 
-新配置推荐使用 `config.yaml users` + `xrelay.inbounds[].user_refs`。`InboundUser` 仍作为展开后的内部模型和 legacy 配置入口保留。
+新配置推荐使用 `config.yaml users` + `xray.inbounds[].user_refs`。`InboundUser` 仍作为展开后的内部模型和 legacy 配置入口保留。
 
 ### 4.4.1 Global UserProfile 与 user_refs
 
@@ -217,7 +217,7 @@ xrelay_inbound:
 | `display_template` | string | 否 | 订阅节点展示名模板默认值 |
 | `tag` | string | 否 | 订阅 tag 覆盖 |
 
-`xrelay.inbounds[].user_refs` 引用全局用户档案，支持字符串简写：
+`xray.inbounds[].user_refs` 引用全局用户档案，支持字符串简写：
 
 ```yaml
 user_refs: [alice]
@@ -236,7 +236,7 @@ user_refs:
 
 ### 4.4.2 `display_template` 模板语法
 
-`display_template` 使用 Go `text/template` 语法，适用于 `xrelay.inbounds[].display_template`、`xrelay.inbounds[].users[].display_template`、`config.yaml users[].display_template` 和 `xrelay.inbounds[].user_refs[].display_template`。
+`display_template` 使用 Go `text/template` 语法，适用于 `xray.inbounds[].display_template`、`xray.inbounds[].users[].display_template`、`config.yaml users[].display_template` 和 `xray.inbounds[].user_refs[].display_template`。
 
 支持变量：
 
@@ -318,11 +318,11 @@ P0 支持：
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `name` | string | 是 | proxy name |
-| `type` | string | 是 | `raw`、`xrelay-socks5` |
+| `type` | string | 是 | `raw`、`xray-socks5` |
 | `config` | map | raw 必填 | 原样写入 mihomo proxy，并覆盖 name |
-| `ref` | string | xrelay-socks5 必填 | `<stack>.<inbound>` |
+| `ref` | string | xray-socks5 必填 | `<stack>.<inbound>` |
 
-P0 不支持 `xrelay-http`。
+P0 不支持 `xray-http`。
 
 ### 5.5 Group
 

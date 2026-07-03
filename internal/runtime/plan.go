@@ -137,13 +137,13 @@ func ManifestPath(cfg domain.GlobalConfig) string {
 	return filepath.Join(cfg.ResolvePath(cfg.Paths.Runtime), "manifest.json")
 }
 
-// BuildGeneratedFiles 为 target scope 中的 xrelay/clash 服务生成稳定内容。
+// BuildGeneratedFiles 为 target scope 中的 xray/clash 服务生成稳定内容。
 func BuildGeneratedFiles(stackSet domain.StackSet, scope graph.TargetScope) ([]GeneratedFile, error) {
 	generatedDir := stackSet.Config.ResolvePath(stackSet.Config.Paths.Generated)
 	files := make([]GeneratedFile, 0, len(scope.Nodes))
 	for _, node := range scope.Nodes {
 		switch node.Component {
-		case "xrelay":
+		case "xray":
 			content, err := xraygen.DumpsConfig(stackSet, node.Stack)
 			if err != nil {
 				return nil, err
@@ -347,8 +347,8 @@ func manifestFileMatchesTarget(file ManifestFile, scope graph.TargetScope) bool 
 	if target == "" {
 		return true
 	}
-	if strings.HasPrefix(target, "xrelay/") {
-		stack := strings.TrimPrefix(target, "xrelay/")
+	if strings.HasPrefix(target, "xray/") {
+		stack := strings.TrimPrefix(target, "xray/")
 		return file.Service == "proxystack-xray@"+stack+".service"
 	}
 	if strings.HasPrefix(target, "clash/") {

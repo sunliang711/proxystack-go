@@ -78,7 +78,7 @@ func TestLoadStacksExpandsGlobalUserRefs(t *testing.T) {
 	writeFile(t, filepath.Join(stacksDir, "edge.yaml"), `name: edge
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false
@@ -136,15 +136,15 @@ clash:
 	stackSet, err := config.LoadStacks(globalConfig, false)
 
 	require.NoError(t, err)
-	vmessUser := stackSet.Stacks[0].Xrelay.Inbounds[0].Users[0]
+	vmessUser := stackSet.Stacks[0].Xray.Inbounds[0].Users[0]
 	require.Equal(t, "alice", vmessUser.User)
 	require.Equal(t, "tokyo", vmessUser.Profile)
 	require.Equal(t, "33333333-3333-4333-8333-333333333333", vmessUser.UUID)
 	require.Equal(t, "alice@example.com", vmessUser.Email)
 	require.Equal(t, "Tokyo Override", vmessUser.Remark)
 	require.Equal(t, "{{ .stack }} {{ .profile }} {{ .remark }}", vmessUser.DisplayTemplate)
-	require.Empty(t, stackSet.Stacks[0].Xrelay.Inbounds[0].UserRefs)
-	ssUser := stackSet.Stacks[0].Xrelay.Inbounds[1].Users[0]
+	require.Empty(t, stackSet.Stacks[0].Xray.Inbounds[0].UserRefs)
+	ssUser := stackSet.Stacks[0].Xray.Inbounds[1].Users[0]
 	require.Equal(t, "alice-ss-override", ssUser.Password)
 	require.Equal(t, "SS Tokyo", ssUser.Remark)
 }
@@ -252,7 +252,7 @@ func TestLoadStackRejectsUDPForHTTPInbound(t *testing.T) {
 	writeFile(t, stackPath, `name: edge
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false
@@ -405,7 +405,7 @@ func validConfigYAML(baseDir string) string {
 paths:
   stacks: stacks
 port_ranges:
-  xrelay_inbound: 4300-4399
+  xray_inbound: 4300-4399
   clash_socks: 7001-7101
   clash_http: 7201-7301
   xray_api_range: 10001-10999
@@ -417,7 +417,7 @@ func validStackYAML(name string) string {
 	return `name: ` + name + `
 enabled: true
 role: edge
-xrelay:
+xray:
   enabled: true
   api:
     enabled: false

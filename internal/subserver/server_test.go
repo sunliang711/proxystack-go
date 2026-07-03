@@ -162,6 +162,9 @@ func TestHTTPSurgeManagedConfigURL(t *testing.T) {
 
 // TestStateReloadFailureKeepsOldIndex 验证运行期 reload 失败不会替换旧 index。
 func TestStateReloadFailureKeepsOldIndex(t *testing.T) {
+	var output bytes.Buffer
+	restoreLogger := withTestLogger(&output)
+	defer restoreLogger()
 	dataDir := prepareDataDir(t)
 	state := subserver.NewState(dataDir, subgen.Access{Type: "none"}, func() string { return fixedGeneratedAt })
 	require.NoError(t, state.Load())
@@ -174,6 +177,30 @@ func TestStateReloadFailureKeepsOldIndex(t *testing.T) {
 	require.NotNil(t, index)
 	require.Equal(t, []string{"alice"}, users)
 	require.NotEmpty(t, lastError)
+	logText := output.String()
+	require.Contains(t, logText, `"message":"Subscription inputs reload failed"`)
+	require.Contains(t, logText, `"input_dir":"`+filepath.Join(dataDir, "inputs")+`"`)
+	require.Contains(t, logText, `"error":`)
+}
+
+// TestStateReloadWritesSummaryLog 验证运行期 reload 成功后输出 inputs 摘要日志。
+func TestStateReloadWritesSummaryLog(t *testing.T) {
+	var output bytes.Buffer
+	restoreLogger := withTestLogger(&output)
+	defer restoreLogger()
+	dataDir := prepareDataDir(t)
+	state := subserver.NewState(dataDir, subgen.Access{Type: "none"}, func() string { return fixedGeneratedAt })
+	require.NoError(t, state.Load())
+
+	require.NoError(t, state.Reload())
+
+	logText := output.String()
+	require.Contains(t, logText, `"message":"Subscription inputs reloaded"`)
+	require.Contains(t, logText, `"input_dir":"`+filepath.Join(dataDir, "inputs")+`"`)
+	require.Contains(t, logText, `"inputs":1`)
+	require.Contains(t, logText, `"sources":1`)
+	require.Contains(t, logText, `"nodes":1`)
+	require.Contains(t, logText, `"users":1`)
 }
 
 // TestWatcherCanStopAndReload 验证 watcher 可停止，且轮询 fallback 能触发 reload。

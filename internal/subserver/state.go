@@ -7,6 +7,7 @@ import (
 
 	"github.com/eagle/proxystack-go/internal/config"
 	subgen "github.com/eagle/proxystack-go/internal/generator/sub"
+	"github.com/rs/zerolog/log"
 )
 
 // State 保存订阅服务当前可用 index，reload 失败时保留上一份成功状态。
@@ -42,15 +43,27 @@ func (s *State) Load() error {
 
 // Reload 运行期重载 inputs；失败时保留旧 index，只更新 last_error。
 func (s *State) Reload() error {
-	index, err := subgen.MergeInputFiles(filepath.Join(s.dataDir, "inputs"), s.access, s.now())
+	inputDir := filepath.Join(s.dataDir, "inputs")
+	index, err := subgen.MergeInputFiles(inputDir, s.access, s.now())
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err != nil {
 		s.lastError = err.Error()
+		log.Warn().
+			Err(err).
+			Str("input_dir", inputDir).
+			Msg("Subscription inputs reload failed")
 		return err
 	}
 	s.index = &index
 	s.lastError = ""
+	log.Info().
+		Str("input_dir", inputDir).
+		Int("inputs", len(index.Sources)).
+		Int("sources", len(index.Sources)).
+		Int("nodes", len(index.Nodes)).
+		Int("users", len(index.Users)).
+		Msg("Subscription inputs reloaded")
 	return nil
 }
 

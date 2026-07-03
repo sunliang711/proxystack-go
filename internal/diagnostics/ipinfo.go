@@ -3,8 +3,10 @@ package diagnostics
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
+	"net/url"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -18,6 +20,8 @@ const (
 	familyAll  = "all"
 	familyIPv4 = "ipv4"
 	familyIPv6 = "ipv6"
+
+	noCurlCompatibleProxyListenerMessage = "no curl-compatible proxy listener found: need clash socks listener or xray socks5/http inbound"
 )
 
 var (
@@ -108,7 +112,30 @@ type QueryOptions struct {
 	ProgressCallback ProgressCallback
 }
 
-// QueryIPInfo 查询指定 stack 的 mihomo 出口 IP，默认同时检查 IPv4 和 IPv6。
+// proxyEndpoint 保存真实代理 URL、展示 URL 和需要脱敏的敏感片段。
+type proxyEndpoint struct {
+	CurlURL    string
+	DisplayURL string
+	Secrets    []string
+}
+
+// sanitizedError 保留原始错误链，同时只向 Error() 暴露脱敏后的消息。
+type sanitizedError struct {
+	message string
+	cause   error
+}
+
+// Error 返回脱敏后的错误消息，供 CLI 和进度输出展示。
+func (e sanitizedError) Error() string {
+	return e.message
+}
+
+// Unwrap 返回原始错误，保留 errors.Is/As 语义。
+func (e sanitizedError) Unwrap() error {
+	return e.cause
+}
+
+// QueryIPInfo 查询指定 stack 的出口 IP，默认同时检查 IPv4 和 IPv6。
 func QueryIPInfo(ctx context.Context, options QueryOptions) (IpInfoReport, error) {
 	family := strings.ToLower(options.Family)
 	if family == "" {
@@ -131,22 +158,24 @@ func QueryIPInfo(ctx context.Context, options QueryOptions) (IpInfoReport, error
 	if runner == nil {
 		runner = RunCurl
 	}
-	proxyURL, err := ResolveProxyURL(options.ConfigPath, options.StackName)
+	endpoint, err := resolveProxyEndpoint(options.ConfigPath, options.StackName)
 	if err != nil {
 		return IpInfoReport{}, err
 	}
+	sanitizeText := endpoint.sanitizeText
+	runner = endpoint.sanitizedRunner(runner)
 	families := []string{family}
 	if family == familyAll {
 		families = []string{familyIPv4, familyIPv6}
 	}
 	if options.LineCallback != nil {
-		emitLines(options.LineCallback, formatIPInfoHeader(options.StackName, proxyURL))
+		emitLines(options.LineCallback, formatIPInfoHeader(options.StackName, endpoint.DisplayURL))
 	}
-	results, err := queryRequestedFamilies(ctx, proxyURL, families, timeout, options.Sources, runner, options.LineCallback, options.ProgressCallback)
+	results, err := queryRequestedFamilies(ctx, endpoint.CurlURL, families, timeout, options.Sources, runner, options.LineCallback, options.ProgressCallback, sanitizeText)
 	if err != nil {
 		return IpInfoReport{}, err
 	}
-	report := IpInfoReport{StackName: options.StackName, ProxyURL: proxyURL, Families: results}
+	report := IpInfoReport{StackName: options.StackName, ProxyURL: endpoint.DisplayURL, Families: results}
 	if options.LineCallback != nil {
 		if len(families) > 1 {
 			for _, result := range results {
@@ -169,36 +198,186 @@ func SourcesForFamily(family string, overrideSources []string) []string {
 	return append([]string(nil), defaultIPv6Sources...)
 }
 
-// ResolveProxyURL 从 stack 的 mihomo socks listener 生成 curl 可用的代理 URL。
+// ResolveProxyURL 从 stack 可用代理入口生成 curl 可用的代理 URL。
 func ResolveProxyURL(configPath string, stackName string) (string, error) {
-	cfg, err := config.LoadConfig(configPath)
+	endpoint, err := resolveProxyEndpoint(configPath, stackName)
 	if err != nil {
 		return "", err
+	}
+	return endpoint.CurlURL, nil
+}
+
+// resolveProxyEndpoint 按 Clash socks、Xray socks5、Xray http 顺序选择 curl 兼容代理入口。
+func resolveProxyEndpoint(configPath string, stackName string) (proxyEndpoint, error) {
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return proxyEndpoint{}, err
 	}
 	stackSet, err := config.LoadStacks(cfg, false)
 	if err != nil {
-		return "", err
+		return proxyEndpoint{}, err
 	}
 	stack, ok := stackSet.ByName()[stackName]
 	if !ok {
-		return "", fmt.Errorf("stack does not exist: %s", stackName)
+		return proxyEndpoint{}, fmt.Errorf("stack does not exist: %s", stackName)
 	}
 	if !stack.Enabled {
-		return "", fmt.Errorf("stack is disabled: %s", stackName)
+		return proxyEndpoint{}, fmt.Errorf("stack is disabled: %s", stackName)
 	}
-	if !stack.Clash.Enabled {
-		return "", fmt.Errorf("clash is disabled: %s", stackName)
+	endpoint, ok := selectProxyEndpoint(stack)
+	if !ok {
+		return proxyEndpoint{}, errors.New(noCurlCompatibleProxyListenerMessage)
 	}
-	if len(stack.Clash.Listeners.Socks) != 1 {
-		return "", fmt.Errorf("exactly one clash socks listener is required: %s", stackName)
+	return endpoint, nil
+}
+
+// selectProxyEndpoint 按配置优先级从 stack 中选择第一个可供 curl 使用的代理入口。
+func selectProxyEndpoint(stack *domain.Stack) (proxyEndpoint, bool) {
+	if stack.Clash.Enabled && len(stack.Clash.Listeners.Socks) > 0 {
+		return clashSocksProxyEndpoint(stack.Clash.Listeners.Socks[0]), true
 	}
-	return ListenerProxyURL(stack.Clash.Listeners.Socks[0]), nil
+	if !stack.Xray.Enabled {
+		return proxyEndpoint{}, false
+	}
+	if endpoint, ok := firstXrayInboundProxyEndpoint(stack.Xray.Inbounds, "socks5"); ok {
+		return endpoint, true
+	}
+	return firstXrayInboundProxyEndpoint(stack.Xray.Inbounds, "http")
 }
 
 // ListenerProxyURL 把 mihomo socks listener 转换为本机可连接的 socks5 URL。
 func ListenerProxyURL(listener domain.SocksListener) string {
-	host := NormalizeConnectHost(listener.Listen)
-	return fmt.Sprintf("socks5://%s:%d", FormatProxyHost(host), listener.Port)
+	return clashSocksProxyEndpoint(listener).CurlURL
+}
+
+// clashSocksProxyEndpoint 把 mihomo socks listener 转换为 curl 代理端点。
+func clashSocksProxyEndpoint(listener domain.SocksListener) proxyEndpoint {
+	username := ""
+	password := ""
+	if len(listener.Users) > 0 {
+		username = listener.Users[0].Username
+		password = listener.Users[0].Password
+	}
+	return newProxyEndpoint("socks5", listener.Listen, listener.Port, username, password)
+}
+
+// firstXrayInboundProxyEndpoint 返回指定协议的第一个 Xray inbound 代理端点。
+func firstXrayInboundProxyEndpoint(inbounds []domain.Inbound, protocol string) (proxyEndpoint, bool) {
+	for _, inbound := range inbounds {
+		if inbound.Protocol != protocol {
+			continue
+		}
+		username := ""
+		password := ""
+		if inbound.Auth != nil && inbound.Auth.Type == "password" {
+			username = inbound.Auth.Username
+			password = inbound.Auth.Password
+		}
+		return newProxyEndpoint(proxySchemeForInboundProtocol(protocol), inbound.Listen, inbound.Port, username, password), true
+	}
+	return proxyEndpoint{}, false
+}
+
+// proxySchemeForInboundProtocol 将 Xray inbound 协议映射为 curl proxy URL scheme。
+func proxySchemeForInboundProtocol(protocol string) string {
+	if protocol == "http" {
+		return "http"
+	}
+	return "socks5"
+}
+
+// newProxyEndpoint 构造真实代理 URL 和对外展示用脱敏 URL。
+func newProxyEndpoint(scheme string, listen string, port int, username string, password string) proxyEndpoint {
+	curlURL := BuildProxyURL(scheme, listen, port, username, password)
+	displayURL := curlURL
+	secrets := make([]string, 0, 1)
+	if password != "" {
+		displayURL = BuildProxyURL(scheme, listen, port, username, "xxxxx")
+		secrets = append(secrets, password)
+	}
+	return proxyEndpoint{CurlURL: curlURL, DisplayURL: displayURL, Secrets: secrets}
+}
+
+// BuildProxyURL 构造 curl 可用代理 URL，并对用户名密码做 URL encoding。
+func BuildProxyURL(scheme string, listen string, port int, username string, password string) string {
+	host := NormalizeConnectHost(listen)
+	proxyURL := url.URL{
+		Scheme: scheme,
+		Host:   fmt.Sprintf("%s:%d", FormatProxyHost(host), port),
+	}
+	if username != "" || password != "" {
+		proxyURL.User = url.UserPassword(username, password)
+	}
+	return proxyURL.String()
+}
+
+// sanitizedRunner 包装 curl 执行器，保留 stdout 原文用于解析，仅脱敏 stderr 和错误。
+func (p proxyEndpoint) sanitizedRunner(runner CurlRunner) CurlRunner {
+	return func(ctx context.Context, proxyURL string, url string, family string, timeout float64) (CurlResult, error) {
+		result, err := runner(ctx, proxyURL, url, family, timeout)
+		result.Stderr = p.sanitizeText(result.Stderr)
+		return result, p.sanitizeError(err)
+	}
+}
+
+// sanitizeError 对可能展示给 CLI 的错误进行密码脱敏，未变化时保留原错误链。
+func (p proxyEndpoint) sanitizeError(err error) error {
+	if err == nil {
+		return nil
+	}
+	message := p.sanitizeText(err.Error())
+	if message == err.Error() {
+		return err
+	}
+	return sanitizedError{message: message, cause: err}
+}
+
+// sanitizeText 替换真实代理 URL、明文密码和常见 URL 编码密码片段。
+func (p proxyEndpoint) sanitizeText(text string) string {
+	if text == "" {
+		return ""
+	}
+	sanitized := text
+	if p.CurlURL != "" && p.DisplayURL != "" {
+		sanitized = strings.ReplaceAll(sanitized, p.CurlURL, p.DisplayURL)
+	}
+	for _, secret := range p.Secrets {
+		for _, value := range secretRedactionVariants(secret) {
+			sanitized = strings.ReplaceAll(sanitized, value, "xxxxx")
+		}
+	}
+	return sanitized
+}
+
+// secretRedactionVariants 返回密码明文和常见 URL 编码形式，供输出脱敏使用。
+func secretRedactionVariants(secret string) []string {
+	if secret == "" {
+		return nil
+	}
+	values := []string{secret, url.QueryEscape(secret), url.PathEscape(secret), proxyPasswordEscape(secret)}
+	uniqueValues := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		uniqueValues = append(uniqueValues, value)
+	}
+	return uniqueValues
+}
+
+// proxyPasswordEscape 使用 net/url 的 userinfo 编码规则生成密码编码形式。
+func proxyPasswordEscape(password string) string {
+	proxyURL := url.URL{
+		Scheme: "socks5",
+		Host:   "127.0.0.1:1",
+		User:   url.UserPassword("user", password),
+	}
+	encoded := proxyURL.String()
+	encoded = strings.TrimPrefix(encoded, "socks5://user:")
+	encoded = strings.TrimSuffix(encoded, "@127.0.0.1:1")
+	return encoded
 }
 
 // NormalizeConnectHost 把监听地址转换为本机连接地址，wildcard listener 使用 127.0.0.1。
@@ -287,20 +466,20 @@ type familyQueryResponse struct {
 }
 
 // queryRequestedFamilies 查询请求涉及的 IP family，all 模式下并发查询 IPv4 和 IPv6。
-func queryRequestedFamilies(ctx context.Context, proxyURL string, families []string, timeout float64, overrideSources []string, runner CurlRunner, lineCallback LineCallback, progressCallback ProgressCallback) ([]FamilyResult, error) {
+func queryRequestedFamilies(ctx context.Context, proxyURL string, families []string, timeout float64, overrideSources []string, runner CurlRunner, lineCallback LineCallback, progressCallback ProgressCallback, sanitizeText func(string) string) ([]FamilyResult, error) {
 	if len(families) == 1 {
-		return querySingleFamily(ctx, proxyURL, families[0], timeout, overrideSources, runner, lineCallback, progressCallback)
+		return querySingleFamily(ctx, proxyURL, families[0], timeout, overrideSources, runner, lineCallback, progressCallback, sanitizeText)
 	}
-	return queryFamiliesConcurrently(ctx, proxyURL, families, timeout, overrideSources, runner, progressCallback)
+	return queryFamiliesConcurrently(ctx, proxyURL, families, timeout, overrideSources, runner, progressCallback, sanitizeText)
 }
 
 // querySingleFamily 保持单 family 内部来源串行 fallback，并保留逐来源流式输出。
-func querySingleFamily(ctx context.Context, proxyURL string, queryFamily string, timeout float64, overrideSources []string, runner CurlRunner, lineCallback LineCallback, progressCallback ProgressCallback) ([]FamilyResult, error) {
+func querySingleFamily(ctx context.Context, proxyURL string, queryFamily string, timeout float64, overrideSources []string, runner CurlRunner, lineCallback LineCallback, progressCallback ProgressCallback, sanitizeText func(string) string) ([]FamilyResult, error) {
 	emitIPInfoProgress(progressCallback, IPInfoProgress{State: IPInfoProgressDetecting, Family: queryFamily, Label: familyLabels[queryFamily]})
 	if lineCallback != nil {
 		lineCallback(familyLabels[queryFamily] + ":")
 	}
-	result, err := queryFamilySources(ctx, proxyURL, queryFamily, SourcesForFamily(queryFamily, overrideSources), timeout, runner, lineCallback)
+	result, err := queryFamilySources(ctx, proxyURL, queryFamily, SourcesForFamily(queryFamily, overrideSources), timeout, runner, lineCallback, sanitizeText)
 	if err != nil {
 		emitIPInfoProgress(progressCallback, IPInfoProgress{State: IPInfoProgressDone, Family: queryFamily, Label: familyLabels[queryFamily], Result: emptyFamilyResult(queryFamily), Err: err})
 		return nil, err
@@ -314,13 +493,13 @@ func querySingleFamily(ctx context.Context, proxyURL string, queryFamily string,
 }
 
 // queryFamiliesConcurrently 并发查询多个 IP family，并按输入顺序返回结果。
-func queryFamiliesConcurrently(ctx context.Context, proxyURL string, families []string, timeout float64, overrideSources []string, runner CurlRunner, progressCallback ProgressCallback) ([]FamilyResult, error) {
+func queryFamiliesConcurrently(ctx context.Context, proxyURL string, families []string, timeout float64, overrideSources []string, runner CurlRunner, progressCallback ProgressCallback, sanitizeText func(string) string) ([]FamilyResult, error) {
 	results := make([]FamilyResult, len(families))
 	resultCh := make(chan familyQueryResponse, len(families))
 	for index, queryFamily := range families {
 		emitIPInfoProgress(progressCallback, IPInfoProgress{State: IPInfoProgressDetecting, Family: queryFamily, Label: familyLabels[queryFamily]})
 		go func(index int, queryFamily string) {
-			result, err := queryFamilySources(ctx, proxyURL, queryFamily, SourcesForFamily(queryFamily, overrideSources), timeout, runner, nil)
+			result, err := queryFamilySources(ctx, proxyURL, queryFamily, SourcesForFamily(queryFamily, overrideSources), timeout, runner, nil, sanitizeText)
 			resultCh <- familyQueryResponse{Index: index, Family: queryFamily, Result: result, Err: err}
 		}(index, queryFamily)
 	}
@@ -356,7 +535,7 @@ func emptyFamilyResult(family string) FamilyResult {
 }
 
 // queryFamilySources 按 IP family 逐个查询来源，拿到匹配 IP 后停止后续来源。
-func queryFamilySources(ctx context.Context, proxyURL string, family string, sources []string, timeout float64, runner CurlRunner, lineCallback LineCallback) (FamilyResult, error) {
+func queryFamilySources(ctx context.Context, proxyURL string, family string, sources []string, timeout float64, runner CurlRunner, lineCallback LineCallback, sanitizeText func(string) string) (FamilyResult, error) {
 	bestIP := ""
 	bestRegion := ""
 	sourceResults := make([]SourceResult, 0, len(sources))
@@ -369,12 +548,13 @@ func queryFamilySources(ctx context.Context, proxyURL string, family string, sou
 			return FamilyResult{}, err
 		}
 		body := strings.TrimSpace(result.Stdout)
+		displayBody := sanitizeText(body)
 		if result.ReturnCode != 0 {
 			sourceResult := SourceResult{
 				URL:    url,
 				Status: "failed",
-				Body:   body,
-				Error:  firstNonEmptyString(strings.TrimSpace(result.Stderr), fmt.Sprintf("curl exited with code %d", result.ReturnCode)),
+				Body:   displayBody,
+				Error:  sanitizeText(firstNonEmptyString(strings.TrimSpace(result.Stderr), fmt.Sprintf("curl exited with code %d", result.ReturnCode))),
 			}
 			recordSourceResult(&sourceResults, sourceResult, lineCallback)
 			continue
@@ -392,7 +572,7 @@ func queryFamilySources(ctx context.Context, proxyURL string, family string, sou
 		} else if ipValue != "" || regionValue != "" {
 			status = "ok"
 		}
-		sourceResult := SourceResult{URL: url, Status: status, IP: ipValue, Region: regionValue, Body: body}
+		sourceResult := SourceResult{URL: url, Status: status, IP: ipValue, Region: regionValue, Body: displayBody}
 		recordSourceResult(&sourceResults, sourceResult, lineCallback)
 		if ipValue != "" {
 			break
@@ -522,9 +702,23 @@ func emitLines(lineCallback LineCallback, lines []string) {
 func formatIPInfoHeader(stackName string, proxyURL string) []string {
 	return []string{
 		"Stack: " + stackName,
-		"Proxy: " + proxyURL,
+		"Proxy: " + redactProxyURL(proxyURL),
 		"",
 	}
+}
+
+// redactProxyURL 隐藏代理 URL 中的密码，防止手工构造报告时误输出明文。
+func redactProxyURL(proxyURL string) string {
+	parsedURL, err := url.Parse(proxyURL)
+	if err != nil || parsedURL.User == nil {
+		return proxyURL
+	}
+	username := parsedURL.User.Username()
+	if _, ok := parsedURL.User.Password(); !ok {
+		return proxyURL
+	}
+	parsedURL.User = url.UserPassword(username, "xxxxx")
+	return parsedURL.String()
 }
 
 // formatSourceResult 格式化单个来源结果，流式模式下每个来源完成后立即输出。

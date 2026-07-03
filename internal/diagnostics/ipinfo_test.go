@@ -3,8 +3,10 @@ package diagnostics
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -40,6 +42,578 @@ func TestQueryIPInfoUsesStackClashSocksListener(t *testing.T) {
 	require.Equal(t, "Tokyo / JP / AS64500", report.Families[0].Region)
 	require.Equal(t, [][]any{{"socks5://127.0.0.1:17091", "https://ipinfo.io/json", "ipv4", 3.0}}, calls)
 	require.Contains(t, stringsJoin(FormatIPInfoReport(report)), "IP: 198.51.100.10")
+}
+
+// TestQueryIPInfoUsesFirstClashSocksUserWithEncodedCredentials 验证 Clash socks listener 会使用第一个用户并编码认证信息。
+func TestQueryIPInfoUsesFirstClashSocksUserWithEncodedCredentials(t *testing.T) {
+	configPath := writeIPInfoFixtureWithStack(t, `name: usa1
+enabled: true
+role: edge
+xray:
+  enabled: true
+  outbound:
+    type: direct
+  inbounds:
+    - name: relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24001
+      auth:
+        type: password
+        username: relay-user
+        password: relay-password
+      sub: false
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: controller-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17091
+        users:
+          - username: first.user
+            password: "p@ss word:1"
+          - username: second.user
+            password: second-password
+  upstreams:
+    - name: direct
+      type: raw
+      config:
+        type: direct
+        server: 127.0.0.1
+        port: 1
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [direct, DIRECT]
+  rules:
+    profile: default
+`)
+	calls := make([]string, 0)
+	fakeCurl := func(ctx context.Context, proxyURL string, url string, family string, timeout float64) (CurlResult, error) {
+		calls = append(calls, proxyURL)
+		return CurlResult{ReturnCode: 0, Stdout: `{"ip": "198.51.100.10"}`}, nil
+	}
+
+	report, err := QueryIPInfo(context.Background(), QueryOptions{
+		ConfigPath: configPath,
+		StackName:  "usa1",
+		Family:     "ipv4",
+		Sources:    []string{"https://ipinfo.example/json"},
+		CurlRunner: fakeCurl,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []string{"socks5://first.user:p%40ss%20word%3A1@127.0.0.1:17091"}, calls)
+	require.Equal(t, "socks5://first.user:xxxxx@127.0.0.1:17091", report.ProxyURL)
+	rendered := stringsJoin(FormatIPInfoReport(report))
+	require.NotContains(t, rendered, "p@ss word:1")
+	require.NotContains(t, rendered, "p%40ss%20word%3A1")
+	require.Contains(t, rendered, "socks5://first.user:xxxxx@127.0.0.1:17091")
+}
+
+// TestQueryIPInfoDoesNotRedactSourceBodyBeforeParsing 验证短密码不会在解析前误伤正常 IP 响应。
+func TestQueryIPInfoDoesNotRedactSourceBodyBeforeParsing(t *testing.T) {
+	configPath := writeIPInfoFixtureWithClashSocksUser(t, "1")
+	fakeCurl := func(ctx context.Context, proxyURL string, url string, family string, timeout float64) (CurlResult, error) {
+		return CurlResult{ReturnCode: 0, Stdout: `{"ip": "198.51.100.10", "city": "Austin", "country": "US", "org": "AS64501"}`}, nil
+	}
+
+	report, err := QueryIPInfo(context.Background(), QueryOptions{
+		ConfigPath: configPath,
+		StackName:  "usa1",
+		Family:     "ipv4",
+		Sources:    []string{"https://ipinfo.example/json"},
+		CurlRunner: fakeCurl,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "198.51.100.10", report.Families[0].IP)
+	require.Equal(t, "Austin / US / AS64501", report.Families[0].Region)
+	require.Equal(t, "ok", report.Families[0].Sources[0].Status)
+}
+
+// TestQueryIPInfoRedactsProxyPasswordInRawSourceBody 验证 raw 响应体进入报告前仍会脱敏。
+func TestQueryIPInfoRedactsProxyPasswordInRawSourceBody(t *testing.T) {
+	configPath := writeIPInfoFixtureWithClashSocksUser(t, "raw-secret")
+	fakeCurl := func(ctx context.Context, proxyURL string, url string, family string, timeout float64) (CurlResult, error) {
+		return CurlResult{ReturnCode: 0, Stdout: "proxy raw-secret response without ip"}, nil
+	}
+
+	report, err := QueryIPInfo(context.Background(), QueryOptions{
+		ConfigPath: configPath,
+		StackName:  "usa1",
+		Family:     "ipv4",
+		Sources:    []string{"https://ipinfo.example/raw"},
+		CurlRunner: fakeCurl,
+	})
+
+	require.NoError(t, err)
+	rendered := stringsJoin(FormatIPInfoReport(report))
+	require.NotContains(t, rendered, "raw-secret")
+	require.Contains(t, rendered, "Body: proxy xxxxx response without ip")
+}
+
+// TestQueryIPInfoFallsBackToXraySocksBeforeHTTP 验证没有 Clash socks 时优先选择 Xray socks5，即使 HTTP inbound 更早配置。
+func TestQueryIPInfoFallsBackToXraySocksBeforeHTTP(t *testing.T) {
+	configPath := writeIPInfoFixtureWithStack(t, `name: usa1
+enabled: true
+role: edge
+xray:
+  enabled: true
+  outbound:
+    type: direct
+  inbounds:
+    - name: web
+      protocol: http
+      listen: 127.0.0.1
+      port: 25080
+      auth:
+        type: noauth
+      sub: false
+    - name: relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24001
+      auth:
+        type: noauth
+      sub: false
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: controller-secret
+  listeners:
+    http: []
+  upstreams:
+    - name: direct
+      type: raw
+      config:
+        type: direct
+        server: 127.0.0.1
+        port: 1
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [direct, DIRECT]
+  rules:
+    profile: default
+`)
+	proxyURL := ""
+	fakeCurl := func(ctx context.Context, proxy string, url string, family string, timeout float64) (CurlResult, error) {
+		proxyURL = proxy
+		return CurlResult{ReturnCode: 0, Stdout: `{"ip": "198.51.100.10"}`}, nil
+	}
+
+	_, err := QueryIPInfo(context.Background(), QueryOptions{
+		ConfigPath: configPath,
+		StackName:  "usa1",
+		Family:     "ipv4",
+		Sources:    []string{"https://ipinfo.example/json"},
+		CurlRunner: fakeCurl,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "socks5://127.0.0.1:24001", proxyURL)
+}
+
+// TestQueryIPInfoUsesFirstXrayInboundWithinSameProtocol 验证同协议 Xray inbound 使用配置顺序中的第一个。
+func TestQueryIPInfoUsesFirstXrayInboundWithinSameProtocol(t *testing.T) {
+	configPath := writeIPInfoFixtureWithStack(t, `name: usa1
+enabled: true
+role: edge
+xray:
+  enabled: true
+  outbound:
+    type: direct
+  inbounds:
+    - name: first-relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24001
+      auth:
+        type: noauth
+      sub: false
+    - name: second-relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24002
+      auth:
+        type: noauth
+      sub: false
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: controller-secret
+  listeners:
+    http: []
+  upstreams:
+    - name: direct
+      type: raw
+      config:
+        type: direct
+        server: 127.0.0.1
+        port: 1
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [direct, DIRECT]
+  rules:
+    profile: default
+`)
+	proxyURL := ""
+	fakeCurl := func(ctx context.Context, proxy string, url string, family string, timeout float64) (CurlResult, error) {
+		proxyURL = proxy
+		return CurlResult{ReturnCode: 0, Stdout: `{"ip": "198.51.100.10"}`}, nil
+	}
+
+	_, err := QueryIPInfo(context.Background(), QueryOptions{
+		ConfigPath: configPath,
+		StackName:  "usa1",
+		Family:     "ipv4",
+		Sources:    []string{"https://ipinfo.example/json"},
+		CurlRunner: fakeCurl,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "socks5://127.0.0.1:24001", proxyURL)
+}
+
+// TestQueryIPInfoFallsBackToXrayHTTPWhenNoSocks 验证没有 Clash socks 和 Xray socks5 时选择 Xray HTTP inbound。
+func TestQueryIPInfoFallsBackToXrayHTTPWhenNoSocks(t *testing.T) {
+	configPath := writeIPInfoFixtureWithStack(t, `name: usa1
+enabled: true
+role: edge
+xray:
+  enabled: true
+  outbound:
+    type: direct
+  inbounds:
+    - name: web
+      protocol: http
+      listen: 127.0.0.1
+      port: 25080
+      auth:
+        type: noauth
+      sub: false
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: controller-secret
+  listeners:
+    http: []
+  upstreams:
+    - name: direct
+      type: raw
+      config:
+        type: direct
+        server: 127.0.0.1
+        port: 1
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [direct, DIRECT]
+  rules:
+    profile: default
+`)
+	proxyURL := ""
+	fakeCurl := func(ctx context.Context, proxy string, url string, family string, timeout float64) (CurlResult, error) {
+		proxyURL = proxy
+		return CurlResult{ReturnCode: 0, Stdout: `{"ip": "198.51.100.10"}`}, nil
+	}
+
+	_, err := QueryIPInfo(context.Background(), QueryOptions{
+		ConfigPath: configPath,
+		StackName:  "usa1",
+		Family:     "ipv4",
+		Sources:    []string{"https://ipinfo.example/json"},
+		CurlRunner: fakeCurl,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "http://127.0.0.1:25080", proxyURL)
+}
+
+// TestQueryIPInfoUsesXrayPasswordAuthWithEncodedCredentials 验证 Xray password auth 会进入 curl URL 并做 URL encoding。
+func TestQueryIPInfoUsesXrayPasswordAuthWithEncodedCredentials(t *testing.T) {
+	configPath := writeIPInfoFixtureWithStack(t, `name: usa1
+enabled: true
+role: edge
+xray:
+  enabled: true
+  outbound:
+    type: direct
+  inbounds:
+    - name: relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24001
+      auth:
+        type: password
+        username: "xray:user"
+        password: "xray p@ss:1"
+      sub: false
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: controller-secret
+  listeners:
+    http: []
+  upstreams:
+    - name: direct
+      type: raw
+      config:
+        type: direct
+        server: 127.0.0.1
+        port: 1
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [direct, DIRECT]
+  rules:
+    profile: default
+`)
+	proxyURL := ""
+	fakeCurl := func(ctx context.Context, proxy string, url string, family string, timeout float64) (CurlResult, error) {
+		proxyURL = proxy
+		return CurlResult{ReturnCode: 0, Stdout: `{"ip": "198.51.100.10"}`}, nil
+	}
+
+	report, err := QueryIPInfo(context.Background(), QueryOptions{
+		ConfigPath: configPath,
+		StackName:  "usa1",
+		Family:     "ipv4",
+		Sources:    []string{"https://ipinfo.example/json"},
+		CurlRunner: fakeCurl,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "socks5://xray%3Auser:xray%20p%40ss%3A1@127.0.0.1:24001", proxyURL)
+	require.Equal(t, "socks5://xray%3Auser:xxxxx@127.0.0.1:24001", report.ProxyURL)
+	require.NotContains(t, stringsJoin(FormatIPInfoReport(report)), "xray p@ss:1")
+}
+
+// TestResolveProxyURLErrorWhenNoCompatibleInbound 验证 vmess/shadowsocks 不会被当作 curl 兼容入口。
+func TestResolveProxyURLErrorWhenNoCompatibleInbound(t *testing.T) {
+	configPath := writeIPInfoFixtureWithStack(t, `name: usa1
+enabled: true
+role: edge
+xray:
+  enabled: true
+  outbound:
+    type: direct
+  inbounds:
+    - name: vmess
+      protocol: vmess
+      listen: 127.0.0.1
+      port: 24001
+      network: raw
+      sub: true
+      users:
+        - user: alice
+          uuid: 11111111-1111-4111-8111-111111111111
+    - name: ss
+      protocol: shadowsocks
+      listen: 127.0.0.1
+      port: 24002
+      method: aes-256-gcm
+      password: ss-server-password
+      sub: true
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: controller-secret
+  listeners:
+    http: []
+  upstreams:
+    - name: direct
+      type: raw
+      config:
+        type: direct
+        server: 127.0.0.1
+        port: 1
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [direct, DIRECT]
+  rules:
+    profile: default
+`)
+
+	_, err := ResolveProxyURL(configPath, "usa1")
+
+	require.EqualError(t, err, noCurlCompatibleProxyListenerMessage)
+}
+
+// TestQueryIPInfoRedactsProxyPasswordInReportAndLineCallback 验证报告和逐行输出不会泄漏代理密码。
+func TestQueryIPInfoRedactsProxyPasswordInReportAndLineCallback(t *testing.T) {
+	configPath := writeIPInfoFixtureWithStack(t, `name: usa1
+enabled: true
+role: edge
+xray:
+  enabled: true
+  outbound:
+    type: direct
+  inbounds:
+    - name: relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24001
+      auth:
+        type: password
+        username: relay-user
+        password: relay-password
+      sub: false
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: controller-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17091
+        users:
+          - username: first.user
+            password: "p@ss word:1"
+  upstreams:
+    - name: direct
+      type: raw
+      config:
+        type: direct
+        server: 127.0.0.1
+        port: 1
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [direct, DIRECT]
+  rules:
+    profile: default
+`)
+	lines := make([]string, 0)
+	fakeCurl := func(ctx context.Context, proxyURL string, url string, family string, timeout float64) (CurlResult, error) {
+		if stringsHasSuffix(url, "/failed") {
+			return CurlResult{
+				ReturnCode: 28,
+				Stderr:     "proxy failed via " + proxyURL + " password p@ss word:1 encoded p%40ss%20word%3A1",
+			}, nil
+		}
+		return CurlResult{ReturnCode: 0, Stdout: `{"ip": "198.51.100.10"}`}, nil
+	}
+
+	report, err := QueryIPInfo(context.Background(), QueryOptions{
+		ConfigPath:   configPath,
+		StackName:    "usa1",
+		Family:       "ipv4",
+		Sources:      []string{"https://ipinfo.example/failed", "https://ipinfo.example/ok"},
+		CurlRunner:   fakeCurl,
+		LineCallback: func(line string) { lines = append(lines, line) },
+	})
+
+	require.NoError(t, err)
+	visibleOutput := stringsJoin(append(FormatIPInfoReport(report), lines...))
+	require.NotContains(t, visibleOutput, "p@ss word:1")
+	require.NotContains(t, visibleOutput, "p%40ss%20word%3A1")
+	require.Contains(t, visibleOutput, "socks5://first.user:xxxxx@127.0.0.1:17091")
+	require.Contains(t, visibleOutput, "password xxxxx")
+}
+
+// TestQueryIPInfoRedactsProxyPasswordInProgressErrors 验证进度错误不会带出真实代理密码。
+func TestQueryIPInfoRedactsProxyPasswordInProgressErrors(t *testing.T) {
+	configPath := writeIPInfoFixtureWithStack(t, `name: usa1
+enabled: true
+role: edge
+xray:
+  enabled: true
+  outbound:
+    type: direct
+  inbounds:
+    - name: relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24001
+      auth:
+        type: password
+        username: relay-user
+        password: relay-password
+      sub: false
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: controller-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17091
+        users:
+          - username: first.user
+            password: "p@ss word:1"
+  upstreams:
+    - name: direct
+      type: raw
+      config:
+        type: direct
+        server: 127.0.0.1
+        port: 1
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [direct, DIRECT]
+  rules:
+    profile: default
+`)
+	errBoom := errors.New("proxy dial failed")
+	progresses := make([]IPInfoProgress, 0)
+	fakeCurl := func(ctx context.Context, proxyURL string, url string, family string, timeout float64) (CurlResult, error) {
+		return CurlResult{}, fmt.Errorf("dial failed via %s with p@ss word:1: %w", proxyURL, errBoom)
+	}
+
+	_, err := QueryIPInfo(context.Background(), QueryOptions{
+		ConfigPath:       configPath,
+		StackName:        "usa1",
+		Family:           "ipv4",
+		Sources:          []string{"https://ipinfo.example/json"},
+		CurlRunner:       fakeCurl,
+		ProgressCallback: func(progress IPInfoProgress) { progresses = append(progresses, progress) },
+	})
+
+	require.Error(t, err)
+	require.ErrorIs(t, err, errBoom)
+	require.NotContains(t, err.Error(), "p@ss word:1")
+	require.NotContains(t, err.Error(), "p%40ss%20word%3A1")
+	require.Contains(t, err.Error(), "socks5://first.user:xxxxx@127.0.0.1:17091")
+	require.Len(t, progresses, 2)
+	require.Error(t, progresses[1].Err)
+	require.ErrorIs(t, progresses[1].Err, errBoom)
+	require.NotContains(t, progresses[1].Err.Error(), "p@ss word:1")
+}
+
+// TestFormatIPInfoReportRedactsProxyPassword 验证报告格式化会隐藏手工传入代理 URL 中的密码。
+func TestFormatIPInfoReportRedactsProxyPassword(t *testing.T) {
+	report := IpInfoReport{
+		StackName: "usa1",
+		ProxyURL:  "socks5://user:p%40ss%20word@127.0.0.1:17091",
+		Families: []FamilyResult{{
+			Family: familyIPv4,
+			Label:  "IPv4",
+			IP:     "198.51.100.10",
+		}},
+	}
+
+	rendered := stringsJoin(FormatIPInfoReport(report))
+
+	require.NotContains(t, rendered, "p%40ss%20word")
+	require.Contains(t, rendered, "socks5://user:xxxxx@127.0.0.1:17091")
 }
 
 // TestQueryIPInfoUsesDefaultSourcesByFamily 验证默认来源按 IPv4/IPv6 分组，并在成功解析 IP 后停止后续来源。
@@ -252,10 +826,13 @@ func TestQueryIPInfoEmitsProgressLinesPerSource(t *testing.T) {
 // TestListenerProxyURLNormalizesWildcardAndIPv6Hosts 验证 wildcard 监听地址会转成本机地址，IPv6 地址会补方括号。
 func TestListenerProxyURLNormalizesWildcardAndIPv6Hosts(t *testing.T) {
 	wildcardListener := domain.SocksListener{Name: "local", Listen: "0.0.0.0", Port: 17090}
+	emptyListener := domain.SocksListener{Name: "local", Listen: "", Port: 17090}
 	ipv6Listener := domain.SocksListener{Name: "local", Listen: "::1", Port: 17091}
 
 	require.Equal(t, "socks5://127.0.0.1:17090", ListenerProxyURL(wildcardListener))
+	require.Equal(t, "socks5://127.0.0.1:17090", ListenerProxyURL(emptyListener))
 	require.Equal(t, "socks5://[::1]:17091", ListenerProxyURL(ipv6Listener))
+	require.Equal(t, "http://user:p%40ss%20word@[::1]:18080", BuildProxyURL("http", "[::1]", 18080, "user", "p@ss word"))
 }
 
 // TestParseSourceResponseHandlesTextAndWrongFamily 验证 ipinfo 能解析文本响应，并识别 family 不匹配的响应。
@@ -297,43 +874,7 @@ func TestBuildCurlArgsDoesNotForceIPv6ProxyConnection(t *testing.T) {
 // writeIPInfoFixture 写入最小可用 agent 配置和 stack。
 func writeIPInfoFixture(t *testing.T, socksListen string) string {
 	t.Helper()
-	baseDir := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "stacks"), 0o750))
-	configPath := filepath.Join(baseDir, "config.yaml")
-	require.NoError(t, os.WriteFile(configPath, []byte(`version: 1
-paths:
-  bin: bin
-  geo: geo
-  stacks: stacks
-  runtime: runtime
-  generated: runtime/generated
-  publish: publish
-  downloads: downloads
-  sub: sub
-external_host: proxy.example.com
-subscription:
-  source: local
-port_ranges:
-  xray_inbound: 4300-4399
-  clash_socks: 7001-7101
-  clash_http: 7201-7301
-  xray_api_range: 10001-10999
-  clash_controller: 19000-19999
-security:
-  require_auth_for_public_socks_http: true
-  allow_noauth_public: false
-install:
-  mihomo:
-    version: latest
-    source: auto
-  xray:
-    version: latest
-    source: auto
-  geo:
-    version: latest
-    source: auto
-`), 0o640))
-	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stacks", "usa1.yaml"), []byte(`name: usa1
+	return writeIPInfoFixtureWithStack(t, `name: usa1
 enabled: true
 role: edge
 xray:
@@ -374,20 +915,104 @@ clash:
       proxies: [direct, DIRECT]
   rules:
     profile: default
+`)
+}
+
+// writeIPInfoFixtureWithClashSocksUser 写入带单个 Clash socks 认证用户的 stack 配置。
+func writeIPInfoFixtureWithClashSocksUser(t *testing.T, password string) string {
+	t.Helper()
+	return writeIPInfoFixtureWithStack(t, `name: usa1
+enabled: true
+role: edge
+xray:
+  enabled: true
+  outbound:
+    type: direct
+  inbounds:
+    - name: relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24001
+      auth:
+        type: password
+        username: relay-user
+        password: relay-password
+      sub: false
+clash:
+  enabled: true
+  controller:
+    listen: 127.0.0.1:19091
+    secret: controller-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17091
+        users:
+          - username: first.user
+            password: "`+password+`"
+  upstreams:
+    - name: direct
+      type: raw
+      config:
+        type: direct
+        server: 127.0.0.1
+        port: 1
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [direct, DIRECT]
+  rules:
+    profile: default
+`)
+}
+
+// writeIPInfoFixtureWithStack 写入最小可用 agent 配置和指定 stack 内容。
+func writeIPInfoFixtureWithStack(t *testing.T, stackYAML string) string {
+	t.Helper()
+	baseDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "stacks"), 0o750))
+	configPath := filepath.Join(baseDir, "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(`version: 1
+paths:
+  bin: bin
+  geo: geo
+  stacks: stacks
+  runtime: runtime
+  generated: runtime/generated
+  publish: publish
+  downloads: downloads
+  sub: sub
+external_host: proxy.example.com
+subscription:
+  source: local
+port_ranges:
+  xray_inbound: 4300-4399
+  clash_socks: 7001-7101
+  clash_http: 7201-7301
+  xray_api_range: 10001-10999
+  clash_controller: 19000-19999
+security:
+  require_auth_for_public_socks_http: true
+  allow_noauth_public: false
+install:
+  mihomo:
+    version: latest
+    source: auto
+  xray:
+    version: latest
+    source: auto
+  geo:
+    version: latest
+    source: auto
 `), 0o640))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "stacks", "usa1.yaml"), []byte(stackYAML), 0o640))
 	return configPath
 }
 
 // stringsJoin 用换行拼接字符串切片，避免测试引入额外格式逻辑。
 func stringsJoin(values []string) string {
-	result := ""
-	for index, value := range values {
-		if index > 0 {
-			result += "\n"
-		}
-		result += value
-	}
-	return result
+	return strings.Join(values, "\n")
 }
 
 // stringsHasSuffix 判断字符串后缀，保持测试辅助函数局部化。

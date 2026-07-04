@@ -127,15 +127,15 @@ psctl [--base-dir DIR] add NAME [--template pair|auto-url-test|load-balance] [--
 ### 3.3.1 `example`
 
 ```bash
-psctl example [stack|xray|clash] [SECTION] [TYPE]
+psctl example [config|stack|xray|clash] [SECTION] [TYPE]
 ```
 
 职责：
 
-- 输出可复制的 stack YAML 配置片段到 stdout。
+- 输出可复制的 config 或 stack YAML 配置片段到 stdout。
 - 不带参数时输出 usage 和当前支持的全部片段说明。
 - 支持按 area、section 或具体 type 逐级筛选片段。
-- 当前覆盖 stack role，xray api/stats/policy/loglevel/auth/inbound/outbound，以及 clash mode/loglevel/controller/listener/upstream/group/rules。
+- 当前覆盖 config users，stack role，xray api/stats/policy/loglevel/auth/inbound/outbound，以及 clash mode/loglevel/controller/listener/upstream/group/rules。
 - 精确到 `TYPE` 时输出纯 YAML；只筛选到 area 或 section 时输出带注释的候选片段清单。
 
 副作用：只读。

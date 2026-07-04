@@ -58,6 +58,8 @@ func TestAgentExampleNoArgsPrintsUsage(t *testing.T) {
 	require.Contains(t, output, "psctl example [config|stack|xray|clash] [SECTION] [TYPE]")
 	require.Contains(t, output, "psctl example config users default")
 	require.Contains(t, output, "psctl example stack role edge")
+	require.Contains(t, output, "psctl example xray inbound vmess-raw")
+	require.NotContains(t, output, "  psctl example xray inbound vmess\n")
 	require.Contains(t, output, "psctl example clash upstream raw")
 }
 
@@ -109,11 +111,49 @@ func TestAgentExampleAcceptsCommonTypos(t *testing.T) {
 	require.Contains(t, output, "auth:")
 }
 
-// TestAgentExampleRejectsUnknownSnippet 验证未知片段返回可定位的错误。
-func TestAgentExampleRejectsUnknownSnippet(t *testing.T) {
-	output, err := runAgentCommandForTestError("example", "clash", "listener", "mixed")
+// TestAgentExampleRejectsUnknownArea 验证未知 area 只提示可用 area。
+func TestAgentExampleRejectsUnknownArea(t *testing.T) {
+	output, err := runAgentCommandForTestError("example", "xrays", "inbound", "vmess-raw")
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unsupported example snippet: clash listener mixed")
+	require.Contains(t, err.Error(), "unsupported example snippet: xrays inbound vmess-raw")
+	require.Contains(t, err.Error(), "Did you mean: xray")
+	require.Contains(t, err.Error(), "Supported areas:")
+	require.Contains(t, err.Error(), "  config")
+	require.Contains(t, err.Error(), "  stack")
+	require.Contains(t, err.Error(), "  xray")
+	require.Contains(t, err.Error(), "  clash")
+	require.NotContains(t, err.Error(), "psctl example")
+	require.Empty(t, output)
+}
+
+// TestAgentExampleRejectsUnknownSection 验证未知 section 只提示当前 area 下的 section。
+func TestAgentExampleRejectsUnknownSection(t *testing.T) {
+	output, err := runAgentCommandForTestError("example", "xray", "inbund", "vmess-raw")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported example snippet: xray inbund vmess-raw")
+	require.Contains(t, err.Error(), "Did you mean: xray inbound")
+	require.Contains(t, err.Error(), `Supported sections for area "xray":`)
+	require.Contains(t, err.Error(), "  api")
+	require.Contains(t, err.Error(), "  inbound")
+	require.Contains(t, err.Error(), "  outbound")
+	require.NotContains(t, err.Error(), "Supported types")
+	require.NotContains(t, err.Error(), "psctl example")
+	require.Empty(t, output)
+}
+
+// TestAgentExampleRejectsUnknownType 验证未知 type 只提示当前 section 下的 type。
+func TestAgentExampleRejectsUnknownType(t *testing.T) {
+	output, err := runAgentCommandForTestError("example", "clash", "listener", "socsk")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported example snippet: clash listener socsk")
+	require.Contains(t, err.Error(), "Did you mean: clash listener socks")
+	require.Contains(t, err.Error(), `Supported types for section "clash listener":`)
+	require.Contains(t, err.Error(), "  socks")
+	require.Contains(t, err.Error(), "  http")
+	require.NotContains(t, err.Error(), "xray-socks5")
+	require.NotContains(t, err.Error(), "psctl example")
 	require.Empty(t, output)
 }

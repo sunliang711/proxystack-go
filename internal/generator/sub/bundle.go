@@ -13,6 +13,8 @@ import (
 	"strings"
 )
 
+const maxBundleManifestBytes int64 = 1 << 20
+
 // BundleManifest 是订阅发布包 manifest。
 type BundleManifest struct {
 	BundleSchema    string            `json:"bundle_schema"`
@@ -139,7 +141,12 @@ func WriteBundle(outputPath string, source string, generatedAt string, inputFile
 
 // ExtractBundleInputs 校验发布包并原子写入 dataDir/inputs。
 func ExtractBundleInputs(bundlePath string, dataDir string, replaceAll bool) (BundleImportResult, error) {
-	manifest, inputMembers, err := readAndValidateBundle(bundlePath)
+	return ExtractBundleInputsWithLimit(bundlePath, dataDir, replaceAll, 0)
+}
+
+// ExtractBundleInputsWithLimit 校验发布包并限制解压后的 input 总字节数。
+func ExtractBundleInputsWithLimit(bundlePath string, dataDir string, replaceAll bool, maxInputBytes int64) (BundleImportResult, error) {
+	manifest, inputMembers, err := readAndValidateBundle(bundlePath, maxInputBytes)
 	if err != nil {
 		return BundleImportResult{}, err
 	}
@@ -235,7 +242,7 @@ func ExtractBundleInputs(bundlePath string, dataDir string, replaceAll bool) (Bu
 	}, nil
 }
 
-func readAndValidateBundle(bundlePath string) (BundleManifest, map[string][]byte, error) {
+func readAndValidateBundle(bundlePath string, maxInputBytes int64) (BundleManifest, map[string][]byte, error) {
 	reader, err := zip.OpenReader(bundlePath)
 	if err != nil {
 		return BundleManifest{}, nil, GeneratorError{Message: "invalid subscription bundle zip: " + bundlePath}
@@ -254,7 +261,7 @@ func readAndValidateBundle(bundlePath string) (BundleManifest, map[string][]byte
 	if !ok {
 		return BundleManifest{}, nil, GeneratorError{Message: "bundle manifest is missing"}
 	}
-	manifestData, err := readZipFile(manifestFile)
+	manifestData, err := readZipFileLimited(manifestFile, maxBundleManifestBytes)
 	if err != nil {
 		return BundleManifest{}, nil, err
 	}
@@ -281,15 +288,24 @@ func readAndValidateBundle(bundlePath string) (BundleManifest, map[string][]byte
 		return BundleManifest{}, nil, GeneratorError{Message: "bundle inputs do not match manifest"}
 	}
 	inputMembers := map[string][]byte{}
+	var totalInputBytes int64
 	for name, expectedHash := range manifest.InputsSHA256 {
 		file := members["inputs/"+name]
 		if file == nil {
 			return BundleManifest{}, nil, GeneratorError{Message: "bundle input is missing: " + name}
 		}
-		content, err := readZipFile(file)
+		remainingBytes := int64(0)
+		if maxInputBytes > 0 {
+			remainingBytes = maxInputBytes - totalInputBytes
+			if remainingBytes <= 0 {
+				return BundleManifest{}, nil, GeneratorError{Message: "bundle inputs exceed size limit"}
+			}
+		}
+		content, err := readZipFileLimited(file, remainingBytes)
 		if err != nil {
 			return BundleManifest{}, nil, err
 		}
+		totalInputBytes += int64(len(content))
 		if sha256Bytes(content) != expectedHash {
 			return BundleManifest{}, nil, GeneratorError{Message: "input hash mismatch: " + name}
 		}
@@ -349,12 +365,29 @@ func writeZipMember(zipWriter *zip.Writer, name string, content []byte) error {
 }
 
 func readZipFile(file *zip.File) ([]byte, error) {
+	return readZipFileLimited(file, 0)
+}
+
+func readZipFileLimited(file *zip.File, maxBytes int64) ([]byte, error) {
+	if maxBytes > 0 && file.UncompressedSize64 > uint64(maxBytes) {
+		return nil, GeneratorError{Message: "bundle member exceeds size limit: " + file.Name}
+	}
 	reader, err := file.Open()
 	if err != nil {
 		return nil, err
 	}
 	defer reader.Close()
-	return io.ReadAll(reader)
+	if maxBytes <= 0 {
+		return io.ReadAll(reader)
+	}
+	data, err := io.ReadAll(io.LimitReader(reader, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, GeneratorError{Message: "bundle member exceeds size limit: " + file.Name}
+	}
+	return data, nil
 }
 
 func writeFileAtomically(path string, content []byte, mode os.FileMode) error {

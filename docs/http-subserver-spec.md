@@ -2,7 +2,7 @@
 
 生成日期：2026-06-17
 
-本文定义 `pssub serve` 的 HTTP 行为、鉴权、状态管理和 watcher 语义。
+本文定义 `pssub serve` 的 HTTP 行为、鉴权、状态管理、导入接口和 watcher 语义。
 
 ## 1. 服务边界
 
@@ -19,6 +19,11 @@
 - `runtime/manifest.json`
 - clash upstream、rules、controller 配置
 
+`import_api.enabled=true` 时允许写入：
+
+- `<base-dir>/.imports/*.zip` 临时上传文件，处理完成后删除。
+- `<base-dir>/inputs`，仅通过订阅 bundle 导入流程写入。
+
 ## 2. 启动流程
 
 1. 解析全局 `--base-dir` 以及 `--listen`、`--host`、`--port`。
@@ -28,10 +33,14 @@
 5. 扫描 `<base-dir>/inputs`。
 6. 校验所有 input。
 7. 构建内存 index。
-8. 创建 Gin HTTP server。
-9. 启动 watcher。
+8. 创建订阅 Gin HTTP server。
+9. 创建 watcher。
+10. 监听订阅 HTTP 地址。
+11. `import_api.enabled=true` 时监听独立 admin HTTP 地址，只绑定 `import_api.listen`。
+12. 启动 watcher 和 HTTP server。
 
 启动阶段任何 input 非法，服务启动失败。
+如果 admin listener 启动失败，必须关闭已打开的订阅 listener 并停止 watcher。
 
 ## 3. 状态管理
 
@@ -65,6 +74,7 @@ reload 失败：
 | GET | `/premium_sub/:token/:user` | Premium Clash，path token 推荐 |
 | GET | `/surge_sub/:user` | Surge，query token 兼容 |
 | GET | `/surge_sub/:token/:user` | Surge，path token 推荐 |
+| POST | `/admin/import-bundle?replace_all=true|false` | 仅 admin listener；导入订阅 bundle |
 
 ## 5. 鉴权
 
@@ -81,6 +91,13 @@ reload 失败：
 - token 不匹配返回 403。
 
 token 来源只来自 sub config，不来自 bundle manifest。
+
+导入接口：
+
+- 不使用 token。
+- 仅在 `import_api.enabled=true` 时启动独立 admin listener。
+- `import_api.listen` 必须是 loopback 或 `localhost`。
+- handler 仍必须基于 `RemoteAddr` 做回环校验，不信任 `X-Forwarded-For` 或 `X-Real-IP`。
 
 ## 6. 响应
 
@@ -134,6 +151,53 @@ token 来源只来自 sub config，不来自 bundle manifest。
 | 404 | `not_found` | 用户不存在或无节点 |
 | 503 | `index_unavailable` | index 不可用 |
 | 503 | `template_error` | 模板不可用 |
+
+### 6.3 `/admin/import-bundle`
+
+请求：
+
+- 方法：`POST`
+- Query：`replace_all=true|false`，缺省等价于 `false`
+- Body：`psctl sub export` 生成的 zip bundle
+- Content-Type：不强制
+- 上传 zip 大小和解压后的 input 总大小均受 `import_api.max_bundle_bytes` 限制
+
+成功：
+
+```json
+{
+  "status": "ok",
+  "source": "all",
+  "generated_at": "2026-06-05T12:00:00+08:00",
+  "inputs": 1,
+  "written": ["usa1.yaml"],
+  "replaced": [],
+  "removed": [],
+  "replace_all": false,
+  "reloaded": true
+}
+```
+
+处理规则：
+
+- 上传体先写入 `<base-dir>/.imports/*.zip`，目录权限建议 `0700`，临时文件权限建议 `0600`。
+- 处理完成后删除临时 zip。
+- 只接受 `proxystack.sub-bundle`。
+- 复用 bundle 导入逻辑完整校验 zip、manifest、hash、解压后 input 总大小和 inputs 后再写入。
+- 成功写入后必须立即 `Reload()`，reload 成功才返回 200。
+- 并发导入必须串行化，避免同时替换 inputs。
+
+错误码：
+
+| HTTP | code | 场景 |
+| --- | --- | --- |
+| 400 | `bad_request` | `replace_all` 非 `true|false` |
+| 400 | `invalid_bundle` | zip、manifest、schema、hash 或 input 校验失败 |
+| 403 | `forbidden` | `RemoteAddr` 非回环地址 |
+| 413 | `payload_too_large` | 超过 `max_bundle_bytes` |
+| 500 | `upload_failed` | 临时文件写入失败 |
+| 500 | `import_failed` | 导入阶段出现非校验类错误 |
+| 500 | `reload_failed` | 写入后 reload 失败 |
 
 ## 7. Surge Managed Config
 

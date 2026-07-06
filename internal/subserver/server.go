@@ -4,11 +4,15 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/eagle/proxystack-go/internal/config"
@@ -19,10 +23,12 @@ import (
 
 // Server 封装 pssub HTTP 服务和 watcher 生命周期。
 type Server struct {
-	Config config.SubServerConfig
-	State  *State
-	HTTP   *http.Server
-	Watch  *Watcher
+	Config     config.SubServerConfig
+	State      *State
+	HTTP       *http.Server
+	ImportHTTP *http.Server
+	Watch      *Watcher
+	ImportMu   sync.Mutex
 }
 
 // NewRouter 创建订阅 HTTP router。
@@ -37,12 +43,21 @@ func NewRouter(state *State, subConfig config.SubServerConfig) *gin.Engine {
 	return router
 }
 
+// newImportRouter 创建独立导入接口 router，只挂载 admin 导入路由。
+func newImportRouter(state *State, subConfig config.SubServerConfig, importMu *sync.Mutex) *gin.Engine {
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+	router.Use(requestLogger())
+	router.POST("/admin/import-bundle", importBundleHandler(state, subConfig, importMu))
+	return router
+}
+
 // NewServer 创建 HTTP server 和 watcher，但不启动监听。
 func NewServer(subConfig config.SubServerConfig, now func() string) *Server {
 	access := accessFromConfig(subConfig.Access)
 	state := NewState(subConfig.DataDir, access, now)
 	router := NewRouter(state, subConfig)
-	return &Server{
+	server := &Server{
 		Config: subConfig,
 		State:  state,
 		HTTP: &http.Server{
@@ -51,6 +66,14 @@ func NewServer(subConfig config.SubServerConfig, now func() string) *Server {
 			ReadHeaderTimeout: 5 * time.Second,
 		},
 	}
+	if subConfig.ImportAPI.Enabled {
+		server.ImportHTTP = &http.Server{
+			Addr:              subConfig.ImportAPI.Listen,
+			Handler:           newImportRouter(state, subConfig, &server.ImportMu),
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+	}
+	return server
 }
 
 // Start 启动 HTTP server 和 watcher。
@@ -67,25 +90,198 @@ func (s *Server) Start(ctx context.Context) error {
 		s.Watch.Stop()
 		return err
 	}
+	var importListener net.Listener
+	if s.ImportHTTP != nil {
+		importListener, err = net.Listen("tcp", s.Config.ImportAPI.Listen)
+		if err != nil {
+			_ = listener.Close()
+			s.Watch.Stop()
+			return err
+		}
+	}
 	s.logLoaded(listener.Addr().String())
-	errCh := make(chan error, 1)
+	if importListener != nil {
+		s.logImportLoaded(importListener.Addr().String())
+	}
+	errCh := make(chan error, 2)
 	go func() {
 		errCh <- s.HTTP.Serve(listener)
 	}()
+	if importListener != nil {
+		go func() {
+			errCh <- s.ImportHTTP.Serve(importListener)
+		}()
+	}
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = s.HTTP.Shutdown(shutdownCtx)
+		s.shutdownHTTP(shutdownCtx)
 		s.Watch.Stop()
 		return ctx.Err()
 	case err := <-errCh:
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		s.shutdownHTTP(shutdownCtx)
 		s.Watch.Stop()
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
 		return err
 	}
+}
+
+// shutdownHTTP 优雅停止订阅和导入 HTTP server。
+func (s *Server) shutdownHTTP(ctx context.Context) {
+	_ = s.HTTP.Shutdown(ctx)
+	if s.ImportHTTP != nil {
+		_ = s.ImportHTTP.Shutdown(ctx)
+	}
+}
+
+// importBundleHandler 导入 psctl sub export 生成的订阅 bundle，并在成功后立即 reload。
+func importBundleHandler(state *State, subConfig config.SubServerConfig, importMu *sync.Mutex) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !isLoopbackRemoteAddr(c.Request.RemoteAddr) {
+			writeError(c, http.StatusForbidden, "forbidden", "import api requires loopback client")
+			return
+		}
+		replaceAll, err := parseImportReplaceAll(c.Request.URL.Query())
+		if err != nil {
+			writeError(c, http.StatusBadRequest, "bad_request", "replace_all must be true or false")
+			return
+		}
+
+		importMu.Lock()
+		defer importMu.Unlock()
+
+		bundlePath, err := writeImportTempBundle(c.Request, c.Writer, subConfig.DataDir, subConfig.ImportAPI.MaxBundleBytes)
+		if err != nil {
+			var maxBytesError *http.MaxBytesError
+			if errors.As(err, &maxBytesError) {
+				writeError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "subscription bundle is too large")
+				return
+			}
+			log.Error().Err(err).Msg("Subscription import upload failed")
+			writeError(c, http.StatusInternalServerError, "upload_failed", "subscription bundle upload failed")
+			return
+		}
+		defer os.Remove(bundlePath)
+
+		result, err := subgen.ExtractBundleInputsWithLimit(bundlePath, subConfig.DataDir, replaceAll, subConfig.ImportAPI.MaxBundleBytes)
+		if err != nil {
+			writeImportBundleError(c, err)
+			return
+		}
+		if err := state.Reload(); err != nil {
+			log.Error().Err(err).Msg("Subscription import reload failed")
+			writeError(c, http.StatusInternalServerError, "reload_failed", "subscription inputs reload failed")
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"status":       "ok",
+			"source":       result.Manifest.Source,
+			"generated_at": result.Manifest.GeneratedAt,
+			"inputs":       len(result.WrittenInputs),
+			"written":      result.WrittenInputs,
+			"replaced":     result.ReplacedInputs,
+			"removed":      result.RemovedInputs,
+			"replace_all":  result.ReplaceAll,
+			"reloaded":     true,
+		})
+	}
+}
+
+// parseImportReplaceAll 解析导入接口 replace_all 参数，缺省时按 false 处理。
+func parseImportReplaceAll(values url.Values) (bool, error) {
+	rawValues, ok := values["replace_all"]
+	if !ok {
+		return false, nil
+	}
+	if len(rawValues) != 1 {
+		return false, errors.New("replace_all must be provided once")
+	}
+	switch rawValues[0] {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, errors.New("replace_all must be true or false")
+	}
+}
+
+// writeImportTempBundle 把上传 body 限流后写入 base dir 下的临时 zip 文件。
+func writeImportTempBundle(request *http.Request, writer http.ResponseWriter, dataDir string, maxBundleBytes int64) (string, error) {
+	importsDir := filepath.Join(dataDir, ".imports")
+	if err := os.MkdirAll(importsDir, 0o700); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(importsDir, 0o700); err != nil {
+		return "", err
+	}
+	file, err := os.CreateTemp(importsDir, "bundle-*.zip")
+	if err != nil {
+		return "", err
+	}
+	bundlePath := file.Name()
+	if err := file.Chmod(0o600); err != nil {
+		_ = file.Close()
+		_ = os.Remove(bundlePath)
+		return "", err
+	}
+	body := http.MaxBytesReader(writer, request.Body, maxBundleBytes)
+	_, copyErr := io.Copy(file, body)
+	closeBodyErr := body.Close()
+	var syncErr error
+	if copyErr == nil {
+		syncErr = file.Sync()
+	}
+	closeErr := file.Close()
+	if copyErr != nil {
+		_ = os.Remove(bundlePath)
+		return "", copyErr
+	}
+	if closeBodyErr != nil {
+		_ = os.Remove(bundlePath)
+		return "", closeBodyErr
+	}
+	if syncErr != nil {
+		_ = os.Remove(bundlePath)
+		return "", syncErr
+	}
+	if closeErr != nil {
+		_ = os.Remove(bundlePath)
+		return "", closeErr
+	}
+	return bundlePath, nil
+}
+
+// writeImportBundleError 把 bundle 校验错误映射为安全的 HTTP 响应。
+func writeImportBundleError(c *gin.Context, err error) {
+	var generatorError subgen.GeneratorError
+	if errors.As(err, &generatorError) {
+		writeError(c, http.StatusBadRequest, "invalid_bundle", "subscription bundle is invalid")
+		return
+	}
+	log.Error().Err(err).Msg("Subscription import failed")
+	writeError(c, http.StatusInternalServerError, "import_failed", "subscription bundle import failed")
+}
+
+// isLoopbackRemoteAddr 只根据 RemoteAddr 判断调用方是否来自本机回环地址。
+func isLoopbackRemoteAddr(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if zoneIndex := strings.LastIndex(host, "%"); zoneIndex >= 0 {
+		host = host[:zoneIndex]
+	}
+	addr, err := netip.ParseAddr(host)
+	return err == nil && addr.IsLoopback()
 }
 
 // requestLogger 输出不含 token 和 query 的 HTTP 访问日志。
@@ -146,6 +342,15 @@ func (s *Server) logLoaded(listen string) {
 		Int("nodes", nodes).
 		Int("users", len(users)).
 		Msg("Subscription server loaded")
+}
+
+// logImportLoaded 输出导入接口启动摘要，便于确认 admin listener 隔离监听。
+func (s *Server) logImportLoaded(listen string) {
+	log.Info().
+		Str("data_dir", s.Config.DataDir).
+		Str("listen", listen).
+		Int64("max_bundle_bytes", s.Config.ImportAPI.MaxBundleBytes).
+		Msg("Subscription import API loaded")
 }
 
 func healthHandler(state *State) gin.HandlerFunc {

@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `GlobalConfig` | 允许 | 当前 Python 领域模型允许扩展字段，避免破坏用户配置 |
 | `Stack`、`Xray`、`Clash`、`Inbound`、`Outbound`、`Upstream`、`Group` | 允许 | 保留未来扩展和用户附加字段 |
-| `SubServerConfig`、`ManagedConfig` | 禁止 | 订阅服务自身配置，误写字段应 fail fast |
+| `SubServerConfig`、`ImportAPIConfig`、`ManagedConfig` | 禁止 | 订阅服务自身配置，误写字段应 fail fast |
 | `SubscriptionInput`、`SubscriptionNode`、`SubscriptionAuth` | 禁止 | agent/sub 之间的传输契约 |
 | `SubscriptionIndex`、`SubscriptionAccess` | 禁止 | HTTP 鉴权和内存索引契约 |
 | `BundleManifest` | 禁止 | zip 安全校验契约 |
@@ -361,8 +361,9 @@ P0 不支持 `xray-http`。
 
 | 字段 | 类型 | 必填 | 默认值 |
 | --- | --- | --- | --- |
-| `listen` | string | 否 | `0.0.0.0:3003` |
+| `listen` | string | 否 | `127.0.0.1:3003` |
 | `access` | object | 否 | `{type: none}` |
+| `import_api` | object | 否 | 见下文 |
 | `templates_dir` | path | 否 | 无 |
 | `watch_interval` | float | 否 | `2.0` |
 | `watch_debounce` | float | 否 | `0.3` |
@@ -377,7 +378,19 @@ P0 不支持 `xray-http`。
 
 token 只存放在 sub config 中，不写入 bundle 和 input。
 
-### 6.2 ManagedConfig
+### 6.2 ImportAPIConfig
+
+`import_api` 用于让 `pssub serve` 启动独立 admin HTTP listener，导入 `psctl sub export` 生成的订阅 bundle。默认关闭。
+
+| 字段 | 类型 | 默认值 | 校验 |
+| --- | --- | --- | --- |
+| `enabled` | bool | `false` | bool |
+| `listen` | string | `127.0.0.1:3004` | `enabled=true` 时必须为 loopback 或 `localhost` |
+| `max_bundle_bytes` | int | `67108864` | `>0`；同时限制上传 zip 大小和解压后的 input 总大小 |
+
+启用时 admin listener 只绑定 `import_api.listen`，不挂在订阅 HTTP listener 上。推荐保持 `127.0.0.1` 并通过 SSH 隧道访问。
+
+### 6.3 ManagedConfig
 
 | 字段 | 类型 | 默认值 | 校验 |
 | --- | --- | --- | --- |

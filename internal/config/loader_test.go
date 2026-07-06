@@ -357,6 +357,24 @@ func TestLoadSubServerConfigDefaultsToLoopback(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "127.0.0.1:3003", subConfig.Listen)
 	require.Equal(t, "none", subConfig.Access.Type)
+	require.False(t, subConfig.ImportAPI.Enabled)
+	require.Equal(t, "127.0.0.1:3004", subConfig.ImportAPI.Listen)
+	require.Equal(t, int64(67108864), subConfig.ImportAPI.MaxBundleBytes)
+}
+
+// TestLoadSubServerConfigAcceptsImportAPI 验证导入接口启用时默认本机监听并通过校验。
+func TestLoadSubServerConfigAcceptsImportAPI(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "sub.yaml")
+	writeFile(t, configPath, `import_api:
+  enabled: true
+`)
+
+	subConfig, err := config.LoadSubServerConfig(configPath)
+
+	require.NoError(t, err)
+	require.True(t, subConfig.ImportAPI.Enabled)
+	require.Equal(t, "127.0.0.1:3004", subConfig.ImportAPI.Listen)
+	require.Equal(t, int64(67108864), subConfig.ImportAPI.MaxBundleBytes)
 }
 
 // TestLoadSubServerConfigRejectsInvalidValues 验证 sub config 非法值会 fail fast。
@@ -371,6 +389,9 @@ func TestLoadSubServerConfigRejectsInvalidValues(t *testing.T) {
 		{name: "public listen without token", content: "listen: 0.0.0.0:3003\naccess:\n  type: none\n", want: "access.type none is only allowed"},
 		{name: "access unknown", content: "access:\n  type: none\n  extra: true\n", want: "field extra not found"},
 		{name: "log unknown", content: "log:\n  format: json\n  extra: true\n", want: "field extra not found"},
+		{name: "import api unknown", content: "import_api:\n  enabled: false\n  extra: true\n", want: "field extra not found"},
+		{name: "import api public listen", content: "import_api:\n  enabled: true\n  listen: 0.0.0.0:3004\n", want: "import_api.listen must be loopback or localhost"},
+		{name: "import api zero max bytes", content: "import_api:\n  max_bundle_bytes: 0\n", want: "import_api.max_bundle_bytes must be greater than 0"},
 		{name: "bad log format", content: "log:\n  format: text\n", want: "log.format must be json or console"},
 		{name: "bad managed scheme", content: "managed_config:\n  public_base_url: ftp://example.com/sub\n", want: "must use http or https"},
 		{name: "managed query", content: "managed_config:\n  public_base_url: https://example.com/sub?token=1\n", want: "must not include query or fragment"},

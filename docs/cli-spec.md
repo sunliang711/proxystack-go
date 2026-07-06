@@ -657,11 +657,13 @@ pssub [--base-dir DIR] [--listen HOST:PORT] serve [--host HOST] [--port PORT]
 - 启动订阅 HTTP 服务。
 - 加载 `<base-dir>/config.yaml` 和 `<base-dir>/inputs`。
 - 启动 watcher，运行期 reload。
+- `import_api.enabled=true` 时额外启动独立 localhost/loopback admin listener，提供 `POST /admin/import-bundle?replace_all=true|false` 导入订阅 bundle。
 
 副作用：
 
 - 长期运行 HTTP server。
-- 运行期只读 inputs，除日志外不写 agent 目录。
+- 默认只读 `<base-dir>/inputs`；`import_api.enabled=true` 时可写 `<base-dir>/.imports` 和 `<base-dir>/inputs`。
+- 不写 agent 目录。
 
 验收：
 

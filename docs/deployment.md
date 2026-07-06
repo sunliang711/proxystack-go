@@ -84,6 +84,13 @@ sudo pssub --base-dir /opt/proxystack-sub logs -f
 
 此时 sub root 为 `/opt/proxystack-sub`。
 
+如需远程导入 `psctl sub export` 生成的 bundle，推荐在 `/opt/proxystack-sub/config.yaml` 中开启 `import_api.enabled=true`，保持 `import_api.listen: 127.0.0.1:3004`，再通过 SSH 隧道访问：
+
+```bash
+ssh -L 3004:127.0.0.1:3004 user@sub-host
+curl -X POST --data-binary @sub-bundle.zip "http://127.0.0.1:3004/admin/import-bundle?replace_all=false"
+```
+
 ## Docker sub 部署
 
 镜像只包含 `pssub`，不包含 mihomo/xray：

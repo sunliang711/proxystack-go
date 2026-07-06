@@ -8,16 +8,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	defaultImportAPIListen         = "127.0.0.1:3004"
+	defaultImportAPIMaxBundleBytes = 67108864
+)
+
 // SubServerConfig 保存 pssub 自身运行配置，使用 strict decode 防止误写字段。
 type SubServerConfig struct {
-	DataDir       string        `json:"-" yaml:"-" mapstructure:"-"`
-	Listen        string        `json:"listen" yaml:"listen" mapstructure:"listen"`
-	Log           LogConfig     `json:"log" yaml:"log" mapstructure:"log"`
-	Access        AccessConfig  `json:"access" yaml:"access" mapstructure:"access"`
-	TemplatesDir  string        `json:"templates_dir" yaml:"templates_dir" mapstructure:"templates_dir"`
-	WatchInterval float64       `json:"watch_interval" yaml:"watch_interval" mapstructure:"watch_interval"`
-	WatchDebounce float64       `json:"watch_debounce" yaml:"watch_debounce" mapstructure:"watch_debounce"`
-	ManagedConfig ManagedConfig `json:"managed_config" yaml:"managed_config" mapstructure:"managed_config"`
+	DataDir       string          `json:"-" yaml:"-" mapstructure:"-"`
+	Listen        string          `json:"listen" yaml:"listen" mapstructure:"listen"`
+	Log           LogConfig       `json:"log" yaml:"log" mapstructure:"log"`
+	Access        AccessConfig    `json:"access" yaml:"access" mapstructure:"access"`
+	ImportAPI     ImportAPIConfig `json:"import_api" yaml:"import_api" mapstructure:"import_api"`
+	TemplatesDir  string          `json:"templates_dir" yaml:"templates_dir" mapstructure:"templates_dir"`
+	WatchInterval float64         `json:"watch_interval" yaml:"watch_interval" mapstructure:"watch_interval"`
+	WatchDebounce float64         `json:"watch_debounce" yaml:"watch_debounce" mapstructure:"watch_debounce"`
+	ManagedConfig ManagedConfig   `json:"managed_config" yaml:"managed_config" mapstructure:"managed_config"`
 
 	fields map[string]bool `json:"-" yaml:"-"`
 }
@@ -43,6 +49,12 @@ access:
   type: none
   # token 仅在 type: token 时必填，可通过 /sub/<token>/<user> 访问。
   # token: change-me
+
+# HTTP 导入接口，默认关闭；启用后只允许绑定 localhost/loopback，便于 SSH 隧道访问。
+import_api:
+  enabled: false
+  listen: 127.0.0.1:3004
+  max_bundle_bytes: 67108864
 
 # 自定义模板目录；为空时使用内置模板。
 # 查找顺序：templates_dir/sub/<template> -> templates_dir/<template> -> <base-dir>/templates/sub/<template> -> 内置模板。
@@ -74,6 +86,7 @@ func (s *SubServerConfig) UnmarshalYAML(value *yaml.Node) error {
 		"listen":         true,
 		"log":            true,
 		"access":         true,
+		"import_api":     true,
 		"templates_dir":  true,
 		"watch_interval": true,
 		"watch_debounce": true,
@@ -94,6 +107,7 @@ func (s *SubServerConfig) ApplyDefaults() {
 		s.Access.Type = "none"
 	}
 	s.Log.ApplyDefaults()
+	s.ImportAPI.ApplyDefaults()
 	if !s.fields["watch_interval"] && s.WatchInterval == 0 {
 		s.WatchInterval = 2.0
 	}
@@ -122,6 +136,9 @@ func (s SubServerConfig) Validate() error {
 		return fmt.Errorf("watch_debounce must be greater than or equal to 0")
 	}
 	if err := s.Access.Validate(); err != nil {
+		return err
+	}
+	if err := s.ImportAPI.Validate(); err != nil {
 		return err
 	}
 	if s.Access.Type == "none" && !domain.IsLoopbackHost(host) {
@@ -206,6 +223,54 @@ func (a AccessConfig) Validate() error {
 	default:
 		return fmt.Errorf("access.type must be none or token")
 	}
+}
+
+// ImportAPIConfig 保存 pssub 独立导入接口配置。
+type ImportAPIConfig struct {
+	Enabled        bool   `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
+	Listen         string `json:"listen" yaml:"listen" mapstructure:"listen"`
+	MaxBundleBytes int64  `json:"max_bundle_bytes" yaml:"max_bundle_bytes" mapstructure:"max_bundle_bytes"`
+
+	fields map[string]bool `json:"-" yaml:"-"`
+}
+
+// UnmarshalYAML 记录并拒绝 import_api 子对象未知字段。
+func (i *ImportAPIConfig) UnmarshalYAML(value *yaml.Node) error {
+	i.fields = yamlFields(value)
+	if err := rejectUnknownFields(i.fields, map[string]bool{
+		"enabled":          true,
+		"listen":           true,
+		"max_bundle_bytes": true,
+	}); err != nil {
+		return err
+	}
+	type raw ImportAPIConfig
+	return value.Decode((*raw)(i))
+}
+
+// ApplyDefaults 补齐导入接口默认值，显式 0 保留给校验阶段 fail fast。
+func (i *ImportAPIConfig) ApplyDefaults() {
+	if !i.fields["listen"] && i.Listen == "" {
+		i.Listen = defaultImportAPIListen
+	}
+	if !i.fields["max_bundle_bytes"] && i.MaxBundleBytes == 0 {
+		i.MaxBundleBytes = defaultImportAPIMaxBundleBytes
+	}
+}
+
+// Validate 校验导入接口的监听地址和上传大小限制。
+func (i ImportAPIConfig) Validate() error {
+	host, _, err := domain.ParseListen(i.Listen)
+	if err != nil {
+		return fmt.Errorf("import_api.%w", err)
+	}
+	if i.MaxBundleBytes <= 0 {
+		return fmt.Errorf("import_api.max_bundle_bytes must be greater than 0")
+	}
+	if i.Enabled && !domain.IsLoopbackHost(host) {
+		return fmt.Errorf("import_api.listen must be loopback or localhost when import_api.enabled is true")
+	}
+	return nil
 }
 
 // ManagedConfig 保存 managed subscription 输出配置。

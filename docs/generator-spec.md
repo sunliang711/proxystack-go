@@ -8,7 +8,9 @@
 
 输入：
 
-- agent 生成器只读取 `config.yaml` 和 `stacks/*.yaml`。
+- agent 生成器读取 `config.yaml` 和 `stacks/*.yaml`，并叠加 `<runtime>/disabled.json` 的用户禁用覆盖。
+  - 该覆盖只影响 Xray 生成结果，且只过滤 vmess/shadowsocks inbound 的 `clients`；mihomo 和订阅生成完全不读它。
+  - 它由 `runtime.BuildPlan` 和 `psctl render xray` 显式加载，不进入 `config.LoadStacks`，因此与生成无关的命令不受它影响。
 - `render sub --input-dir` 和 `pssub serve` 只读取 inputs 和 sub config。
 
 输出：
@@ -18,6 +20,7 @@
 - 订阅 input：`<generated>/sub/inputs/<source>.yaml`
 - 订阅 index：`<generated>/sub/index.json`
 - runtime manifest：`<runtime>/manifest.json`
+- 用户禁用状态：`<runtime>/disabled.json`（由 `psctl user enable/disable` 写入，不是生成产物）
 - 订阅发布包：`<publish>/sub-bundle.zip` 或 `<publish>/<stack>-sub-bundle.zip`
 
 稳定性要求：

@@ -477,8 +477,8 @@ defaults:
       tag: api
       # API 默认监听地址；新增 stack 可按需自动分配端口。
       listen: 127.0.0.1:10085
-      # 启用的 API 服务列表。
-      services: [StatsService]
+      # 启用的 API 服务列表。HandlerService 供 psctl user 热启停用户。
+      services: [HandlerService, StatsService]
     # Xray stats 默认配置。
     stats:
       # 是否默认启用 stats。

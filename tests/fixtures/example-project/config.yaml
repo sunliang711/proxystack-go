@@ -39,7 +39,7 @@ defaults:
       enabled: true
       tag: api
       listen: 127.0.0.1:10085
-      services: [StatsService]
+      services: [HandlerService, StatsService]
     stats:
       enabled: true
     policy:

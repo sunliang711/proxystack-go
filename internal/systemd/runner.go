@@ -366,6 +366,7 @@ func StandardMetadataRules(config domain.GlobalConfig) []MetadataRule {
 	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Generated), "xray", "*.json"), 0o640)
 	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Generated), "mihomo", "*.yaml"), 0o640)
 	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Runtime), "manifest.json"), 0o640)
+	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Runtime), "disabled.json"), 0o640)
 	return rules
 }
 

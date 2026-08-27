@@ -116,6 +116,10 @@ func newRenderXrayCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			stackSet.DisabledUsers, err = agentruntime.LoadDisabledUsers(stackSet.Config)
+			if err != nil {
+				return err
+			}
 			output, err := xraygen.DumpsConfig(stackSet, args[0])
 			if err != nil {
 				return err

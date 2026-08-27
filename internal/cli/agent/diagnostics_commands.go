@@ -15,7 +15,9 @@ import (
 	"github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/diagnostics"
 	"github.com/eagle/proxystack-go/internal/domain"
+	xraygen "github.com/eagle/proxystack-go/internal/generator/xray"
 	"github.com/eagle/proxystack-go/internal/systemd"
+	"github.com/eagle/proxystack-go/internal/userstate"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
@@ -67,16 +69,82 @@ func runDoctor(configPath string) (doctorReport, error) {
 		return doctorReport{}, fmt.Errorf("doctor config failed: %w", err)
 	}
 	report := doctorReport{Checks: []string{"config loaded"}}
-	if _, err := config.LoadStacks(cfg, false); err != nil {
+	stackSet, err := config.LoadStacks(cfg, false)
+	if err != nil {
 		report.Issues = append(report.Issues, "configuration validation failed: "+err.Error())
 	} else {
 		report.Checks = append(report.Checks, "stacks configuration validated")
+		addDoctorUserToggleIssues(&report, stackSet)
 	}
 	uid, gid, hasServiceAccount := addDoctorServiceAccountIssues(&report)
 	addDoctorMetadataIssues(&report, cfg, uid, gid, hasServiceAccount)
 	addDoctorBinaryIssues(&report, cfg)
 	addDoctorUnitIssues(&report)
 	return report, nil
+}
+
+// addDoctorUserToggleIssues 检查用户启停相关的配置和运行时状态。
+//
+// 两件事：HandlerService 在本机开了一个无鉴权的用户/inbound 管理面，值得让运维知道
+// 自己开着；以及 disabled.json 里可能留着配置中已不存在的陈旧条目。
+func addDoctorUserToggleIssues(report *doctorReport, stackSet domain.StackSet) {
+	handler := make([]string, 0)
+	missing := make([]string, 0)
+	for _, stack := range stackSet.Stacks {
+		if !stack.Enabled || !stack.Xray.Enabled {
+			continue
+		}
+		apiConfig := domain.ResolveXrayAPIConfig(stackSet.Config.Defaults.Xray, stack.Xray)
+		if !apiConfig.Enabled || !apiConfig.HasService("HandlerService") {
+			missing = append(missing, stack.Name)
+			continue
+		}
+		handler = append(handler, stack.Name+" "+apiConfig.Listen)
+	}
+	// 两者都是合法配置，所以只作为 check 陈述取舍，不让 doctor 失败。
+	if len(handler) > 0 {
+		report.Checks = append(report.Checks, "xray HandlerService enabled on "+strings.Join(handler, ", ")+
+			"; psctl user applies without restart, but the API has no authentication so any local process can add or remove users")
+	}
+	if len(missing) > 0 {
+		report.Checks = append(report.Checks, "xray HandlerService not enabled on "+strings.Join(missing, ", ")+
+			"; psctl user still records state but needs psctl restart to take effect")
+	}
+	addDoctorDisabledStateIssues(report, stackSet)
+}
+
+// addDoctorDisabledStateIssues 检查 disabled.json 是否引用了已不存在的 stack/用户。
+func addDoctorDisabledStateIssues(report *doctorReport, stackSet domain.StackSet) {
+	state, err := userstate.Load(userstate.Path(stackSet.Config))
+	if err != nil {
+		report.Issues = append(report.Issues, "disabled user state could not be read: "+err.Error())
+		return
+	}
+	if len(state.Disabled) == 0 {
+		return
+	}
+	known := map[string]bool{}
+	for _, stack := range stackSet.Stacks {
+		for _, inbound := range stack.Xray.Inbounds {
+			if !xraygen.SupportsUserToggle(inbound.Protocol) {
+				continue
+			}
+			for _, user := range inbound.Users {
+				known[stack.Name+"\x00"+user.User] = true
+			}
+		}
+	}
+	stale := make([]string, 0)
+	for _, entry := range state.Disabled {
+		if !known[entry.Stack+"\x00"+entry.User] {
+			stale = append(stale, entry.Stack+"/"+entry.User)
+		}
+	}
+	if len(stale) > 0 {
+		report.Issues = append(report.Issues, "disabled user state references users that no longer exist; run psctl user enable USER STACK to clear: "+strings.Join(stale, ", "))
+		return
+	}
+	report.Checks = append(report.Checks, fmt.Sprintf("disabled user state: %d entries, all resolvable", len(state.Disabled)))
 }
 
 // addDoctorServiceAccountIssues 检查 systemd unit 使用的运行用户和组是否存在。

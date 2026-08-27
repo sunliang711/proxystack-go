@@ -94,7 +94,7 @@ xray_inbound:
 | `defaults.xray.api.enabled` | `true` | bool |
 | `defaults.xray.api.tag` | `api` | 标识符 |
 | `defaults.xray.api.listen` | `127.0.0.1:10085` | 只能 loopback |
-| `defaults.xray.api.services` | `[StatsService]` | 非空字符串列表 |
+| `defaults.xray.api.services` | `[HandlerService, StatsService]` | 非空字符串列表；`HandlerService` 是 `psctl user enable/disable` 热生效的前提 |
 | `defaults.xray.stats.enabled` | `true` | bool |
 | `defaults.xray.policy.enabled` | `true` | bool |
 
@@ -487,3 +487,24 @@ nodes: []
 - 只包含 `config.yaml` 和 `stacks/*.yaml`。
 - 不包含 runtime/generated、manifest、downloads、pssub inputs。
 - 导入前先完整校验 manifest、hash、schema 和目标覆盖策略。
+
+## 11. Disabled User State
+
+用途：记录 `psctl user disable/enable` 的临时启停状态。路径 `<runtime>/disabled.json`，权限 `0640`。
+
+```json
+{
+  "version": 1,
+  "disabled": [
+    {"user": "bob", "stack": "usa1", "since": "2026-08-27T12:00:00+08:00"}
+  ]
+}
+```
+
+约束：
+
+- `version` 与当前实现不一致时 fail fast，不能当作空状态。
+- `stack` 必须是具体 stack 名，不支持通配；省略 TARGET 时由命令展开成逐 stack 条目。
+- `user` 对应 `config.yaml` 的用户档案名，不含 profile：状态按 `(stack, user)` 记录，同一 user 的所有 profile 一起启停。
+- 文件不存在等价于空状态，便于首次使用。
+- 它是 runtime 状态而不是配置：不进 native backup，不参与 manifest hash，恢复备份后需要重新设置。

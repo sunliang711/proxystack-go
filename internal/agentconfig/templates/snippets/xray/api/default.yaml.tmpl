@@ -3,4 +3,4 @@ api:
   enabled: true
   tag: api
   listen: 127.0.0.1:{{ .XrayAPIPort }}
-  services: [StatsService]
+  services: [HandlerService, StatsService]

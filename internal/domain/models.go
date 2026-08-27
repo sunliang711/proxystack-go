@@ -197,7 +197,7 @@ func DefaultXrayAPIConfig() XrayAPIConfig {
 		Enabled:  true,
 		Tag:      defaultXrayAPITag,
 		Listen:   defaultXrayAPIListen,
-		Services: []string{"StatsService"},
+		Services: []string{"HandlerService", "StatsService"},
 	}
 }
 
@@ -207,6 +207,16 @@ func (x *XrayAPIConfig) UnmarshalYAML(value *yaml.Node) error {
 	x.fields = yamlFields(value)
 	type raw XrayAPIConfig
 	return value.Decode((*raw)(x))
+}
+
+// HasService 判断 API 是否启用了指定服务。
+func (x XrayAPIConfig) HasService(name string) bool {
+	for _, service := range x.Services {
+		if service == name {
+			return true
+		}
+	}
+	return false
 }
 
 // XrayStatsConfig 保存 Xray stats 开关。
@@ -1343,10 +1353,35 @@ func (s *Stack) Validate() error {
 	return s.Clash.Validate()
 }
 
+// DisabledUserSet 记录被临时禁用的用户，外层 key 是 stack 名，内层 key 是 user 名。
+type DisabledUserSet map[string]map[string]bool
+
+// Has 判断某 stack 上的用户是否处于禁用状态。
+func (d DisabledUserSet) Has(stack string, user string) bool {
+	if d == nil {
+		return false
+	}
+	return d[stack][user]
+}
+
+// Add 记录某 stack 上的用户为禁用状态。
+func (d DisabledUserSet) Add(stack string, user string) {
+	if d == nil {
+		return
+	}
+	if d[stack] == nil {
+		d[stack] = map[string]bool{}
+	}
+	d[stack][user] = true
+}
+
 // StackSet 保存全局配置和所有 stack 的合并输入。
 type StackSet struct {
 	Config GlobalConfig `json:"config" yaml:"config"`
 	Stacks []Stack      `json:"stacks" yaml:"stacks"`
+
+	// DisabledUsers 是 runtime/disabled.json 的运行时覆盖，只影响 Xray 生成结果，不参与 manifest hash。
+	DisabledUsers DisabledUserSet `json:"-" yaml:"-"`
 }
 
 // StackNames 返回所有 stack 名称，保持加载顺序。

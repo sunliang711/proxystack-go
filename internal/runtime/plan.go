@@ -16,6 +16,7 @@ import (
 	mihomogen "github.com/eagle/proxystack-go/internal/generator/mihomo"
 	xraygen "github.com/eagle/proxystack-go/internal/generator/xray"
 	"github.com/eagle/proxystack-go/internal/graph"
+	"github.com/eagle/proxystack-go/internal/userstate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -83,6 +84,19 @@ type BuildOptions struct {
 	Target          string
 	SkipSystemPorts bool
 	Now             func() time.Time
+
+	// DisabledUsers 覆盖用户禁用状态的来源；为空时从 runtime/disabled.json 读取。
+	// psctl user 用它按“尚未落盘的目标状态”预演 plan，校验通过后才写盘。
+	DisabledUsers func(domain.GlobalConfig) (domain.DisabledUserSet, error)
+}
+
+// LoadDisabledUsers 从 runtime/disabled.json 读取禁用用户集合。
+func LoadDisabledUsers(config domain.GlobalConfig) (domain.DisabledUserSet, error) {
+	state, err := userstate.Load(userstate.Path(config))
+	if err != nil {
+		return nil, err
+	}
+	return state.UserSet(), nil
 }
 
 // BuildPlan 加载配置、解析 target、生成期望文件并计算 manifest diff。
@@ -92,6 +106,14 @@ func BuildPlan(options BuildOptions) (Plan, error) {
 		return Plan{}, err
 	}
 	stackSet, err := config.LoadStacks(cfg, !options.SkipSystemPorts)
+	if err != nil {
+		return Plan{}, err
+	}
+	loadDisabled := options.DisabledUsers
+	if loadDisabled == nil {
+		loadDisabled = LoadDisabledUsers
+	}
+	stackSet.DisabledUsers, err = loadDisabled(cfg)
 	if err != nil {
 		return Plan{}, err
 	}

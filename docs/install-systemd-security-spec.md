@@ -30,6 +30,8 @@ proxystack:proxystack
 | `stacks/*.yaml` | `0640` | `proxystack:proxystack` |
 | `bin/mihomo`、`bin/xray` | `0750` | `proxystack:proxystack` |
 | `geo/*` | `0640` | `proxystack:proxystack` |
+| `runtime/manifest.json` | `0640` | `proxystack:proxystack` |
+| `runtime/disabled.json` | `0640` | `proxystack:proxystack` |
 
 未变化生成文件也允许修复 metadata。
 

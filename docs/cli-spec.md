@@ -27,10 +27,10 @@
 
 | 分类 | 含义 | 命令 |
 | --- | --- | --- |
-| 只读 | 不写文件，不调用服务管理器，不启动 HTTP 服务 | `version`、`list`、`validate`、`check`、`render *`、`doctor`、`sub validate-inputs` |
+| 只读 | 不写文件，不调用服务管理器，不启动 HTTP 服务 | `version`、`list`、`validate`、`check`、`render *`、`doctor`、`sub validate-inputs`、`user list` |
 | 写 agent 配置 | 写 `config.yaml` 或 `stacks/*.yaml` | `psctl setup local`、`psctl setup all`、`psctl setup`、`config`、`add`、`clone`、`member add/remove`、`remove` |
 | 写 sub 配置 | 写 `<sub-base-dir>/config.yaml` | `pssub setup local`、`pssub setup all`、`pssub setup` |
-| 写 runtime | 写 `runtime/generated`、`runtime/manifest.json` 或 `publish` | `start`、`restart`、`sub export`、`export`、`import` |
+| 写 runtime | 写 `runtime/generated`、`runtime/manifest.json` 或 `publish` | `start`、`restart`、`sub export`、`export`、`import`、`user enable/disable` |
 | 服务管理器 | 调用 `systemctl`/`journalctl` 或 `launchctl`/`log` | `setup local`、`setup all`、`setup`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`service *` |
 | 下载/安装 | 写 `downloads`、`bin`、`geo` 或 `.venv` | `psctl setup deps`、`psctl setup all`、`psctl setup`、`update` |
 | HTTP 运行 | 启动长期运行进程 | `pssub serve` |
@@ -243,6 +243,41 @@ psctl [--base-dir DIR] member remove STACK MEMBER
 - member stack 必须存在名为 `relay` 的 socks5 inbound。
 - `add` 同步 upstream 和相关代理组。
 - `remove` 清理 upstream 和相关代理组中的 proxy。
+
+### 3.7.1 `user`
+
+```bash
+psctl [--base-dir DIR] user list [TARGET]
+psctl [--base-dir DIR] user disable USER [TARGET]
+psctl [--base-dir DIR] user enable USER [TARGET]
+```
+
+职责：
+
+- 临时启停已配置的用户，不重启服务。新增、删除和修改用户仍然改配置文件。
+- 只覆盖 vmess 和 shadowsocks inbound：socks5/http 是单账号 inbound，摘掉账号会退化成免认证入口。
+- `TARGET` 省略表示全部 stack，支持 `NAME` 和 `xray/NAME`；`clash/NAME` 必须显式拒绝。
+- 状态按 `(stack, user)` 记录，同一 user 的所有 profile 一起启停。
+
+副作用：
+
+- `list` 只读。
+- `disable/enable` 写 `runtime/disabled.json`，重新生成受影响 stack 的 `runtime/generated/xray/*.json` 并更新 manifest，然后调用受管 `bin/xray` 的 `api rmu`/`api adu` 热应用。
+- 不写 `config.yaml` 和 `stacks/*.yaml`，不调用服务管理器。
+
+验收：
+
+- 禁用状态跨重启存活：生成 Xray 配置时按 `runtime/disabled.json` 过滤用户。
+- 顺序必须是先算目标状态、预演 plan 并校验，全部通过后才落盘、写生成文件、热应用。任何一步校验失败都不能留下已写入的状态。
+- 待写入的生成结果必须**恰好**等于本次启停造成的 `clients` 增删：既不能有 `clients` 以外的差异，也不能夹带别处未重启的用户增删（那些不会被热应用，写盘会让运行中实例和磁盘分叉且此后漂移检测失效）。不满足时拒绝写入任何文件并提示改用 `psctl restart`。
+- 逐 stack 预演，某个无关 stack 的未重启改动不能挡住其它 stack 的启停。
+- 拒绝禁用某个 inbound 的最后一个启用用户。
+- 热应用成功与否按 `xray api` 输出的 `Removed/Added N user(s) in total.` 判定，不能只看退出码：这两个子命令对单用户失败只打印不改退出码。
+- 热应用失败（服务未运行、`xray.api.services` 缺少 `HandlerService`、计数为 0 等）只告警，命令仍然成功，并逐条给出可直接执行的 `psctl restart xray/NAME`。
+- 传给 `xray api` 的 inbound tag 和 email 不能以 `-` 开头，否则会被 flag 解析吃掉。
+- `disable` 时提示同 scope 内引用了该用户但不能启停的入口（socks5/http inbound、同名 Clash listener 账号）。
+- `disabled.json` 里引用了已不存在 stack/用户的陈旧条目，`user list` 和 `doctor` 要报出来，`user enable` 可以清除。
+- 订阅内容和 clash 入口不受启停影响。
 
 ### 3.8 `remove`
 
@@ -463,7 +498,7 @@ psctl [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECONDS]
 
 职责：
 
-- `doctor` 检查目录权限、二进制版本、systemd unit、端口占用和配置引用。
+- `doctor` 检查目录权限、二进制版本、systemd unit、端口占用、配置引用，以及用户启停相关状态。
 - `ipinfo` 通过该 stack 的 mihomo socks listener 和 `curl` 查询出口 IP。
 
 副作用：
@@ -477,6 +512,8 @@ psctl [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECONDS]
 - `ipinfo --timeout` 默认 `8.0` 秒。
 - `ipinfo` 不是 mihomo REST API。
 - IPv4/IPv6 默认来源和 fallback 与 Python 版一致。
+- `doctor` 必须陈述每个 stack 的 `HandlerService` 状态：开启时说明它是本机无鉴权的用户/inbound 管理面，未开启时说明 `psctl user` 需要 `psctl restart` 才生效。两者都是合法配置，只作为 check 输出，不能让 `doctor` 判失败。
+- `runtime/disabled.json` 里引用了已不存在用户的陈旧条目必须报成 issue。
 
 ## 4. `pssub` 命令
 

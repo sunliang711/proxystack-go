@@ -136,7 +136,7 @@ func TestAgentUserToggleIsIdempotent(t *testing.T) {
 	require.Contains(t, output, "No change: user2 is already disabled")
 }
 
-// TestAgentUserDisableRejectsLastEnabledUser 验证不能把某个 inbound 的用户全部禁用。
+// TestAgentUserDisableRejectsLastEnabledUser 验证其他用户已被禁用时的提示指向恢复路径。
 func TestAgentUserDisableRejectsLastEnabledUser(t *testing.T) {
 	baseDir := newTwoUserProject(t)
 	useFakeXrayAPI(t, nil)
@@ -145,10 +145,27 @@ func TestAgentUserDisableRejectsLastEnabledUser(t *testing.T) {
 	_, err := runAgentCommandForTestError("--base-dir", baseDir, "user", "disable", "user1")
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "is the last enabled user of usa1/")
+	require.Contains(t, err.Error(), "user1 is the last enabled user of usa1/vmess:24100:vmess; enable one of user2 first, or disable the inbound in the stack file")
 	state, stateErr := userstate.Load(filepath.Join(baseDir, "runtime", "disabled.json"))
 	require.NoError(t, stateErr)
 	require.Len(t, state.Disabled, 1)
+}
+
+// TestAgentUserDisableRejectsOnlyUser 验证 inbound 本来就只有一个用户时的提示。
+//
+// 这时说“最后一个启用的用户”会让运维去找并不存在的其他用户，必须说“唯一用户”。
+func TestAgentUserDisableRejectsOnlyUser(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "config.yaml")
+	require.NoError(t, agentconfig.InitProject(agentconfig.InitOptions{BaseDir: baseDir, ExternalHost: "proxy.example.com"}))
+	require.NoError(t, agentconfig.AddStack(agentconfig.AddOptions{ConfigPath: configPath, Name: "usa1", Template: "pair", KeepTemplatePorts: true}))
+
+	_, err := runAgentCommandForTestError("--base-dir", baseDir, "user", "disable", "user1")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "user1 is the only user of usa1/vmess:24100:vmess; disable the inbound in the stack file instead")
+	require.NotContains(t, err.Error(), "last enabled")
+	require.NoFileExists(t, filepath.Join(baseDir, "runtime", "disabled.json"))
 }
 
 // TestAgentUserDisableRejectsUnknownUser 验证不存在的用户会报错而不是静默写状态。

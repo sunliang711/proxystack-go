@@ -271,7 +271,7 @@ psctl [--base-dir DIR] user enable USER [TARGET]
 - 顺序必须是先算目标状态、预演 plan 并校验，全部通过后才落盘、写生成文件、热应用。任何一步校验失败都不能留下已写入的状态。
 - 待写入的生成结果必须**恰好**等于本次启停造成的 `clients` 增删：既不能有 `clients` 以外的差异，也不能夹带别处未重启的用户增删（那些不会被热应用，写盘会让运行中实例和磁盘分叉且此后漂移检测失效）。不满足时拒绝写入任何文件并提示改用 `psctl restart`。
 - 逐 stack 预演，某个无关 stack 的未重启改动不能挡住其它 stack 的启停。
-- 拒绝禁用某个 inbound 的最后一个启用用户。
+- 拒绝禁用某个 inbound 的最后一个启用用户，并区分两种局面：配置里本来就只有这一个用户时提示「only user」并指向改 stack 文件；其他用户已被禁用时提示「last enabled user」并列出可以先启用哪些。
 - 热应用成功与否按 `xray api` 输出的 `Removed/Added N user(s) in total.` 判定，不能只看退出码：这两个子命令对单用户失败只打印不改退出码。
 - 热应用失败（服务未运行、`xray.api.services` 缺少 `HandlerService`、计数为 0 等）只告警，命令仍然成功，并逐条给出可直接执行的 `psctl restart xray/NAME`。
 - 传给 `xray api` 的 inbound tag 和 email 不能以 `-` 开头，否则会被 flag 解析吃掉。

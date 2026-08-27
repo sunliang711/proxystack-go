@@ -381,21 +381,35 @@ func noSuchUserError(scope userScope, user string, target string) error {
 }
 
 // ensureInboundKeepsUser 拒绝把某个 inbound 的用户全部禁用。
+//
+// 错误分两种局面：配置里本来就只有这一个用户，和其他用户已经被禁用了。
+// 两者的处理方式不同，所以消息要说清楚是哪一种。
 func ensureInboundKeepsUser(scope userScope, user string) error {
 	for _, site := range scope.Sites {
 		if site.Disabled {
 			continue
 		}
 		remaining := 0
+		alreadyDisabled := make([]string, 0)
 		for _, candidate := range site.Inbound.Users {
-			if candidate.User == user || scope.State.IsDisabled(site.Stack, candidate.User) {
+			if candidate.User == user {
+				continue
+			}
+			if scope.State.IsDisabled(site.Stack, candidate.User) {
+				alreadyDisabled = append(alreadyDisabled, candidate.User)
 				continue
 			}
 			remaining++
 		}
-		if remaining == 0 {
-			return fmt.Errorf("%s is the last enabled user of %s/%s; disable the inbound in the stack file instead", user, site.Stack, site.Tag)
+		if remaining > 0 {
+			continue
 		}
+		if len(alreadyDisabled) == 0 {
+			return fmt.Errorf("%s is the only user of %s/%s; disable the inbound in the stack file instead", user, site.Stack, site.Tag)
+		}
+		sort.Strings(alreadyDisabled)
+		return fmt.Errorf("%s is the last enabled user of %s/%s; enable one of %s first, or disable the inbound in the stack file",
+			user, site.Stack, site.Tag, strings.Join(alreadyDisabled, ", "))
 	}
 	return nil
 }

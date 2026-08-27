@@ -89,9 +89,9 @@ sudo pssub --base-dir /opt/proxystack-sub logs -f
 镜像只包含 `pssub`，不包含 mihomo/xray：
 
 ```bash
-sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack-sub
-sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack-sub/inputs
-sudo install -d -o 10001 -g 10001 -m 0750 /opt/proxystack-sub/templates
+sudo install -d -o 10001 -g 10001 -m 2770 /opt/proxystack-sub
+sudo install -d -o 10001 -g 10001 -m 2770 /opt/proxystack-sub/inputs
+sudo install -d -o 10001 -g 10001 -m 2770 /opt/proxystack-sub/templates
 sudo install -o 10001 -g 10001 -m 0640 /path/to/sub-config.yaml /opt/proxystack-sub/config.yaml
 docker compose -f docker-compose.sub.yml up -d --build
 ```

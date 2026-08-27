@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eagle/proxystack-go/internal/domain"
+	"github.com/eagle/proxystack-go/internal/fsperm"
 	"github.com/eagle/proxystack-go/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -70,6 +72,28 @@ func TestRunSubDoctorReportsInvalidInputs(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Contains(t, strings.Join(report.Issues, "\n"), "subscription inputs validation failed")
+}
+
+// TestAddSubDoctorMetadataIssuesAcceptsCompliantTree 验证权限正确的 sub 树不产生任何 issue。
+//
+// 只断言「不合规时会报」是不够的：SubMetadataRules 改成带 setgid 的 SharedDirMode 之后，
+// 用 Perm() 比较会永远不相等，每个目录都会误报，而那样的回归照样能通过旧断言。
+func TestAddSubDoctorMetadataIssuesAcceptsCompliantTree(t *testing.T) {
+	baseDir := t.TempDir()
+	require.NoError(t, fsperm.MkdirManaged(baseDir, fsperm.SharedDirMode))
+	require.NoError(t, fsperm.MkdirManaged(filepath.Join(baseDir, "inputs", "manual"), fsperm.SharedDirMode))
+	for _, name := range []string{"config.yaml", filepath.Join("inputs", "manual", "usa.yaml")} {
+		path := filepath.Join(baseDir, name)
+		require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))
+		require.NoError(t, fsperm.ChmodIfDifferent(path, fsperm.FileMode))
+	}
+	paths := domain.DefaultConfigPaths()
+	paths.Sub = "."
+	report := subDoctorReport{}
+
+	addSubDoctorMetadataIssues(&report, domain.GlobalConfig{BaseDir: baseDir, Paths: paths}, 0, 0, false)
+
+	require.Empty(t, report.Issues)
 }
 
 // TestAddSubDoctorMetadataIssuesReportsModeMismatch 验证 doctor 会报告 sub 目录树权限不匹配。

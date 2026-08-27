@@ -15,6 +15,7 @@ import (
 
 	configloader "github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/domain"
+	"github.com/eagle/proxystack-go/internal/fsperm"
 	"github.com/eagle/proxystack-go/internal/graph"
 )
 
@@ -319,6 +320,9 @@ type MetadataFixer struct {
 }
 
 // Fix 修复单个路径的权限和可选 owner。
+//
+// 调用方必须保证 path 不是软链接：os.Chmod 会跟随链接，而 Linux 没有 lchmod，
+// 唯一的防线是在规则层就把软链接排除掉。chown 这边用 Lchown 再兜一层。
 func (f MetadataFixer) Fix(path string, mode os.FileMode, uid int, gid int) error {
 	chmod := f.Chmod
 	if chmod == nil {
@@ -332,7 +336,7 @@ func (f MetadataFixer) Fix(path string, mode os.FileMode, uid int, gid int) erro
 	}
 	chown := f.Chown
 	if chown == nil {
-		chown = os.Chown
+		chown = os.Lchown
 	}
 	return chown(path, uid, gid)
 }
@@ -345,39 +349,44 @@ func FixPermissions(path string, mode os.FileMode) error {
 // StandardMetadataRules 返回 proxystack 标准目录和文件权限规则。
 func StandardMetadataRules(config domain.GlobalConfig) []MetadataRule {
 	rules := []MetadataRule{
-		{Path: config.BaseDir, Mode: 0o750},
-		{Path: config.ResolvePath(config.Paths.Bin), Mode: 0o750},
-		{Path: config.ResolvePath(config.Paths.Geo), Mode: 0o750},
-		{Path: config.ResolvePath(config.Paths.Stacks), Mode: 0o750},
-		{Path: config.ResolvePath(config.Paths.Runtime), Mode: 0o750},
-		{Path: config.ResolvePath(config.Paths.Generated), Mode: 0o750},
-		{Path: filepath.Join(config.ResolvePath(config.Paths.Generated), "xray"), Mode: 0o750},
-		{Path: filepath.Join(config.ResolvePath(config.Paths.Generated), "mihomo"), Mode: 0o750},
-		{Path: config.ResolvePath(config.Paths.Publish), Mode: 0o750},
-		{Path: config.ResolvePath(config.Paths.Downloads), Mode: 0o750},
-		{Path: config.ResolvePath(config.Paths.Sub), Mode: 0o750},
+		{Path: config.BaseDir, Mode: fsperm.ServiceDirMode},
+		{Path: config.ResolvePath(config.Paths.Bin), Mode: fsperm.ServiceDirMode},
+		{Path: config.ResolvePath(config.Paths.Geo), Mode: fsperm.ServiceDirMode},
+		{Path: config.ResolvePath(config.Paths.Downloads), Mode: fsperm.ServiceDirMode},
+		{Path: config.ResolvePath(config.Paths.Stacks), Mode: fsperm.SharedDirMode},
+		{Path: config.ResolvePath(config.Paths.Runtime), Mode: fsperm.SharedDirMode},
+		{Path: config.ResolvePath(config.Paths.Generated), Mode: fsperm.SharedDirMode},
+		{Path: filepath.Join(config.ResolvePath(config.Paths.Generated), "xray"), Mode: fsperm.SharedDirMode},
+		{Path: filepath.Join(config.ResolvePath(config.Paths.Generated), "mihomo"), Mode: fsperm.SharedDirMode},
+		{Path: config.ResolvePath(config.Paths.Publish), Mode: fsperm.SharedDirMode},
+		{Path: config.ResolvePath(config.Paths.Sub), Mode: fsperm.SharedDirMode},
 	}
 	if config.ConfigPath != "" {
-		rules = append(rules, MetadataRule{Path: config.ConfigPath, Mode: 0o640})
+		rules = append(rules, MetadataRule{Path: config.ConfigPath, Mode: fsperm.FileMode})
 	}
-	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Stacks), "*.yaml"), 0o640)
-	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Bin), "*"), 0o750)
-	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Geo), "*"), 0o640)
-	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Generated), "xray", "*.json"), 0o640)
-	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Generated), "mihomo", "*.yaml"), 0o640)
-	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Runtime), "manifest.json"), 0o640)
-	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Runtime), "disabled.json"), 0o640)
+	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Stacks), "*.yaml"), fsperm.FileMode)
+	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Bin), "*"), fsperm.ExecMode)
+	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Geo), "*"), fsperm.FileMode)
+	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Generated), "xray", "*.json"), fsperm.FileMode)
+	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Generated), "mihomo", "*.yaml"), fsperm.FileMode)
+	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Runtime), "manifest.json"), fsperm.FileMode)
+	rules = appendGlobRules(rules, filepath.Join(config.ResolvePath(config.Paths.Runtime), "disabled.json"), fsperm.FileMode)
 	return rules
 }
 
 // RepairStandardMetadata 修复已存在标准路径的 mode 和 owner。
 func RepairStandardMetadata(config domain.GlobalConfig, uid int, gid int, fixer MetadataFixer) error {
 	for _, rule := range StandardMetadataRules(config) {
-		if _, err := os.Stat(rule.Path); err != nil {
+		// Lstat 而不是 Stat：软链接一律跳过，理由见 MetadataFixer.Fix。
+		info, err := os.Lstat(rule.Path)
+		if err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
 			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			continue
 		}
 		if err := fixer.Fix(rule.Path, rule.Mode, uid, gid); err != nil {
 			return err
@@ -403,9 +412,9 @@ func SubMetadataRules(config domain.GlobalConfig) ([]MetadataRule, error) {
 		if entry.Type()&fs.ModeSymlink != 0 {
 			return nil
 		}
-		mode := os.FileMode(0o640)
+		mode := fsperm.FileMode
 		if entry.IsDir() {
-			mode = 0o750
+			mode = fsperm.SharedDirMode
 		}
 		rules = append(rules, MetadataRule{Path: path, Mode: mode})
 		return nil
@@ -651,6 +660,13 @@ func appendGlobRules(rules []MetadataRule, pattern string, mode os.FileMode) []M
 	}
 	sort.Strings(matches)
 	for _, match := range matches {
+		// 软链接必须排除：修复以 root 运行，chmod/chown 会跟随链接作用到目标上，
+		// 受管目录里放一个指向 /etc/shadow 的链接就能让 root 把它交出去。
+		// SubMetadataRules 一直这么做，这里补齐。
+		info, err := os.Lstat(match)
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			continue
+		}
 		rules = append(rules, MetadataRule{Path: match, Mode: mode})
 	}
 	return rules

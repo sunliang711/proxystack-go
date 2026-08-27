@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/eagle/proxystack-go/internal/domain"
+	"github.com/eagle/proxystack-go/internal/fsperm"
 )
 
 // DefaultTimeout 是单次 api 调用的等待上限。
@@ -86,8 +87,9 @@ func (c Client) RemoveUser(ctx context.Context, inboundTag string, email string)
 
 // AddUser 把一段 inbound 用户片段加回运行中的实例。
 func (c Client) AddUser(ctx context.Context, dir string, inboundPatch string) error {
-	// patch 里带着 UUID / 密码，落在已经是 0750 的 runtime 目录而不是共享的 /tmp。
-	if err := os.MkdirAll(dir, 0o750); err != nil {
+	// patch 里带着 UUID / 密码，落在受管的 runtime 目录而不是共享的 /tmp；
+	// 文件本身由 os.CreateTemp 以 0600 + 随机名创建，组也读不到。
+	if err := fsperm.MkdirManaged(dir, fsperm.SharedDirMode); err != nil {
 		return err
 	}
 	file, err := os.CreateTemp(dir, ".psctl-adu-*.json")

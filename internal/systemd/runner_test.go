@@ -10,6 +10,7 @@ import (
 	"github.com/eagle/proxystack-go/internal/agentconfig"
 	configloader "github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/domain"
+	"github.com/eagle/proxystack-go/internal/fsperm"
 	"github.com/eagle/proxystack-go/internal/graph"
 	"github.com/stretchr/testify/require"
 )
@@ -309,10 +310,60 @@ func TestRepairSubMetadataRecursesSubTree(t *testing.T) {
 	err := RepairSubMetadata(cfg, 1000, 1001, fixer)
 
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o750), modes[baseDir])
-	require.Equal(t, os.FileMode(0o750), modes[filepath.Join(baseDir, "inputs")])
-	require.Equal(t, os.FileMode(0o750), modes[filepath.Join(baseDir, "inputs", "manual")])
-	require.Equal(t, os.FileMode(0o640), modes[filepath.Join(baseDir, "config.yaml")])
-	require.Equal(t, os.FileMode(0o640), modes[filepath.Join(baseDir, "inputs", "manual", "usa.yaml")])
+	require.Equal(t, fsperm.SharedDirMode, modes[baseDir])
+	require.Equal(t, fsperm.SharedDirMode, modes[filepath.Join(baseDir, "inputs")])
+	require.Equal(t, fsperm.SharedDirMode, modes[filepath.Join(baseDir, "inputs", "manual")])
+	require.Equal(t, fsperm.FileMode, modes[filepath.Join(baseDir, "config.yaml")])
+	require.Equal(t, fsperm.FileMode, modes[filepath.Join(baseDir, "inputs", "manual", "usa.yaml")])
 	require.Equal(t, [2]int{1000, 1001}, owners[filepath.Join(baseDir, "inputs", "manual", "usa.yaml")])
+}
+
+// TestStandardMetadataRulesSkipsSymlinks 验证 glob 出来的软链接不会进入修复规则。
+//
+// 修复以 root 运行，chmod/chown 都会跟随软链接；受管目录里预埋一个指向 /etc/shadow
+// 的链接就能让 root 把它交出去。SubMetadataRules 一直有这层过滤，这里补齐。
+func TestStandardMetadataRulesSkipsSymlinks(t *testing.T) {
+	baseDir := t.TempDir()
+	geoDir := filepath.Join(baseDir, "geo")
+	require.NoError(t, os.MkdirAll(geoDir, 0o750))
+	realPath := filepath.Join(geoDir, "geoip.dat")
+	require.NoError(t, os.WriteFile(realPath, []byte("x"), 0o640))
+	victimPath := filepath.Join(t.TempDir(), "victim")
+	require.NoError(t, os.WriteFile(victimPath, []byte("x"), 0o600))
+	linkPath := filepath.Join(geoDir, "planted.dat")
+	require.NoError(t, os.Symlink(victimPath, linkPath))
+
+	rules := StandardMetadataRules(domain.GlobalConfig{BaseDir: baseDir, Paths: domain.DefaultConfigPaths()})
+
+	paths := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		paths = append(paths, rule.Path)
+	}
+	require.Contains(t, paths, realPath)
+	require.NotContains(t, paths, linkPath)
+}
+
+// TestRepairStandardMetadataSkipsSymlinkedPaths 验证修复不会作用到软链接指向的目标上。
+func TestRepairStandardMetadataSkipsSymlinkedPaths(t *testing.T) {
+	baseDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "stacks"), 0o750))
+	victimPath := filepath.Join(t.TempDir(), "victim")
+	require.NoError(t, os.WriteFile(victimPath, []byte("x"), 0o600))
+	require.NoError(t, os.Symlink(victimPath, filepath.Join(baseDir, "stacks", "planted.yaml")))
+	configPath := filepath.Join(baseDir, "config.yaml")
+	require.NoError(t, os.Symlink(victimPath, configPath))
+
+	touched := make([]string, 0)
+	fixer := MetadataFixer{
+		Chmod: func(path string, mode os.FileMode) error { touched = append(touched, path); return nil },
+		Chown: func(path string, uid int, gid int) error { return nil },
+	}
+
+	err := RepairStandardMetadata(domain.GlobalConfig{BaseDir: baseDir, ConfigPath: configPath, Paths: domain.DefaultConfigPaths()}, 1000, 1001, fixer)
+
+	require.NoError(t, err)
+	for _, path := range touched {
+		require.NotContains(t, path, "planted.yaml")
+		require.NotEqual(t, configPath, path, "软链接形式的 config.yaml 不应被修复")
+	}
 }

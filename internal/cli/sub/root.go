@@ -383,7 +383,7 @@ func initSubLayout(baseDir string, force bool) (initSubResult, error) {
 	configPath := subConfigPathForBaseDir(baseDir)
 	result := initSubResult{DataDir: dataDir, InputDir: inputDir, TemplatesDir: templatesDir, ConfigPath: configPath}
 	for _, dir := range []string{dataDir, inputDir, templatesDir} {
-		if err := os.MkdirAll(dir, 0o750); err != nil {
+		if err := os.MkdirAll(dir, 0o770); err != nil {
 			return initSubResult{}, err
 		}
 	}
@@ -723,7 +723,7 @@ func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 
 // writeFileAtomicWithOwner 写入配置文件，并在替换前尽量保留目标文件 owner。
 func writeFileAtomicWithOwner(path string, data []byte, mode os.FileMode, uid int, gid int) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o770); err != nil {
 		return err
 	}
 	temp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
@@ -770,7 +770,12 @@ func fileOwnerIDs(info os.FileInfo) (int, int, bool) {
 	return int(stat.Uid), int(stat.Gid), true
 }
 
-// chownFileIfNeeded 在临时文件 owner 与目标 owner 不一致时执行 chown。
+// chownFileIfNeeded 在临时文件 owner 与目标 owner 不一致时尽力保持 owner。
+//
+// 非特权进程改不了文件的 uid（需要 CAP_CHOWN），所以运维账号以组成员身份写入时
+// chown 必然 EPERM。那种情况下放弃 owner、只保住组即可：受管目录带 setgid，
+// 临时文件的组已经是 proxystack，服务账号照样读得到。硬失败会让免 sudo 的写入
+// 路径整体不可用。
 func chownFileIfNeeded(file *os.File, uid int, gid int) error {
 	info, err := file.Stat()
 	if err != nil {
@@ -780,7 +785,17 @@ func chownFileIfNeeded(file *os.File, uid int, gid int) error {
 	if !ok || (currentUID == uid && currentGID == gid) {
 		return nil
 	}
-	return file.Chown(uid, gid)
+	if err := file.Chown(uid, gid); err != nil {
+		if os.IsPermission(err) && currentGID == gid {
+			return nil
+		}
+		if os.IsPermission(err) {
+			// uid 改不了，至少把组对齐到服务组。
+			return file.Chown(-1, gid)
+		}
+		return err
+	}
+	return nil
 }
 
 // runEditor 执行用户指定或环境默认编辑器。

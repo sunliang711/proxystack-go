@@ -13,6 +13,7 @@ import (
 	"github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/domain"
 	"github.com/eagle/proxystack-go/internal/domain/validation"
+	"github.com/eagle/proxystack-go/internal/fsperm"
 	agentruntime "github.com/eagle/proxystack-go/internal/runtime"
 )
 
@@ -73,11 +74,11 @@ type RemoveOptions struct {
 
 // StackSummary 是 list 命令输出用的轻量 stack 描述。
 type StackSummary struct {
-	Name           string
-	Enabled        bool
-	Role           string
-	XrayEndpoint string
-	ClashEndpoint  string
+	Name          string
+	Enabled       bool
+	Role          string
+	XrayEndpoint  string
+	ClashEndpoint string
 }
 
 // InitProject 创建默认 agent 配置和标准目录。
@@ -112,19 +113,24 @@ func EnsureProjectLayout(options InitOptions) error {
 		return err
 	}
 	configPath := filepath.Join(baseDir, "config.yaml")
-	dirs := []string{
-		baseDir,
-		filepath.Join(baseDir, "bin"),
-		filepath.Join(baseDir, "geo"),
-		filepath.Join(baseDir, "stacks"),
-		filepath.Join(baseDir, "runtime"),
-		filepath.Join(baseDir, "runtime", "generated"),
-		filepath.Join(baseDir, "publish"),
-		filepath.Join(baseDir, "downloads"),
-		filepath.Dir(configPath),
+	// 走 MkdirManaged 而不是裸 MkdirAll：mkdir 的 mode 会被 umask 削掉，
+	// 而且从来不设置 setgid 位，组可写目录必须建完再显式 chmod。
+	dirs := []struct {
+		path string
+		mode os.FileMode
+	}{
+		{baseDir, fsperm.ServiceDirMode},
+		{filepath.Join(baseDir, "bin"), fsperm.ServiceDirMode},
+		{filepath.Join(baseDir, "geo"), fsperm.ServiceDirMode},
+		{filepath.Join(baseDir, "downloads"), fsperm.ServiceDirMode},
+		{filepath.Join(baseDir, "stacks"), fsperm.SharedDirMode},
+		{filepath.Join(baseDir, "runtime"), fsperm.SharedDirMode},
+		{filepath.Join(baseDir, "runtime", "generated"), fsperm.SharedDirMode},
+		{filepath.Join(baseDir, "publish"), fsperm.SharedDirMode},
+		{filepath.Dir(configPath), fsperm.ServiceDirMode},
 	}
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0o750); err != nil {
+		if err := fsperm.MkdirManaged(dir.path, dir.mode); err != nil {
 			return err
 		}
 	}
@@ -234,11 +240,11 @@ func ListStacks(configPath string) ([]StackSummary, error) {
 	summaries := make([]StackSummary, 0, len(stackSet.Stacks))
 	for _, stack := range stackSet.Stacks {
 		summaries = append(summaries, StackSummary{
-			Name:           stack.Name,
-			Enabled:        stack.Enabled,
-			Role:           stack.Role,
-			XrayEndpoint: firstXrayEndpoint(stack),
-			ClashEndpoint:  firstClashEndpoint(stack),
+			Name:          stack.Name,
+			Enabled:       stack.Enabled,
+			Role:          stack.Role,
+			XrayEndpoint:  firstXrayEndpoint(stack),
+			ClashEndpoint: firstClashEndpoint(stack),
 		})
 	}
 	sort.Slice(summaries, func(i int, j int) bool { return summaries[i].Name < summaries[j].Name })
@@ -528,7 +534,7 @@ func firstNonEmpty(values ...string) string {
 }
 
 func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o770); err != nil {
 		return err
 	}
 	temp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")

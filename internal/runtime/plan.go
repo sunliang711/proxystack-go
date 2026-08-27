@@ -13,6 +13,7 @@ import (
 
 	"github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/domain"
+	"github.com/eagle/proxystack-go/internal/fsperm"
 	mihomogen "github.com/eagle/proxystack-go/internal/generator/mihomo"
 	xraygen "github.com/eagle/proxystack-go/internal/generator/xray"
 	"github.com/eagle/proxystack-go/internal/graph"
@@ -329,7 +330,10 @@ func ApplyPlan(plan Plan) error {
 				return err
 			}
 		case ActionNoChange:
-			if err := os.Chmod(change.Path, change.Mode); err != nil && !os.IsNotExist(err) {
+			// chmod 要求调用者是文件 owner。受管目录是组可写的，文件可能由
+			// 运维账号、root 或服务账号任一方创建，所以只在权限确实不符时才改，
+			// 避免非 owner 在无变化的情况下撞 EPERM。
+			if err := fsperm.ChmodIfDifferent(change.Path, change.Mode); err != nil {
 				return err
 			}
 		}
@@ -408,7 +412,7 @@ func sha256Bytes(data []byte) string {
 }
 
 func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	if err := fsperm.MkdirManaged(filepath.Dir(path), fsperm.SharedDirMode); err != nil {
 		return err
 	}
 	temp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")

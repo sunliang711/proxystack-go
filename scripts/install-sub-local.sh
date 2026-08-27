@@ -679,8 +679,8 @@ ensure_sub_dirs() {
 	local owner_group="${INSTALL_USER}:${INSTALL_GROUP}"
 
 	ensure_dir "${BASE_DIR}" "0750" "${owner_group}"
-	ensure_dir "${BASE_DIR}/inputs" "0750" "${owner_group}"
-	ensure_dir "${BASE_DIR}/templates" "0750" "${owner_group}"
+	ensure_dir "${BASE_DIR}/inputs" "2770" "${owner_group}"
+	ensure_dir "${BASE_DIR}/templates" "2770" "${owner_group}"
 }
 
 # ensure_cli_dir 创建 CLI 安装目录。

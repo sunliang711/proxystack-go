@@ -498,7 +498,7 @@ psctl [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECONDS]
 
 职责：
 
-- `doctor` 检查目录权限、二进制版本、systemd unit、端口占用、配置引用，以及用户启停相关状态。
+- `doctor` 检查目录权限（含 setgid 位）、文件所属组、二进制版本、systemd unit、端口占用、配置引用，以及用户启停相关状态。受管目录是组可写的，owner 可能是运维账号、root 或服务账号，因此只校验组不校验 owner。
 - `ipinfo` 通过该 stack 的 mihomo socks listener 和 `curl` 查询出口 IP。
 
 副作用：
@@ -512,6 +512,7 @@ psctl [--base-dir DIR] ipinfo STACK [--family all|ipv4|ipv6] [--timeout SECONDS]
 - `ipinfo --timeout` 默认 `8.0` 秒。
 - `ipinfo` 不是 mihomo REST API。
 - IPv4/IPv6 默认来源和 fallback 与 Python 版一致。
+- `setup local` 在 root 和非 root 两条路径上都要提示把运维账号加入 `proxystack` 组；root 路径取 `SUDO_USER`，已在组内或直接以 root 登录时不提示。
 - `doctor` 必须陈述每个 stack 的 `HandlerService` 状态：开启时说明它是本机无鉴权的用户/inbound 管理面，未开启时说明 `psctl user` 需要 `psctl restart` 才生效。两者都是合法配置，只作为 check 输出，不能让 `doctor` 判失败。
 - `runtime/disabled.json` 里引用了已不存在用户的陈旧条目必须报成 issue。
 

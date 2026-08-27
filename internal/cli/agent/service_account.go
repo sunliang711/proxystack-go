@@ -23,6 +23,14 @@ var serviceAccountEUIDFunc = os.Geteuid
 var serviceAccountGIDFunc = os.Getgid
 var serviceAccountGroupsFunc = os.Getgroups
 var serviceAccountLookupGroupFunc = user.LookupGroup
+var serviceAccountSudoUserFunc = func() string { return os.Getenv("SUDO_USER") }
+var serviceAccountUserGroupIDsFunc = func(name string) ([]string, error) {
+	target, err := user.Lookup(name)
+	if err != nil {
+		return nil, err
+	}
+	return target.GroupIds()
+}
 
 // ensureServiceAccountForInit 在 Linux root 初始化时幂等创建 systemd unit 使用的运行用户和组。
 func ensureServiceAccountForInit(ctx context.Context, baseDir string) error {
@@ -117,11 +125,37 @@ func repairServiceMetadataForConfigPath(configPath string) error {
 	return repairServiceMetadataFunc(cfg)
 }
 
-// printNonRootLinuxInitGroupHint 在 Linux 非 root 本地初始化时提示用户加入服务组。
-func printNonRootLinuxInitGroupHint(writer io.Writer, baseDir string) {
-	if serviceAccountGOOSFunc() != "linux" || serviceAccountEUIDFunc() == 0 {
+// printServiceGroupHint 在 Linux 初始化后提示把运维账号加入服务组。
+//
+// root 和非 root 两条路径都要提示：走标准流程的人是 sudo 装的，如果只在非 root
+// 分支提示，那些最需要知道这件事的人反而从头到尾看不到。
+func printServiceGroupHint(writer io.Writer, baseDir string) {
+	if serviceAccountGOOSFunc() != "linux" {
 		return
 	}
+	if serviceAccountEUIDFunc() == 0 {
+		printSudoInvokerGroupHint(writer, baseDir)
+		return
+	}
+	printNonRootLinuxInitGroupHint(writer, baseDir)
+}
+
+// printSudoInvokerGroupHint 提示 sudo 背后的真实调用者加入服务组。
+func printSudoInvokerGroupHint(writer io.Writer, baseDir string) {
+	invoker := serviceAccountSudoUserFunc()
+	if invoker == "" || invoker == "root" {
+		return
+	}
+	inGroup, err := userInServiceGroup(invoker)
+	if err != nil || inGroup {
+		return
+	}
+	fmt.Fprintf(writer, "Hint: add %s to the %s group so psctl can manage %s without sudo:\n  sudo usermod -aG %s %s\nThen log in again, or run `newgrp %s` for the current shell.\n",
+		invoker, systemd.DefaultServiceGroup, baseDir, systemd.DefaultServiceGroup, invoker, systemd.DefaultServiceGroup)
+}
+
+// printNonRootLinuxInitGroupHint 在 Linux 非 root 本地初始化时提示用户加入服务组。
+func printNonRootLinuxInitGroupHint(writer io.Writer, baseDir string) {
 	inGroup, err := currentProcessInServiceGroup()
 	if err == nil && inGroup {
 		return
@@ -130,7 +164,25 @@ func printNonRootLinuxInitGroupHint(writer io.Writer, baseDir string) {
 		fmt.Fprintf(writer, "Hint: non-root Linux setup local cannot create or verify the %s group. Run `sudo psctl setup local` once, or add your user after the group exists:\n  sudo usermod -aG %s \"$USER\"\nThen log in again, or run `newgrp %s` for the current shell.\n", systemd.DefaultServiceGroup, systemd.DefaultServiceGroup, systemd.DefaultServiceGroup)
 		return
 	}
-	fmt.Fprintf(writer, "Hint: add your user to the %s group so non-root psctl commands can read %s:\n  sudo usermod -aG %s \"$USER\"\nThen log in again, or run `newgrp %s` for the current shell.\n", systemd.DefaultServiceGroup, baseDir, systemd.DefaultServiceGroup, systemd.DefaultServiceGroup)
+	fmt.Fprintf(writer, "Hint: add your user to the %s group so psctl can manage %s without sudo:\n  sudo usermod -aG %s \"$USER\"\nThen log in again, or run `newgrp %s` for the current shell.\n", systemd.DefaultServiceGroup, baseDir, systemd.DefaultServiceGroup, systemd.DefaultServiceGroup)
+}
+
+// userInServiceGroup 检查指定账号是否已在 proxystack 服务组中。
+func userInServiceGroup(name string) (bool, error) {
+	serviceGroup, err := serviceAccountLookupGroupFunc(systemd.DefaultServiceGroup)
+	if err != nil {
+		return false, err
+	}
+	groupIDs, err := serviceAccountUserGroupIDsFunc(name)
+	if err != nil {
+		return false, err
+	}
+	for _, groupID := range groupIDs {
+		if groupID == serviceGroup.Gid {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // currentProcessInServiceGroup 检查当前进程所属组是否包含 proxystack 服务组。

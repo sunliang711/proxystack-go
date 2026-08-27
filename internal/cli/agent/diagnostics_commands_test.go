@@ -16,6 +16,7 @@ import (
 
 	"github.com/eagle/proxystack-go/internal/diagnostics"
 	"github.com/eagle/proxystack-go/internal/domain"
+	"github.com/eagle/proxystack-go/internal/fsperm"
 	"github.com/eagle/proxystack-go/internal/systemd"
 	"github.com/stretchr/testify/require"
 )
@@ -162,23 +163,23 @@ func TestDoctorCheckSummariesIncludeAccountDetails(t *testing.T) {
 	addDoctorMetadataIssues(&report, cfg, uid, gid, true)
 
 	require.Equal(t, "service account: user=proxystack uid=988 group=proxystack gid=989", formatDoctorServiceAccountCheck(988, 989))
-	require.Contains(t, strings.Join(report.Checks, "\n"), "filesystem metadata checked: expected owner=proxystack:proxystack mode rules=")
+	require.Contains(t, strings.Join(report.Checks, "\n"), "filesystem metadata checked: expected group=proxystack mode rules=")
 }
 
 // TestDoctorMetadataAllowsMissingGeneratedComponentDirs 验证未启动前缺少生成子目录不会被 doctor 误报。
 func TestDoctorMetadataAllowsMissingGeneratedComponentDirs(t *testing.T) {
 	baseDir := t.TempDir()
-	require.NoError(t, os.Chmod(baseDir, 0o750))
-	for _, dir := range []string{
-		"bin",
-		"geo",
-		"stacks",
-		"runtime",
-		filepath.Join("runtime", "generated"),
-		"publish",
-		"downloads",
+	require.NoError(t, os.Chmod(baseDir, fsperm.ServiceDirMode))
+	for dir, mode := range map[string]os.FileMode{
+		"bin":                                 fsperm.ServiceDirMode,
+		"geo":                                 fsperm.ServiceDirMode,
+		"downloads":                           fsperm.ServiceDirMode,
+		"stacks":                              fsperm.SharedDirMode,
+		"runtime":                             fsperm.SharedDirMode,
+		filepath.Join("runtime", "generated"): fsperm.SharedDirMode,
+		"publish":                             fsperm.SharedDirMode,
 	} {
-		require.NoError(t, os.MkdirAll(filepath.Join(baseDir, dir), 0o750))
+		require.NoError(t, fsperm.MkdirManaged(filepath.Join(baseDir, dir), mode))
 	}
 	cfg := domain.GlobalConfig{BaseDir: baseDir, Paths: domain.DefaultConfigPaths()}
 	report := doctorReport{}
@@ -206,8 +207,8 @@ func TestDoctorUnitIssuesIgnoreSubService(t *testing.T) {
 	require.Contains(t, strings.Join(report.Checks, "\n"), "systemd units checked")
 }
 
-// TestAddDoctorOwnerIssueReportsMismatch 验证 doctor 会报告标准路径 owner 不匹配。
-func TestAddDoctorOwnerIssueReportsMismatch(t *testing.T) {
+// TestAddDoctorOwnerIssueReportsGroupMismatch 验证 doctor 会报告标准路径的组不匹配。
+func TestAddDoctorOwnerIssueReportsGroupMismatch(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("owner metadata is not available on windows")
 	}
@@ -218,14 +219,34 @@ func TestAddDoctorOwnerIssueReportsMismatch(t *testing.T) {
 	stat := info.Sys().(*syscall.Stat_t)
 	report := doctorReport{}
 
-	addDoctorOwnerIssue(&report, path, info, int(stat.Uid)+1, int(stat.Gid)+1)
+	addDoctorOwnerIssue(&report, path, info, int(stat.Uid), int(stat.Gid)+1)
 
 	require.Len(t, report.Issues, 1)
-	require.Contains(t, report.Issues[0], "path owner mismatch")
+	require.Contains(t, report.Issues[0], "path group mismatch")
 	require.Contains(t, report.Issues[0], path)
 	require.Contains(t, report.Issues[0], "got=")
 	require.Contains(t, report.Issues[0], "want=")
 	require.Contains(t, report.Issues[0], fmt.Sprintf("uid=%d gid=%d", stat.Uid, stat.Gid))
+}
+
+// TestAddDoctorOwnerIssueAcceptsForeignOwnerInServiceGroup 验证只要组对，owner 是谁都不算问题。
+//
+// 受管目录组可写之后，文件可能由运维账号、root 或服务账号任一方创建，
+// owner 本来就不唯一；决定服务读不读得到的是组。
+func TestAddDoctorOwnerIssueAcceptsForeignOwnerInServiceGroup(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("owner metadata is not available on windows")
+	}
+	path := filepath.Join(t.TempDir(), "file")
+	require.NoError(t, os.WriteFile(path, []byte("x"), 0o640))
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	stat := info.Sys().(*syscall.Stat_t)
+	report := doctorReport{}
+
+	addDoctorOwnerIssue(&report, path, info, int(stat.Uid)+1, int(stat.Gid))
+
+	require.Empty(t, report.Issues)
 }
 
 // TestFormatDoctorOwnerLabelIncludesNamesAndIDs 验证 owner 输出优先使用名称并保留数字 ID。

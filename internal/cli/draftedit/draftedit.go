@@ -167,7 +167,7 @@ func prepareDraft(options Options) (string, error) {
 	if mode == 0 {
 		mode = 0o640
 	}
-	if err := os.MkdirAll(filepath.Dir(draftPath), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(draftPath), 0o770); err != nil {
 		return "", err
 	}
 	return draftPath, os.WriteFile(draftPath, options.Initial, mode)

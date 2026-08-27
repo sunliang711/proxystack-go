@@ -42,7 +42,7 @@ func NewWatcher(dataDir string, interval time.Duration, debounce time.Duration, 
 // Start 启动 watcher goroutine。
 func (w *Watcher) Start() error {
 	inputDir := filepath.Join(w.dataDir, "inputs")
-	if err := os.MkdirAll(inputDir, 0o750); err != nil {
+	if err := os.MkdirAll(inputDir, 0o770); err != nil {
 		return err
 	}
 	fileWatcher, _ := fsnotify.NewWatcher()

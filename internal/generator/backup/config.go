@@ -88,9 +88,17 @@ func WriteNativeBackup(outputPath string, configPath string, stacksDir string, c
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o750); err != nil {
 		return Manifest{}, err
 	}
-	tempPath := outputPath + ".tmp"
-	file, err := os.OpenFile(tempPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o640)
+	// 用随机名 + O_EXCL 建临时文件：固定的 "<outputPath>.tmp" 是可预测路径，
+	// 而 O_CREATE|O_TRUNC 会跟随软链接——在可写的输出目录里预埋一个链接，
+	// 就能让这次写入（可能是 root 执行的）把字节写穿到别的文件上。
+	file, err := os.CreateTemp(filepath.Dir(outputPath), "."+filepath.Base(outputPath)+".tmp-*")
 	if err != nil {
+		return Manifest{}, err
+	}
+	tempPath := file.Name()
+	if err := file.Chmod(0o640); err != nil {
+		_ = file.Close()
+		_ = os.Remove(tempPath)
 		return Manifest{}, err
 	}
 	writeErr := func() error {
@@ -331,7 +339,7 @@ func sortedStackMembers(files map[string][]byte) []string {
 }
 
 func writeFileAtomically(path string, content []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o770); err != nil {
 		return err
 	}
 	tempPath := filepath.Join(filepath.Dir(path), "."+filepath.Base(path)+".tmp")
@@ -358,7 +366,7 @@ func writeFileAtomically(path string, content []byte, mode os.FileMode) error {
 }
 
 func restoreBackupFiles(baseDir string, targetConfig []byte, stackMembers []string, files map[string][]byte) error {
-	if err := os.MkdirAll(baseDir, 0o750); err != nil {
+	if err := os.MkdirAll(baseDir, 0o770); err != nil {
 		return err
 	}
 	stagingRoot, err := os.MkdirTemp(baseDir, ".restore-*")
@@ -371,7 +379,7 @@ func restoreBackupFiles(baseDir string, targetConfig []byte, stackMembers []stri
 	if err := writeFileAtomically(stagingConfigPath, targetConfig, 0o640); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(stagingStacksDir, 0o750); err != nil {
+	if err := os.MkdirAll(stagingStacksDir, 0o770); err != nil {
 		return err
 	}
 	for _, member := range stackMembers {

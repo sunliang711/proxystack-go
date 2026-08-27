@@ -15,6 +15,7 @@ import (
 	"github.com/eagle/proxystack-go/internal/config"
 	"github.com/eagle/proxystack-go/internal/diagnostics"
 	"github.com/eagle/proxystack-go/internal/domain"
+	"github.com/eagle/proxystack-go/internal/fsperm"
 	xraygen "github.com/eagle/proxystack-go/internal/generator/xray"
 	"github.com/eagle/proxystack-go/internal/systemd"
 	"github.com/eagle/proxystack-go/internal/userstate"
@@ -195,17 +196,17 @@ func addDoctorMetadataIssues(report *doctorReport, cfg domain.GlobalConfig, uid 
 			report.Issues = append(report.Issues, "path could not be checked: "+rule.Path+" "+err.Error())
 			continue
 		}
-		if info.Mode().Perm() != rule.Mode {
-			report.Issues = append(report.Issues, fmt.Sprintf("path mode mismatch: %s got=%#o want=%#o", rule.Path, info.Mode().Perm(), rule.Mode))
+		if !fsperm.Matches(info.Mode(), rule.Mode) {
+			report.Issues = append(report.Issues, fmt.Sprintf("path mode mismatch: %s got=%s want=%s", rule.Path, fsperm.Format(info.Mode()), fsperm.Format(rule.Mode)))
 		}
 		if checkOwner {
 			addDoctorOwnerIssue(report, rule.Path, info, uid, gid)
 		}
 	}
 	if checkOwner {
-		report.Checks = append(report.Checks, fmt.Sprintf("filesystem metadata checked: expected owner=%s:%s mode rules=%d", systemd.DefaultServiceUser, systemd.DefaultServiceGroup, len(rules)))
+		report.Checks = append(report.Checks, fmt.Sprintf("filesystem metadata checked: expected group=%s mode rules=%d", systemd.DefaultServiceGroup, len(rules)))
 	} else {
-		report.Checks = append(report.Checks, fmt.Sprintf("filesystem metadata checked: mode rules=%d owner check skipped", len(rules)))
+		report.Checks = append(report.Checks, fmt.Sprintf("filesystem metadata checked: mode rules=%d group check skipped", len(rules)))
 	}
 }
 
@@ -247,9 +248,21 @@ func addDoctorOwnerIssue(report *doctorReport, path string, info os.FileInfo, ui
 		report.Issues = append(report.Issues, "path owner could not be checked: "+path)
 		return
 	}
-	if int(stat.Uid) != uid || int(stat.Gid) != gid {
-		report.Issues = append(report.Issues, fmt.Sprintf("path owner mismatch: %s got=%s want=%s", path, formatDoctorOwnerLabel(int(stat.Uid), int(stat.Gid)), formatDoctorOwnerLabel(uid, gid)))
+	// 受管目录是组可写的，文件可能由运维账号、root 或服务账号任一方创建，
+	// owner 因此本来就不唯一。真正决定服务读不读得到的是组，只校验组。
+	if int(stat.Gid) != gid {
+		report.Issues = append(report.Issues, fmt.Sprintf("path group mismatch: %s got=%s want=%s", path, formatDoctorOwnerLabel(int(stat.Uid), int(stat.Gid)), formatDoctorGroupLabel(gid)))
 	}
+}
+
+// formatDoctorGroupLabel 格式化组，保留数字 ID 便于排查。
+func formatDoctorGroupLabel(gid int) string {
+	gidText := strconv.Itoa(gid)
+	groupName := gidText
+	if serviceGroup, err := user.LookupGroupId(gidText); err == nil && serviceGroup.Name != "" {
+		groupName = serviceGroup.Name
+	}
+	return fmt.Sprintf("%s (gid=%d)", groupName, gid)
 }
 
 // formatDoctorOwnerLabel 格式化 owner，用名称提升可读性，保留数字 ID 便于排查。

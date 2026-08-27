@@ -20,20 +20,46 @@ proxystack:proxystack
 | Go binary 目录 | `0750` | `proxystack:proxystack` |
 | `bin/` | `0750` | `proxystack:proxystack` |
 | `geo/` | `0750` | `proxystack:proxystack` |
-| `runtime/` | `0750` | `proxystack:proxystack` |
-| `publish/` | `0750` | `proxystack:proxystack` |
 | `downloads/` | `0750` | `proxystack:proxystack` |
-| `sub/` | `0750` | `proxystack:proxystack` |
-| `sub/` 下所有子目录 | `0750` | `proxystack:proxystack` |
-| `sub/` 下所有普通文件 | `0640` | `proxystack:proxystack` |
+| `stacks/` | `2770` | `*:proxystack` |
+| `runtime/` | `2770` | `*:proxystack` |
+| `runtime/generated/`、`runtime/generated/xray`、`runtime/generated/mihomo` | `2770` | `*:proxystack` |
+| `publish/` | `2770` | `*:proxystack` |
+| `sub/` | `2770` | `*:proxystack` |
+| `sub/` 下所有子目录 | `2770` | `*:proxystack` |
+| `sub/` 下所有普通文件 | `0640` | `*:proxystack` |
 | `config.yaml` | `0640` | `proxystack:proxystack` |
-| `stacks/*.yaml` | `0640` | `proxystack:proxystack` |
+| `stacks/*.yaml` | `0640` | `*:proxystack` |
 | `bin/mihomo`、`bin/xray` | `0750` | `proxystack:proxystack` |
 | `geo/*` | `0640` | `proxystack:proxystack` |
-| `runtime/manifest.json` | `0640` | `proxystack:proxystack` |
-| `runtime/disabled.json` | `0640` | `proxystack:proxystack` |
+| `runtime/manifest.json` | `0640` | `*:proxystack` |
+| `runtime/disabled.json` | `0640` | `*:proxystack` |
 
 未变化生成文件也允许修复 metadata。
+
+### 组可写目录
+
+`stacks/`、`runtime/`（含 `generated/`）、`publish/`、`sub/` 是 `2770`：加入 `proxystack` 组的运维账号不用 sudo 就能改 stack 配置、跑 `psctl start/restart`、用 `psctl user` 启停用户。
+
+- **setgid 是配套必需项。** 组成员创建的文件默认带自己的主组，服务账号会读不到；setgid 让目录下新建的文件和子目录统一继承 `proxystack` 组。手工修权限必须用 `chmod 2770` 而不是 `chmod 770`。
+- **普通文件不给组写位。** 写文件一律「建临时文件 + rename」，只需要目录写权限。
+- **owner 一栏写 `*`**：文件可能由运维账号、root（sudo）或服务账号任一方创建，owner 本来就不唯一；决定服务读不读得到的是组。`RepairStandardMetadata` 以 root 运行时仍会把 owner 归一到 `proxystack:proxystack`，`doctor` 只校验组。
+
+### 为什么 base dir、`bin/`、`geo/`、`downloads/` 不组可写
+
+`rename(2)` 只检查**父目录**的写权限，文件自身的 mode 和 owner 完全不参与。所以父目录一旦组可写，组成员就能把 `bin/` 整个改名再建一个自己的，`bin/xray` 上的 `0750` 形同虚设——而那些二进制是 systemd 以 `proxystack` 身份执行的，等于把服务账号的代码执行权交给组成员。
+
+装二进制和 geo 数据本来就是 `sudo psctl install/setup deps`，把这几个目录留在组外代价为零。`config.yaml` 在 base dir 下，因此**改全局配置仍需 sudo**；改 stack 配置不需要。
+
+### 授权边界
+
+`proxystack` 组成员 ≈ 代理服务配置和运行时数据的完全控制权：能增删用户、改路由、改 stack 配置。不能替换受管二进制，不能改 unit 文件（在 `/etc` 下，root-only），也不能借此提权到 root。
+
+不需要这个能力就不要往组里加人——组默认只有服务账号自己。
+
+### 存量升级
+
+已有部署是 `0750`。升级后跑一次 `sudo psctl setup local`（幂等）即可把权限修到位；订阅服务同理跑 `sudo pssub setup local`。在此之前 `psctl doctor` 会报 `path mode mismatch`。
 
 ## 2. install/update 行为
 

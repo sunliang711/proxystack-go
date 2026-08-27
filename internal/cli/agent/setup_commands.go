@@ -98,10 +98,11 @@ func runSetupLocal(command *cobra.Command, externalHost string, force bool) erro
 	if err != nil {
 		return err
 	}
-	printNonRootLinuxInitGroupHint(command.OutOrStdout(), baseDir)
 	if err := ensureServiceAccountForInit(context.Background(), baseDir); err != nil {
 		return fmt.Errorf("setup service account failed: %w", err)
 	}
+	// 服务组可能刚由上一步创建，提示必须放在它之后才判断得出成员关系。
+	printServiceGroupHint(command.OutOrStdout(), baseDir)
 	if err := runSetupInit(baseDir, externalHost, force); err != nil {
 		return fmt.Errorf("setup local init failed: %w", err)
 	}

@@ -119,8 +119,9 @@ DOMAIN-SUFFIX,www.rustez.cc,DIRECT
 # > 广告拦截
 RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/ads.list,ADS
 # > AI
-RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/openai.list,OpenAI
+# claude比较严格，把它放到第一防止被其它规则抢占
 RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/claude.list,Claude
+RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/openai.list,OpenAI
 RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/cursor.list,Cursor
 RULE-SET,https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/other-ai.list,OtherAI
 # > 谷歌服务
